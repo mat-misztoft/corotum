@@ -29,6 +29,7 @@ const moreAgents =
 function statusClass(status: string) {
   if (status === "SYNCED" || status === "LOCKED") return "status-synced";
   if (status === "DRIFTED") return "status-drifted";
+  if (status === "AUTH_REQUIRED" || status === "ERROR") return "status-error";
   return "status-attention";
 }
 
@@ -90,7 +91,10 @@ export default function Home() {
               View on GitHub
             </a>
           </div>
-          <code className="install-command">
+          <code
+            className="install-command"
+            aria-label="Official install command"
+          >
             curl -fsSL https://toolmirror.com/install.sh | sh
           </code>
         </div>
@@ -230,7 +234,7 @@ export default function Home() {
                   <dd>sha256:7cf9…d10a</dd>
                 </div>
               </dl>
-              <p>Exact revision and content hash — exact, not latest.</p>
+              <p>Exact revision and content hash. Exact, not latest.</p>
             </li>
             <li>
               <h3>DIFF</h3>
@@ -411,7 +415,10 @@ export default function Home() {
             View on GitHub
           </a>
         </div>
-        <code className="install-command">
+        <code
+          className="install-command"
+          aria-label="Official install command"
+        >
           curl -fsSL https://toolmirror.com/install.sh | sh
         </code>
       </section>

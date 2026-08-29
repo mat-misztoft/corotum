@@ -42,8 +42,7 @@ a {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: color-mix(in srgb, var(--paper) 95%, transparent);
-  backdrop-filter: blur(8px);
+  background: var(--paper);
 }
 
 .wordmark {
@@ -112,10 +111,11 @@ a {
 }
 .button {
   display: inline-flex;
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 700;
   padding: 16px 20px;
   text-decoration: none;
+  white-space: nowrap;
   transition:
     transform 0.15s ease,
     background-color 0.15s ease;
@@ -369,6 +369,7 @@ a {
 }
 .product-flow {
   background: var(--vermillion);
+  color: #110f0d;
   padding: clamp(92px, 12vw, 180px) 42px;
 }
 .flow-heading {
@@ -376,13 +377,13 @@ a {
   max-width: 1440px;
 }
 .flow-heading .dispatch-label {
-  color: #501b13;
+  color: #110f0d;
 }
 .flow-heading h2 {
   max-width: 760px;
 }
 .flow-heading > p:last-child {
-  color: #501b13;
+  color: #110f0d;
   max-width: 510px;
 }
 .flow-story {
@@ -479,7 +480,7 @@ a {
   border-bottom: 1px solid #7e281a;
 }
 .flow-detail-list h3 {
-  color: #501b13;
+  color: #110f0d;
   margin: 0 0 20px;
 }
 .flow-detail-list p {
@@ -514,7 +515,7 @@ a {
   padding: 10px 0;
 }
 .flow-detail-list dt {
-  color: #501b13;
+  color: #110f0d;
 }
 .flow-detail-list dd {
   margin: 0;
@@ -756,6 +757,9 @@ a {
 .status-attention {
   color: #efba58;
 }
+.status-error {
+  color: #e07a72;
+}
 .status-mark {
   font-weight: 700;
   margin-right: 0.35em;
@@ -904,11 +908,6 @@ a {
     overflow-x: auto;
     padding: 4px 0;
     white-space: nowrap;
-  }
-  .landing-header nav a:nth-child(1),
-  .landing-header nav a:nth-child(2),
-  .landing-header nav a:nth-child(3) {
-    display: none;
   }
   .hero {
     display: block;

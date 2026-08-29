@@ -5,9 +5,21 @@ const webRoot = `${import.meta.dir}/..`;
 const page = await Bun.file(`${webRoot}/app/page.tsx`).text();
 const styles = await Bun.file(`${webRoot}/app/globals.css`).text();
 const motion = await Bun.file(`${webRoot}/app/landing-flow-story.tsx`).text();
+const qa = await Bun.file(`${import.meta.dir}/landing-visual-qa.md`).text();
 const builtCss = [
   ...new Glob("dist/**/*.css").scanSync({ cwd: webRoot }),
 ].sort();
+
+const slop = [
+  "linear-gradient",
+  "radial-gradient",
+  "backdrop-filter",
+  "particle",
+  "blob",
+  "glassmorphism",
+  "testimonial",
+  "sparkle",
+];
 
 test("landing e2e: sticky flow and state-lines stay product-semantic", () => {
   expect(page).toContain("From skill to synced state.");
@@ -53,5 +65,46 @@ test.skipIf(builtCss.length === 0)(
     expect(css).toContain("prefers-reduced-motion");
     expect(css).toMatch(/animation:\s*none/);
     expect(css).toContain("reconcile-travel");
+    expect(css).toContain(".landing-header");
+    expect(css).toContain("background:var(--paper)");
   },
 );
+
+test("landing e2e: visual QA evidence records desktop and mobile PASS",
+  () => {
+    expect(qa).toContain("## Desktop comparison (1440)");
+    expect(qa).toContain("## Mobile comparison (390 / max-width 850 and 500)");
+    for (const axis of [
+      "Layout",
+      "Hierarchy",
+      "Typography",
+      "Palette",
+      "Spacing",
+      "Motion",
+    ]) {
+      expect(qa).toContain(`| ${axis} | PASS`);
+    }
+    expect(qa.match(/\| FAIL \|/g) ?? []).toEqual([]);
+  },
+);
+
+test("landing e2e: claims, anti-slop, and accessibility checks pass", () => {
+  expect(page).toContain("$5.99/month · $59.90/year");
+  expect(page).toContain("Agents manage desired state");
+  expect(page).toContain("Exact revision and content hash. Exact, not latest.");
+  expect(page).toContain('aria-label="Official install command"');
+  expect(page).toContain('return "status-error"');
+  expect(page).not.toContain("sync_device");
+  expect(page).not.toContain("sync_all_devices");
+  expect(page).not.toContain("—");
+  expect(page).not.toContain("–");
+  expect(styles).toContain(".landing a:focus-visible");
+  expect(styles).toContain("overflow-x: clip");
+  expect(styles).toContain(".status-error");
+  expect(styles).toContain("background: var(--paper)");
+  expect(styles).not.toContain("nth-child(3)");
+  for (const token of slop) {
+    expect(page.toLowerCase()).not.toContain(token);
+    expect(styles.toLowerCase()).not.toContain(token);
+  }
+});
