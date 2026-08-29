@@ -1,7 +1,4 @@
-const version = "0.1.0";
+import { runCli } from "./cli";
 
-if (Bun.argv.includes("--version") || Bun.argv.includes("-v")) {
-  console.log(`toolmirror ${version}`);
-} else {
-  console.log("ToolMirror CLI feasibility spike");
-}
+const exitCode = await runCli(Bun.argv.slice(2));
+if (exitCode !== 0) process.exitCode = exitCode;
