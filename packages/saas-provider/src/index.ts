@@ -37,6 +37,16 @@ export {
 /** Provider-local stand-in for a Cloud workspace that has no revision yet. */
 export const UNINITIALIZED_CLOUD_REVISION = revisionId("rev_uninitialized");
 
+export type PendingResolution = Readonly<{
+  skillId: string;
+  baseRevision: string;
+  idempotencyKey?: string;
+  repository: string;
+  revision: string;
+  path: string;
+  contentHash: string;
+}>;
+
 export type SaaSProviderOptions = Readonly<{
   origin: string;
   workspaceId: string;
@@ -72,6 +82,30 @@ export class SaaSProvider implements StateProvider {
     return this.request("GET");
   }
 
+  /** Submit a device-resolved exact lock; a stale competing resolver gets CONFLICT. */
+  async resolvePending(
+    input: PendingResolution,
+  ): Promise<Result<DesiredStateEnvelope>> {
+    try {
+      const repository = new URL(input.repository);
+      if (repository.username || repository.password) {
+        return {
+          kind: "failure",
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Repository must not include credentials.",
+          },
+        };
+      }
+    } catch {
+      // SSH-style Git remotes have no URL credentials component.
+    }
+    return this.request("POST", {
+      ...input,
+      idempotencyKey: input.idempotencyKey ?? crypto.randomUUID(),
+    });
+  }
+
   async push(
     input: PushDesiredStateInput,
     transition?: RevisionTransition,
@@ -101,18 +135,21 @@ export class SaaSProvider implements StateProvider {
     });
   }
 
-  private stateUrl() {
-    return `${this.origin}/api/v1/workspaces/${encodeURIComponent(this.workspaceId)}/state`;
+  private stateUrl(resolve = false) {
+    const state = `${this.origin}/api/v1/workspaces/${encodeURIComponent(this.workspaceId)}/state`;
+    return resolve ? `${state}/resolve` : state;
   }
 
   private async request(
-    method: "GET" | "PUT",
-    body?: Readonly<{
-      state: DesiredState;
-      baseRevision: string | null;
-      idempotencyKey: string;
-      transition: RevisionTransition;
-    }>,
+    method: "GET" | "PUT" | "POST",
+    body?:
+      | Readonly<{
+          state: DesiredState;
+          baseRevision: string | null;
+          idempotencyKey: string;
+          transition: RevisionTransition;
+        }>
+      | PendingResolution,
   ): Promise<Result<DesiredStateEnvelope>> {
     try {
       const headers = new Headers({
@@ -120,10 +157,10 @@ export class SaaSProvider implements StateProvider {
         [CLI_VERSION_HEADER]: this.cliVersion,
       });
       if (body) {
-        headers.set(IDEMPOTENCY_KEY_HEADER, body.idempotencyKey);
+        headers.set(IDEMPOTENCY_KEY_HEADER, body.idempotencyKey ?? "");
         headers.set("content-type", "application/json");
       }
-      const response = await this.fetch(this.stateUrl(), {
+      const response = await this.fetch(this.stateUrl(method === "POST"), {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,

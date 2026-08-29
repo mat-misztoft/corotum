@@ -11,7 +11,11 @@ import {
   UNINITIALIZED_CLOUD_REVISION,
 } from "../../../packages/saas-provider/src/index";
 import { approvePairing, createPairing } from "./pairings";
-import { handleGetWorkspaceState, handlePutWorkspaceState } from "./state-http";
+import {
+  handleGetWorkspaceState,
+  handlePostPendingResolution,
+  handlePutWorkspaceState,
+} from "./state-http";
 import { issueDeviceToken, type TokenDatabase } from "./tokens";
 
 const migrationsDirectory = fileURLToPath(
@@ -110,7 +114,7 @@ async function stateDb() {
 async function pairedDevice(db: TokenDatabase, sqlite: Database) {
   sqlite
     .query(
-      "INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+      "INSERT OR IGNORE INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
     )
     .run("user_1", "Ada", "ada@example.com", Date.now(), Date.now());
   const pairing = await createPairing(db, device, 1_000);
@@ -229,6 +233,79 @@ test("an authenticated device can pull empty Cloud state and push an idempotent 
   expect(
     sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get(),
   ).toEqual({ count: 1 });
+});
+
+test("the first device resolution locks a pending skill once and a competing resolver conflicts", async () => {
+  const { sqlite, db } = await stateDb();
+  const firstDevice = await pairedDevice(db, sqlite);
+  const secondDevice = await pairedDevice(db, sqlite);
+  const pending = {
+    manifest: {
+      version: 1 as const,
+      skills: [
+        {
+          ...desired.manifest.skills[0],
+          resolutionStatus: "PENDING_RESOLUTION" as const,
+        },
+      ],
+    },
+    lockfile: { version: 1 as const, skills: [] },
+  };
+  const created = await handlePutWorkspaceState(
+    stateRequest(firstDevice.workspaceId, firstDevice.issued.token, {
+      method: "PUT",
+      body: JSON.stringify({
+        state: pending,
+        baseRevision: null,
+        idempotencyKey: "pending-1",
+        transition,
+      }),
+    }),
+    db,
+    firstDevice.workspaceId,
+  );
+  const baseRevision = ((await created.json()) as { revisionId: string })
+    .revisionId;
+  const resolution = {
+    skillId: skill,
+    baseRevision,
+    idempotencyKey: "resolve-1",
+    repository: source,
+    revision: "abc123",
+    path: "skills/review",
+    contentHash: "sha256:locked",
+  };
+  const winner = await handlePostPendingResolution(
+    stateRequest(firstDevice.workspaceId, firstDevice.issued.token, {
+      method: "POST",
+      body: JSON.stringify(resolution),
+    }),
+    db,
+    firstDevice.workspaceId,
+  );
+  expect(winner.status).toBe(200);
+  expect(((await winner.json()) as { state: typeof desired }).state).toEqual(
+    desired,
+  );
+  const loser = await handlePostPendingResolution(
+    stateRequest(secondDevice.workspaceId, secondDevice.issued.token, {
+      method: "POST",
+      body: JSON.stringify({ ...resolution, idempotencyKey: "resolve-2" }),
+    }),
+    db,
+    secondDevice.workspaceId,
+  );
+  expect(loser.status).toBe(409);
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get(),
+  ).toEqual({ count: 2 });
+  expect(
+    sqlite
+      .query(
+        "SELECT repository, locked_revision AS revision FROM workspace_skills",
+      )
+      .get(),
+  ).toEqual({ repository: source, revision: "abc123" });
 });
 
 test("device-token SaaSProvider pull/push talks to /api/v1 without login or reporting", async () => {
