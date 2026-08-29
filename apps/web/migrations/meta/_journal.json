@@ -15,6 +15,20 @@
       "when": 1787986374593,
       "tag": "0001_tidy_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787986525807,
+      "tag": "0002_breezy_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787986585850,
+      "tag": "0003_lazy_greymalkin",
+      "breakpoints": true
     }
   ]
 }

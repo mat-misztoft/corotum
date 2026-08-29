@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX `workspace_revisions_workspace_sequence_unique` ON `workspace_revisions` (`workspace_id`,`revision_sequence`);--> statement-breakpoint
+CREATE UNIQUE INDEX `workspace_skills_workspace_skill_unique` ON `workspace_skills` (`workspace_id`,`skill_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `workspace_skills_workspace_source_skill_unique` ON `workspace_skills` (`workspace_id`,`source`,`skill_name`);
