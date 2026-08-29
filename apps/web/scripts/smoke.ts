@@ -2,7 +2,7 @@ const port = 8788;
 const process = Bun.spawn(
   ["bunx", "wrangler", "dev", "--port", `${port}`, "--ip", "127.0.0.1"],
   {
-    cwd: import.meta.dir + "/..",
+    cwd: `${import.meta.dir}/..`,
     stderr: "pipe",
     stdout: "pipe",
   },
@@ -32,8 +32,11 @@ try {
   if (!healthy) throw failure;
 
   const home = await fetch(`http://127.0.0.1:${port}/`);
-  if (!home.ok || !(await home.text()).includes("ToolMirror web foundation")) {
-    throw new Error("home page did not render through workerd");
+  if (
+    !home.ok ||
+    !(await home.text()).includes("Keep your agent skills in sync.")
+  ) {
+    throw new Error("landing hero did not render through workerd");
   }
 } finally {
   process.kill();
