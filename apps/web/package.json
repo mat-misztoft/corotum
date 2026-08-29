@@ -2,5 +2,33 @@
   "name": "@toolmirror/web",
   "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "build": "vinext build",
+    "db:migrate": "drizzle-kit generate && CI=1 wrangler d1 migrations apply toolmirror --local",
+    "smoke": "bun ./scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@cloudflare/vite-plugin": "1.54.2",
+    "@vinext/cloudflare": "1.0.0-beta.6",
+    "drizzle-orm": "0.45.2",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-server-dom-webpack": "19.2.8",
+    "vinext": "1.0.0-beta.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260829.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/react": "19.2.8",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.1.1",
+    "@vitejs/plugin-rsc": "0.5.34",
+    "drizzle-kit": "0.31.10",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vite": "8.2.2",
+    "wrangler": "4.127.1"
+  }
 }

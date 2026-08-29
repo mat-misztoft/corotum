@@ -5,11 +5,14 @@
     "target": "ES2022",
     "module": "Preserve",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "skipLibCheck": true
   },
   "include": [
     "tooling/**/*.ts",
     "apps/cli/src/**/*.ts",
+    "apps/web/**/*.ts",
+    "apps/web/**/*.tsx",
     "packages/agent-targets/src/**/*.ts",
     "packages/core/src/**/*.ts",
     "packages/git-provider/src/**/*.ts",
