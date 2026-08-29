@@ -1,0 +1,100 @@
+"use client";
+
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { authClient } from "../../src/auth-client";
+
+type EmailState = "form" | "submitting" | "confirmed" | "error";
+
+export function validEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+export function SignInForm() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<EmailState>("form");
+  const confirmationRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (state === "confirmed") confirmationRef.current?.focus();
+  }, [state]);
+
+  async function submitEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const address = email.trim();
+    if (!validEmail(address)) {
+      setState("error");
+      return;
+    }
+
+    setState("submitting");
+    try {
+      const { error } = await authClient.signIn.magicLink({
+        email: address,
+        callbackURL: "/dashboard",
+      });
+      setState(error ? "error" : "confirmed");
+    } catch {
+      setState("error");
+    }
+  }
+
+  async function signInWith(provider: "github" | "google") {
+    await authClient.signIn.social({ provider, callbackURL: "/dashboard" });
+  }
+
+  if (state === "confirmed") {
+    return (
+      <section className="sign-in-confirmation" aria-labelledby="inbox-heading">
+        <h2 id="inbox-heading" ref={confirmationRef} tabIndex={-1}>
+          Check your inbox
+        </h2>
+        <p>We sent you a sign-in link.</p>
+        <button className="text-button" type="button" onClick={() => setState("form")}>
+          Use another email
+        </button>
+      </section>
+    );
+  }
+
+  const submitting = state === "submitting";
+  return (
+    <>
+      <div className="oauth-actions">
+        <button type="button" onClick={() => signInWith("github")}>
+          Continue with GitHub
+        </button>
+        <button type="button" onClick={() => signInWith("google")}>
+          Continue with Google
+        </button>
+      </div>
+      <div className="sign-in-separator" aria-hidden="true"><span>or</span></div>
+      <form noValidate onSubmit={submitEmail}>
+        <label htmlFor="email">Email address</label>
+        <input
+          autoComplete="email"
+          disabled={submitting}
+          id="email"
+          inputMode="email"
+          name="email"
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (state === "error") setState("form");
+          }}
+          required
+          type="email"
+          value={email}
+          aria-describedby={state === "error" ? "email-error" : undefined}
+          aria-invalid={state === "error"}
+        />
+        {state === "error" && (
+          <p id="email-error" role="alert">
+            Enter a valid email address or try again.
+          </p>
+        )}
+        <button type="submit" disabled={submitting}>
+          {submitting ? "Sending sign-in link…" : "Continue with email"}
+        </button>
+      </form>
+    </>
+  );
+}

@@ -1140,6 +1140,27 @@ a {
   }
 }
 
+.sign-in-page { align-items: center; display: grid; min-height: 100dvh; padding: 24px; }
+.sign-in-panel { background: #20201e; color: #f4eee4; margin: auto; max-width: 440px; padding: clamp(32px, 6vw, 56px); width: 100%; }
+.sign-in-panel .wordmark { color: #f4eee4; display: inline-block; margin-bottom: 54px; }
+.sign-in-kicker { color: #f1c1b8; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; margin: 0 0 16px; }
+.sign-in-panel h1 { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: clamp(3.3rem, 10vw, 5.4rem); font-weight: 500; letter-spacing: -.055em; line-height: .9; margin: 0; text-transform: uppercase; }
+.sign-in-intro { color: #c9c1b5; line-height: 1.5; margin: 20px 0 36px; }
+.oauth-actions, .sign-in-panel form { display: grid; gap: 12px; }
+.sign-in-panel button, .sign-in-panel input { font: inherit; min-height: 48px; width: 100%; }
+.sign-in-panel button { background: #f4eee4; border: 1px solid #f4eee4; color: #171512; cursor: pointer; font-weight: 700; padding: 10px 14px; }
+.sign-in-panel button:hover:not(:disabled) { background: #df492f; border-color: #df492f; color: #f4eee4; }
+.sign-in-panel button:disabled, .sign-in-panel input:disabled { cursor: wait; opacity: .65; }
+.sign-in-panel input { background: #20201e; border: 1px solid #c9c1b5; color: #f4eee4; padding: 10px 12px; }
+.sign-in-panel label { font-size: 14px; font-weight: 700; }
+.sign-in-panel input:focus-visible, .sign-in-panel button:focus-visible, .sign-in-panel a:focus-visible { outline: 3px solid #df492f; outline-offset: 3px; }
+.sign-in-panel [role="alert"] { color: #f1c1b8; font-size: 14px; line-height: 1.4; margin: 0; }
+.sign-in-separator { align-items: center; color: #c9c1b5; display: flex; font-size: 13px; gap: 12px; margin: 24px 0; text-align: center; }
+.sign-in-separator::before, .sign-in-separator::after { border-top: 1px solid #55514b; content: ""; flex: 1; }
+.sign-in-confirmation h2 { font-size: 2rem; margin: 0 0 12px; }
+.sign-in-confirmation p { color: #c9c1b5; line-height: 1.5; margin: 0 0 28px; }
+.sign-in-panel .text-button { background: transparent; border-color: #c9c1b5; color: #f4eee4; }
+
 .dashboard { max-width: 1000px; margin: auto; padding: 32px 24px 80px; }
 .dashboard nav { display: flex; gap: 20px; border-bottom: 1px solid #c9c6bd; padding-bottom: 16px; }
 .dashboard nav strong { margin-right: auto; } .dashboard a { color: inherit; }
