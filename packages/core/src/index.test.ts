@@ -2,10 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   type ActualState,
   type DesiredStateEnvelope,
+  parseLockfile,
+  parseManifest,
   type Result,
   revisionId,
   type StateProvider,
+  serializeLockfile,
+  serializeManifest,
   skillId,
+  validateDesiredState,
 } from "./index";
 
 describe("portable core domain primitives", () => {
@@ -25,7 +30,10 @@ describe("portable core domain primitives", () => {
   });
 
   test("represents desired, actual, and every provider failure vocabulary portably", async () => {
-    const desired = { manifest: { skills: [] }, lockfile: { skills: [] } };
+    const desired = {
+      manifest: { version: 1 as const, skills: [] },
+      lockfile: { version: 1 as const, skills: [] },
+    };
     const actual: ActualState = {
       skills: { [skillId("sk_01JXYZ")]: { contentHash: null, managed: false } },
     };
@@ -61,5 +69,154 @@ describe("portable core domain primitives", () => {
       "failure",
       "failure",
     ]);
+  });
+});
+
+describe("deterministic manifest and lockfile schemas", () => {
+  const manifest = {
+    version: 1 as const,
+    skills: [
+      {
+        id: skillId("sk_01JB"),
+        source: "https://github.com/example/skills.git",
+        skill: "code-review",
+        ref: "main",
+        targets: ["pi", "codex"] as const,
+        resolutionStatus: "RESOLVED" as const,
+      },
+      {
+        id: skillId("sk_01JA"),
+        source: "https://github.com/example/skills.git",
+        skill: "frontend-design",
+        ref: "v1",
+        targets: "all" as const,
+        resolutionStatus: "RESOLVED" as const,
+      },
+    ],
+  };
+  const lockfile = {
+    version: 1 as const,
+    skills: [
+      {
+        id: skillId("sk_01JB"),
+        source: "https://github.com/example/skills.git",
+        skill: "code-review",
+        ref: "main",
+        repository: "https://github.com/example/skills.git",
+        revision: "abcdef1",
+        path: "skills/code-review",
+        contentHash: "sha256:review",
+      },
+      {
+        id: skillId("sk_01JA"),
+        source: "https://github.com/example/skills.git",
+        skill: "frontend-design",
+        ref: "v1",
+        repository: "https://github.com/example/skills.git",
+        revision: "abcdef2",
+        path: "skills/frontend-design",
+        contentHash: "sha256:frontend",
+      },
+    ],
+  };
+
+  test("canonicalizes equivalent inputs into byte-identical YAML and JSON", () => {
+    const reversedManifest = {
+      ...manifest,
+      skills: [...manifest.skills].reverse(),
+    };
+    const reversedLockfile = {
+      ...lockfile,
+      skills: [...lockfile.skills].reverse(),
+    };
+
+    expect(serializeManifest(manifest)).toBe(
+      serializeManifest(reversedManifest),
+    );
+    expect(serializeLockfile(lockfile)).toBe(
+      serializeLockfile(reversedLockfile),
+    );
+    expect(serializeLockfile(lockfile)).not.toContain("timestamp");
+    expect(parseManifest(serializeManifest(manifest))).toEqual(
+      parseManifest(serializeManifest(reversedManifest)),
+    );
+    expect(parseLockfile(serializeLockfile(lockfile))).toEqual(
+      parseLockfile(serializeLockfile(reversedLockfile)),
+    );
+  });
+
+  test("rejects duplicate stable IDs and source + skill identities", () => {
+    expect(() =>
+      serializeManifest({
+        ...manifest,
+        skills: [
+          ...manifest.skills,
+          { ...manifest.skills[0], id: skillId("sk_01JA") },
+        ],
+      }),
+    ).toThrow("duplicate skill ID");
+    expect(() =>
+      serializeLockfile({
+        ...lockfile,
+        skills: [
+          ...lockfile.skills,
+          {
+            ...lockfile.skills[0],
+            id: skillId("sk_01JC"),
+            revision: "abcdef3",
+          },
+        ],
+      }),
+    ).toThrow("duplicate source + skill");
+    expect(() =>
+      parseLockfile(
+        JSON.stringify({ ...lockfile, resolvedAt: "2026-01-01T00:00:00.000Z" }),
+      ),
+    ).toThrow("Invalid toolmirror.lock");
+  });
+
+  test("allows missing locks only for Cloud PENDING_RESOLUTION", () => {
+    const pending = {
+      version: 1 as const,
+      skills: [
+        {
+          ...manifest.skills[0],
+          resolutionStatus: "PENDING_RESOLUTION" as const,
+        },
+      ],
+    };
+    const emptyLockfile = { version: 1 as const, skills: [] };
+
+    expect(
+      validateDesiredState(
+        { manifest: pending, lockfile: emptyLockfile },
+        "cloud",
+      ),
+    ).toEqual({
+      manifest: expect.objectContaining({
+        skills: [expect.objectContaining({ id: "sk_01JB" })],
+      }),
+      lockfile: emptyLockfile,
+    });
+    expect(() =>
+      validateDesiredState(
+        { manifest: pending, lockfile: emptyLockfile },
+        "git",
+      ),
+    ).toThrow("only Cloud PENDING_RESOLUTION");
+    expect(() =>
+      validateDesiredState(
+        {
+          manifest: {
+            ...pending,
+            skills: [
+              { ...pending.skills[0], resolutionStatus: "RESOLVED" as const },
+            ],
+          },
+          lockfile: emptyLockfile,
+        },
+        "cloud",
+      ),
+    ).toThrow("only Cloud PENDING_RESOLUTION");
   });
 });

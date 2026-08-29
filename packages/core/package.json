@@ -2,5 +2,9 @@
   "name": "@toolmirror/core",
   "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "yaml": "^2.9.0",
+    "zod": "^4.5.1"
+  }
 }
