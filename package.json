@@ -22,6 +22,7 @@
     "web:smoke": "bun run --cwd apps/web smoke",
     "check:boundaries": "bun ./scripts/check-architecture-boundaries.mjs",
     "lint": "bun run check:boundaries && bunx biome check .",
+    "docs:check": "bun ./tooling/docs-check.ts",
     "test:e2e": "bun test apps/web/e2e",
     "test:cli:invalid-target": "! ./scripts/build-cli.sh bun-invalid-x64",
     "typecheck": "bunx tsc --noEmit",

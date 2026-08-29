@@ -1,0 +1,269 @@
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+
+export const REQUIRED_DOC_FILES = [
+  "README.md",
+  "docs/README.md",
+  "docs/install.md",
+  "docs/cli.md",
+  "docs/git-sync.md",
+  "docs/self-hosting.md",
+  "docs/hosted-cloud.md",
+  "docs/dashboard-and-webmcp.md",
+  "docs/migration.md",
+] as const;
+
+const SELF_HOST_FORBIDDEN_ENV = [
+  "CREEM_API_KEY",
+  "CREEM_WEBHOOK_SECRET",
+  "CREEM_PRODUCT_MONTHLY",
+  "CREEM_PRODUCT_ANNUAL",
+  "CREEM_API_URL",
+] as const;
+
+const HOSTED_REQUIRED_ENV = [
+  "CREEM_API_KEY",
+  "CREEM_WEBHOOK_SECRET",
+  "CREEM_PRODUCT_MONTHLY",
+  "CREEM_PRODUCT_ANNUAL",
+] as const;
+
+const EXTRA_CLI_COMMANDS = ["remove", "unmanage"] as const;
+
+export type DocsCheckFinding = Readonly<{
+  file: string;
+  message: string;
+}>;
+
+/** Collects Commander command names actually registered by the CLI. */
+export function cliCommandsFromSource(source: string): readonly string[] {
+  const names = new Set<string>(EXTRA_CLI_COMMANDS);
+  for (const match of source.matchAll(/\.command\(\s*["'`]([a-z][\w-]*)/g)) {
+    names.add(match[1]);
+  }
+  return [...names].sort();
+}
+
+export function webMcpToolsFromSource(source: string): readonly string[] {
+  return [
+    ...source.matchAll(
+      /"(list_skills|list_devices|get_sync_status|check_skill_updates|add_skill|remove_skill|update_skill|set_skill_ref)"/g,
+    ),
+  ].map((match) => match[1]);
+}
+
+function markdownCode(markdown: string): string {
+  return [...markdown.matchAll(/```[\s\S]*?```|`[^`]+`/g)]
+    .map((match) => match[0])
+    .join("\n");
+}
+
+export function documentedToolmirrorCommands(
+  markdown: string,
+): readonly string[] {
+  const names = new Set<string>();
+  for (const match of markdownCode(markdown).matchAll(
+    /toolmirror(?:\s+(?:--json|--non-interactive))*\s+([a-z][\w-]*)/g,
+  )) {
+    names.add(match[1]);
+  }
+  return [...names].sort();
+}
+
+export function documentedWebMcpTools(markdown: string): readonly string[] {
+  return [
+    ...new Set(
+      [...markdown.matchAll(/`([a-z_]+)`/g)]
+        .map((match) => match[1])
+        .filter((name) =>
+          /^(list_skills|list_devices|get_sync_status|check_skill_updates|add_skill|remove_skill|update_skill|set_skill_ref)$/.test(
+            name,
+          ),
+        ),
+    ),
+  ].sort();
+}
+
+function includesAll(haystack: string, needles: readonly string[]): string[] {
+  return needles.filter(
+    (needle) => !haystack.toLowerCase().includes(needle.toLowerCase()),
+  );
+}
+
+/** Returns human-readable findings. Empty means the public docs gate passed. */
+export async function checkDocs(
+  root: string,
+): Promise<readonly DocsCheckFinding[]> {
+  const findings: DocsCheckFinding[] = [];
+  const files = new Map<string, string>();
+
+  for (const relative of REQUIRED_DOC_FILES) {
+    try {
+      files.set(relative, await readFile(join(root, relative), "utf8"));
+    } catch {
+      findings.push({
+        file: relative,
+        message: "Required documentation file is missing.",
+      });
+    }
+  }
+  if (findings.length > 0) return findings;
+
+  const cliSource = [
+    await readFile(join(root, "apps/cli/src/cli.ts"), "utf8"),
+    ...(await readCommandSources(join(root, "apps/cli/src"))),
+  ].join("\n");
+  const registered = new Set(cliCommandsFromSource(cliSource));
+  const webmcpSource = await readFile(
+    join(root, "apps/web/src/webmcp.ts"),
+    "utf8",
+  );
+  const webmcpTools = new Set(webMcpToolsFromSource(webmcpSource));
+
+  const corpus = [...files.values()].join("\n");
+  for (const phrase of [
+    "v0.1 binaries are unsigned",
+    "no daemon",
+    "remote forced sync",
+    "official installer",
+  ]) {
+    if (!corpus.toLowerCase().includes(phrase.toLowerCase())) {
+      findings.push({
+        file: "docs/",
+        message: `Documentation must state: ${phrase}.`,
+      });
+    }
+  }
+
+  const selfHost = files.get("docs/self-hosting.md") ?? "";
+  for (const missing of includesAll(selfHost, [
+    "Creem is not required",
+    "hosted ToolMirror billing is not required",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "GITHUB_CLIENT_ID",
+    "GITHUB_CLIENT_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "wrangler d1",
+    "AGPL",
+    "GitHub OAuth",
+    "Google OAuth",
+  ])) {
+    findings.push({
+      file: "docs/self-hosting.md",
+      message: `Missing required self-hosting coverage: ${missing}.`,
+    });
+  }
+  for (const env of SELF_HOST_FORBIDDEN_ENV) {
+    if (selfHost.includes(env)) {
+      findings.push({
+        file: "docs/self-hosting.md",
+        message: `Self-hosting docs must not require ${env}. Creem is hosted-only.`,
+      });
+    }
+  }
+  if (/TOOLMIRROR_HOSTED["']?\s*[:=]\s*["']true["']/.test(selfHost)) {
+    findings.push({
+      file: "docs/self-hosting.md",
+      message: "Self-hosting docs must not set TOOLMIRROR_HOSTED to true.",
+    });
+  }
+
+  const hosted = files.get("docs/hosted-cloud.md") ?? "";
+  for (const missing of includesAll(hosted, [
+    "Creem",
+    "checkout",
+    "$5.99",
+    "$59.90",
+    "billing portal",
+    "entitlement",
+    "month",
+    "year",
+  ])) {
+    findings.push({
+      file: "docs/hosted-cloud.md",
+      message: `Missing hosted billing coverage: ${missing}.`,
+    });
+  }
+  for (const env of HOSTED_REQUIRED_ENV) {
+    if (!hosted.includes(env)) {
+      findings.push({
+        file: "docs/hosted-cloud.md",
+        message: `Hosted docs must document ${env}.`,
+      });
+    }
+  }
+
+  const install = files.get("docs/install.md") ?? "";
+  for (const missing of includesAll(install, [
+    "curl -fsSL https://toolmirror.com/install.sh | sh",
+    "irm https://toolmirror.com/install.ps1 | iex",
+    "toolmirror cli-update",
+    "toolmirror cli-update --check",
+    "SHA-256",
+  ])) {
+    findings.push({
+      file: "docs/install.md",
+      message: `Missing installer coverage: ${missing}.`,
+    });
+  }
+
+  const migrate = files.get("docs/migration.md") ?? "";
+  for (const missing of includesAll(migrate, [
+    "toolmirror migrate cloud",
+    "toolmirror migrate git",
+    "--strategy",
+  ])) {
+    findings.push({
+      file: "docs/migration.md",
+      message: `Missing migration coverage: ${missing}.`,
+    });
+  }
+
+  for (const [relative, markdown] of files) {
+    for (const command of documentedToolmirrorCommands(markdown)) {
+      if (!registered.has(command)) {
+        findings.push({
+          file: relative,
+          message: `Documented command \`toolmirror ${command}\` is not registered in the CLI.`,
+        });
+      }
+    }
+    for (const tool of documentedWebMcpTools(markdown)) {
+      if (!webmcpTools.has(tool)) {
+        findings.push({
+          file: relative,
+          message: `Documented WebMCP tool \`${tool}\` is not implemented.`,
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+async function readCommandSources(directory: string): Promise<string[]> {
+  const entries = await readdir(directory);
+  const files = entries.filter((name) => name.endsWith("-command.ts"));
+  return Promise.all(
+    files.map((name) => readFile(join(directory, name), "utf8")),
+  );
+}
+
+async function main(): Promise<void> {
+  const root = join(import.meta.dir, "..");
+  const findings = await checkDocs(root);
+  if (findings.length === 0) {
+    console.log("docs:check passed");
+    return;
+  }
+  for (const finding of findings) {
+    console.error(`${finding.file}: ${finding.message}`);
+  }
+  process.exitCode = 1;
+}
+
+if (import.meta.main) {
+  await main();
+}

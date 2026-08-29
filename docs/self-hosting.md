@@ -1,0 +1,178 @@
+# Self-hosted ToolMirror Cloud
+
+Self-hosted ToolMirror Cloud is free under AGPLv3. Hosted ToolMirror billing is not required for self-hosted Cloud. Creem is not required. Do not configure Creem. Auth and OAuth are configured independently from hosted billing.
+
+There is no daemon and no remote forced sync. Devices pair in a browser and apply or report state only when the CLI runs on that device.
+
+## What you deploy
+
+The `apps/web` Cloudflare Worker (vinext / Next.js on workerd) plus one D1 database. The same process serves the landing page, dashboard, WebMCP, and `/api/v1/` Cloud API.
+
+Leave `TOOLMIRROR_HOSTED` unset or set it to `false`. Only `true` or `1` turns on hosted toolmirror.com billing. Self-hosted Cloud paths do not check Creem entitlement.
+
+## Prerequisites
+
+- A Cloudflare account and Wrangler authenticated for that account
+- [Bun](https://bun.sh/) 1.3 or newer
+- A GitHub OAuth App
+- A Google OAuth App
+- Public HTTPS origin for the Worker
+
+Creem, a Creem account, and hosted toolmirror.com subscription products are not prerequisites.
+
+## AGPL obligations
+
+This software is licensed under [GNU AGPLv3](../LICENSE). If you run a modified version as a network service, you must offer the corresponding source to users who interact with it over the network. Keep the license text, copyright notices, and a way to obtain the source you actually deploy.
+
+## Create D1 and bindings
+
+From `apps/web`:
+
+```bash
+npx wrangler d1 create toolmirror
+```
+
+Put the returned `database_id` in `apps/web/wrangler.jsonc` under `d1_databases` for binding `DB`, database name `toolmirror`, `migrations_dir` `migrations`. The repository ships with `database_id` `local-toolmirror-d1` for local use; production must use the created id.
+
+Apply migrations:
+
+```bash
+npx wrangler d1 migrations apply toolmirror --remote
+```
+
+Local development:
+
+```bash
+bun run db:migrate
+```
+
+`wrangler.jsonc` already binds:
+
+| Binding | Name | Purpose |
+| --- | --- | --- |
+| `DB` | D1 `toolmirror` | Auth, workspaces, revisions, devices, reports |
+| `ASSETS` | `dist/client` | Built web assets |
+| `TOOLMIRROR_TELEMETRY` | Analytics Engine dataset `toolmirror_telemetry` | Optional anonymous CLI telemetry ingest |
+
+You do not need a Creem webhook route configuration for self-hosting. Hosted billing routes return that billing is unavailable when the deployment is not hosted.
+
+## Auth and OAuth
+
+Production (anything other than `TOOLMIRROR_ENVIRONMENT=development`) requires:
+
+- `BETTER_AUTH_SECRET` at least 32 characters
+- `BETTER_AUTH_URL` equal to the public origin, for example `https://cloud.example.com`
+- Both GitHub and Google OAuth client id and secret
+
+Create the OAuth apps with:
+
+| Field | Value |
+| --- | --- |
+| Homepage | `https://cloud.example.com` |
+| GitHub callback | `https://cloud.example.com/api/auth/callback/github` |
+| Google callback | `https://cloud.example.com/api/auth/callback/google` |
+
+Replace the origin with your `BETTER_AUTH_URL`. Partial OAuth (id without secret, or only one provider) is rejected.
+
+This OAuth setup is the entire sign-in path for self-hosted Cloud. It is independent of Creem and of hosted toolmirror.com billing.
+
+## Environment variables
+
+Required for a production self-host:
+
+| Name | How to set | Notes |
+| --- | --- | --- |
+| `BETTER_AUTH_SECRET` | `npx wrangler secret put BETTER_AUTH_SECRET` | ≥ 32 characters |
+| `GITHUB_CLIENT_SECRET` | `npx wrangler secret put GITHUB_CLIENT_SECRET` | |
+| `GOOGLE_CLIENT_SECRET` | `npx wrangler secret put GOOGLE_CLIENT_SECRET` | |
+| `BETTER_AUTH_URL` | `vars` in `wrangler.jsonc` | Public origin, no trailing path |
+| `GITHUB_CLIENT_ID` | `vars` | |
+| `GOOGLE_CLIENT_ID` | `vars` | |
+| `TOOLMIRROR_ENVIRONMENT` | `vars` | `production` |
+| `TOOLMIRROR_HOSTED` | `vars` | `false` or omit |
+
+Example `vars` (do not put secrets here):
+
+```jsonc
+"vars": {
+  "BETTER_AUTH_URL": "https://cloud.example.com",
+  "GITHUB_CLIENT_ID": "your-github-client-id",
+  "GOOGLE_CLIENT_ID": "your-google-client-id",
+  "TOOLMIRROR_ENVIRONMENT": "production",
+  "TOOLMIRROR_HOSTED": "false"
+}
+```
+
+Do not set hosted billing variables. Hosted ToolMirror billing is not required for self-hosted Cloud.
+
+Optional CLI-side variables, used on devices rather than the Worker:
+
+| Name | Purpose |
+| --- | --- |
+| `TOOLMIRROR_CLOUD_ORIGIN` | Cloud origin for `login`, `init cloud`, and `migrate` |
+| `TOOLMIRROR_RELEASE_BASE` | CLI release origin for installers and `cli-update` |
+
+## Deploy
+
+From the repository root:
+
+```bash
+bun install
+bun run web:build
+```
+
+From `apps/web`:
+
+```bash
+npx wrangler d1 migrations apply toolmirror --remote
+npx wrangler deploy
+```
+
+Confirm `https://cloud.example.com` serves the site and `/dashboard` redirects through OAuth.
+
+## Operational setup
+
+1. Install the official CLI on each device ([install.md](./install.md)).
+2. Sign in to the self-hosted site with GitHub or Google. A default workspace is created for the user.
+3. Pair a device:
+
+```bash
+toolmirror login --origin https://cloud.example.com
+```
+
+Or initialize Cloud and adopt selected local skills in one step:
+
+```bash
+toolmirror init cloud --source owner/skills --origin https://cloud.example.com
+```
+
+`init cloud` opens the pairing browser flow when the device is not already logged in. Hosted entitlement is not required.
+
+4. Open `/dashboard` for skills, devices, target reports, and settings. Self-hosted billing UI states that Cloud functionality is free and has no billing portal.
+5. Mutate Cloud desired state with [WebMCP](./dashboard-and-webmcp.md) (or the same-origin dashboard mutation API). Git CLI mutation commands (`add`, `sync`, and the rest) require Git Sync mode.
+6. Revoke a device from `/dashboard/devices`. Revoke invalidates only that device token and keeps remote machine data.
+7. `toolmirror logout --origin https://cloud.example.com` revokes the local token.
+
+Pairing codes expire after 10 minutes. Cloud may return `426 Upgrade Required` when the CLI is older than `0.1.0`. Git Sync is independent of that check.
+
+## Supported agents and migration
+
+Supported agents are listed in [cli.md](./cli.md). v0.1 manages global/user-level skills only.
+
+Git ↔ Cloud migration:
+
+```bash
+toolmirror migrate cloud --strategy replace --origin https://cloud.example.com
+toolmirror migrate git git@github.com:example/toolmirror-state.git --strategy merge --origin https://cloud.example.com
+```
+
+See [migration.md](./migration.md). Identity (skill id, source, ref, lock revision, hash, targets) is preserved. The canonical local store is not rewritten by migrate.
+
+## Limitations
+
+- v0.1 binaries are unsigned. Official installers are the supported install path.
+- No daemon, watch mode, scheduled updates, or remote forced sync.
+- No project-level skills, teams/RBAC, or Windows arm64.
+- Production auth requires both GitHub and Google OAuth.
+- Self-hosted Cloud does not offer a Creem checkout or billing portal.
+- Manual binary download is not an officially supported installation method.

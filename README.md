@@ -4,7 +4,35 @@ Keep your agent skills in sync.
 
 ToolMirror is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. It supports a free Git Sync backend and hosted or self-hosted ToolMirror Cloud.
 
-> ToolMirror is under active v0.1 development. Installation and self-hosting instructions will be published with the first release.
+v0.1 binaries are unsigned. Official installers are the only supported installation method. There is no daemon and no remote forced sync.
+
+## Install
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://toolmirror.com/install.sh | sh
+```
+
+Windows:
+
+```powershell
+irm https://toolmirror.com/install.ps1 | iex
+```
+
+Update:
+
+```bash
+toolmirror cli-update --check
+toolmirror cli-update
+```
+
+## Docs
+
+- [Public documentation](./docs/README.md)
+- [Git Sync](./docs/git-sync.md)
+- [Self-hosted Cloud](./docs/self-hosting.md) — Creem is not required
+- [Hosted toolmirror.com](./docs/hosted-cloud.md)
 
 ## Development
 
@@ -14,9 +42,8 @@ Requires [Bun](https://bun.sh/) 1.3 or newer.
 bun install
 bun run typecheck
 bun run lint
+bun run docs:check
 ```
-
-## Compiled CLI spike
 
 Build and verify the macOS arm64 standalone binary:
 
@@ -25,8 +52,7 @@ bun run build:cli
 ./scripts/verify-cli.sh dist/toolmirror-darwin-arm64
 ```
 
-The verification runs the binary with a minimal `PATH` that does not contain
-Bun. Linux x64 is built and run in [the compile proof workflow](./.github/workflows/cli-compile.yml).
+Linux x64 is built and run in [the compile proof workflow](./.github/workflows/cli-compile.yml).
 
 ## License
 
