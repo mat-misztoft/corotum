@@ -1,6 +1,8 @@
-export const RELEASE_CHANNEL = "pipeline-proof" as const;
+export const RELEASE_CHANNEL = "v0.1" as const;
 export const RELEASE_SCHEMA_VERSION = 1;
 export const R2_RELEASE_PREFIX = "releases";
+export const PIPELINE_PROOF_REUSE_ERROR =
+  "pipeline-proof artifacts must not be reused";
 
 export type ReleaseTargetId =
   | "darwin-arm64"
@@ -61,18 +63,16 @@ export type LatestJson = Readonly<{
   version: string;
   channel: typeof RELEASE_CHANNEL;
   unsigned: true;
-  final: false;
+  final: true;
   notes: string;
   artifacts: Readonly<Record<ReleaseTargetId, ReleaseArtifact>>;
 }>;
 
-export const PIPELINE_PROOF_NOTES =
-  "v0.1 pipeline-proof artifacts. Unsigned. Not a final release. Manual binary download is not an officially supported installation method.";
+export const FINAL_NOTES =
+  "ToolMirror v0.1. Unsigned. Official installers are the only supported installation method. Manual binary download is not an officially supported installation method.";
 
 export const UNSIGNED_NOTICE =
   "ToolMirror v0.1 binaries are unsigned. Signing and notarization are out of scope for v0.1.";
-
-export const PIPELINE_PROOF_NOTICE = `${PIPELINE_PROOF_NOTES}\n`;
 
 export function compiledBinaryName(target: ReleaseTarget): string {
   return target.id === "windows-x64"
@@ -96,7 +96,7 @@ export function formatChecksums(
   version: string,
   entries: ReadonlyArray<readonly [string, string]>,
 ): string {
-  const header = `# SHA-256 checksums for ToolMirror v${version} (unsigned ${RELEASE_CHANNEL})\n`;
+  const header = `# SHA-256 checksums for ToolMirror v${version} (unsigned ${RELEASE_CHANNEL} final)\n`;
   return `${header}${entries.map(([sha, path]) => checksumLine(sha, path)).join("\n")}\n`;
 }
 
@@ -111,6 +111,35 @@ export function parseChecksums(text: string): Map<string, string> {
     entries.set(match[2], match[1]);
   }
   return entries;
+}
+
+export function isGitSha(value: string): boolean {
+  return /^[a-f0-9]{40}$/.test(value);
+}
+
+export function sourceMarker(sourceSha: string): string {
+  if (!isGitSha(sourceSha)) {
+    throw new Error("sourceSha must be a 40-character lowercase git SHA");
+  }
+  return `sourceSha=${sourceSha}\nchannel=${RELEASE_CHANNEL}\nunsigned=true\nfinal=true\n`;
+}
+
+export function parseSourceMarker(text: string): string {
+  if (text.toLowerCase().includes("pipeline-proof")) {
+    throw new Error(PIPELINE_PROOF_REUSE_ERROR);
+  }
+  const match = /^sourceSha=([a-f0-9]{40})$/m.exec(text);
+  if (!match) {
+    throw new Error("SOURCE marker is missing sourceSha");
+  }
+  if (
+    !text.includes("unsigned=true") ||
+    !text.includes("final=true") ||
+    !text.includes(`channel=${RELEASE_CHANNEL}`)
+  ) {
+    throw new Error("SOURCE marker must declare unsigned final v0.1 artifacts");
+  }
+  return match[1];
 }
 
 export function buildLatestJson(
@@ -133,8 +162,8 @@ export function buildLatestJson(
     version,
     channel: RELEASE_CHANNEL,
     unsigned: true,
-    final: false,
-    notes: PIPELINE_PROOF_NOTES,
+    final: true,
+    notes: FINAL_NOTES,
     artifacts,
   };
 }
@@ -144,9 +173,48 @@ export function r2ObjectKeys(version: string): string[] {
     `${R2_RELEASE_PREFIX}/latest.json`,
     `${versionDir(version)}/checksums.txt`,
     `${versionDir(version)}/UNSIGNED`,
-    `${versionDir(version)}/PIPELINE_PROOF`,
+    `${versionDir(version)}/SOURCE`,
     ...RELEASE_TARGETS.map((target) => artifactObject(version, target.archive)),
   ];
+}
+
+export function createReleaseLayout(
+  version: string,
+  archives: Readonly<Record<ReleaseTargetId, Uint8Array>>,
+  sourceSha: string,
+  sha256: (bytes: Uint8Array) => string,
+): Map<string, Uint8Array> {
+  const sha256ByTarget = {} as Record<ReleaseTargetId, string>;
+  const checksumEntries: Array<readonly [string, string]> = [];
+  const files = new Map<string, Uint8Array>();
+  for (const target of RELEASE_TARGETS) {
+    const bytes = archives[target.id];
+    if (!bytes) throw new Error(`missing archive for ${target.id}`);
+    const digest = sha256(bytes);
+    sha256ByTarget[target.id] = digest;
+    checksumEntries.push([digest, `binaries/${target.archive}`]);
+    files.set(artifactObject(version, target.archive), bytes);
+  }
+  const encoder = new TextEncoder();
+  files.set(
+    `${versionDir(version)}/checksums.txt`,
+    encoder.encode(formatChecksums(version, checksumEntries)),
+  );
+  files.set(
+    `${versionDir(version)}/UNSIGNED`,
+    encoder.encode(`${UNSIGNED_NOTICE}\n`),
+  );
+  files.set(
+    `${versionDir(version)}/SOURCE`,
+    encoder.encode(sourceMarker(sourceSha)),
+  );
+  files.set(
+    `${R2_RELEASE_PREFIX}/latest.json`,
+    encoder.encode(
+      `${JSON.stringify(buildLatestJson(version, sha256ByTarget), null, 2)}\n`,
+    ),
+  );
+  return files;
 }
 
 export type LayoutFile = Readonly<{ path: string; contents: Uint8Array }>;
@@ -155,8 +223,17 @@ export function verifyReleaseLayout(
   version: string,
   files: ReadonlyMap<string, Uint8Array>,
   sha256: (bytes: Uint8Array) => string,
+  expectedSourceSha?: string,
 ): string[] {
   const errors: string[] = [];
+  for (const key of files.keys()) {
+    if (
+      key.includes("PIPELINE_PROOF") ||
+      key.toLowerCase().includes("pipeline-proof")
+    ) {
+      errors.push(PIPELINE_PROOF_REUSE_ERROR);
+    }
+  }
   const expected = new Set(r2ObjectKeys(version));
   for (const key of expected) {
     if (!files.has(key)) errors.push(`missing ${key}`);
@@ -164,7 +241,9 @@ export function verifyReleaseLayout(
   for (const key of files.keys()) {
     if (!expected.has(key)) errors.push(`unexpected ${key}`);
   }
-  if (errors.length > 0) return errors;
+  if (errors.length > 0 && !files.has(`${R2_RELEASE_PREFIX}/latest.json`)) {
+    return errors;
+  }
 
   let latest: LatestJson;
   try {
@@ -172,38 +251,53 @@ export function verifyReleaseLayout(
       new TextDecoder().decode(files.get(`${R2_RELEASE_PREFIX}/latest.json`)),
     ) as LatestJson;
   } catch {
-    return ["latest.json is not valid JSON"];
+    return [...errors, "latest.json is not valid JSON"];
   }
 
   if (latest.schemaVersion !== RELEASE_SCHEMA_VERSION) {
     errors.push("latest.json schemaVersion must be 1");
   }
   if (latest.version !== version) errors.push("latest.json version mismatch");
-  if (latest.channel !== RELEASE_CHANNEL) {
-    errors.push("latest.json must use the pipeline-proof channel");
+  const channel = String(latest.channel);
+  if (channel === "pipeline-proof") {
+    errors.push(PIPELINE_PROOF_REUSE_ERROR);
+  } else if (channel !== RELEASE_CHANNEL) {
+    errors.push(`latest.json must use the ${RELEASE_CHANNEL} channel`);
   }
   if (latest.unsigned !== true) errors.push("v0.1 binaries must be unsigned");
-  if (latest.final !== false) {
-    errors.push("pipeline-proof artifacts must not be marked final");
+  if (latest.final !== true) {
+    errors.push("final artifacts must be marked final");
   }
-  if (latest.notes !== PIPELINE_PROOF_NOTES) {
-    errors.push("latest.json notes must identify non-final unsigned artifacts");
+  if (
+    typeof latest.notes === "string" &&
+    latest.notes.includes("pipeline-proof")
+  ) {
+    errors.push(PIPELINE_PROOF_REUSE_ERROR);
+  } else if (latest.notes !== FINAL_NOTES) {
+    errors.push(
+      "latest.json notes must identify unsigned official installer artifacts",
+    );
   }
 
   const unsigned = new TextDecoder().decode(
     files.get(`${versionDir(version)}/UNSIGNED`),
   );
-  if (!unsigned.includes("unsigned")) {
+  if (!unsigned?.includes("unsigned")) {
     errors.push("UNSIGNED marker is missing the unsigned notice");
   }
-  const proof = new TextDecoder().decode(
-    files.get(`${versionDir(version)}/PIPELINE_PROOF`),
-  );
-  if (
-    !proof.includes("pipeline-proof") ||
-    !proof.includes("Not a final release")
-  ) {
-    errors.push("PIPELINE_PROOF marker is incomplete");
+
+  const sourceBytes = files.get(`${versionDir(version)}/SOURCE`);
+  if (sourceBytes) {
+    try {
+      const sourceSha = parseSourceMarker(
+        new TextDecoder().decode(sourceBytes),
+      );
+      if (expectedSourceSha && sourceSha !== expectedSourceSha) {
+        errors.push("SOURCE marker does not match the final source SHA");
+      }
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
   }
 
   let checksums: Map<string, string>;
@@ -217,11 +311,16 @@ export function verifyReleaseLayout(
     return [...errors, error instanceof Error ? error.message : String(error)];
   }
 
+  const decoder = new TextDecoder();
   for (const target of RELEASE_TARGETS) {
     const object = artifactObject(version, target.archive);
     const relative = `binaries/${target.archive}`;
     const bytes = files.get(object);
     if (!bytes) continue;
+    const prefix = decoder.decode(bytes.slice(0, 32));
+    if (prefix.includes("pipeline-proof")) {
+      errors.push(PIPELINE_PROOF_REUSE_ERROR);
+    }
     const digest = sha256(bytes);
     if (checksums.get(relative) !== digest) {
       errors.push(`checksum mismatch for ${relative}`);
@@ -244,7 +343,7 @@ export function verifyReleaseLayout(
   if (checksums.size !== RELEASE_TARGETS.length) {
     errors.push("checksums.txt must contain one entry per release target");
   }
-  return errors;
+  return [...new Set(errors)];
 }
 
 export function listUploadKeys(version: string): readonly string[] {

@@ -3,63 +3,47 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  artifactObject,
   buildLatestJson,
+  createReleaseLayout,
   formatChecksums,
   listUploadKeys,
-  PIPELINE_PROOF_NOTES,
+  PIPELINE_PROOF_REUSE_ERROR,
   parseChecksums,
+  RELEASE_CHANNEL,
   RELEASE_TARGETS,
   type ReleaseTargetId,
   r2ObjectKeys,
+  sourceMarker,
   uploadReleaseObjects,
   verifyReleaseLayout,
 } from "./release";
+import {
+  smokeReleaseManifest,
+  smokeWorkerdEndpoints,
+} from "./release-endpoints";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
+const SOURCE_SHA = "0123456789abcdef0123456789abcdef01234567";
 
 function sha256(bytes: Uint8Array): string {
   return new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 }
 
 function fakeArchive(id: string): Uint8Array {
-  return new TextEncoder().encode(`pipeline-proof-archive:${id}`);
+  return new TextEncoder().encode(`final-archive:${id}`);
+}
+
+function archives(): Record<ReleaseTargetId, Uint8Array> {
+  return Object.fromEntries(
+    RELEASE_TARGETS.map((target) => [target.id, fakeArchive(target.id)]),
+  ) as Record<ReleaseTargetId, Uint8Array>;
 }
 
 function layoutFiles(
   version: string,
   overrides: Record<string, Uint8Array | undefined> = {},
 ): Map<string, Uint8Array> {
-  const sha256ByTarget = {} as Record<ReleaseTargetId, string>;
-  const checksumEntries: Array<readonly [string, string]> = [];
-  const files = new Map<string, Uint8Array>();
-  for (const target of RELEASE_TARGETS) {
-    const bytes = fakeArchive(target.id);
-    const digest = sha256(bytes);
-    sha256ByTarget[target.id] = digest;
-    checksumEntries.push([digest, `binaries/${target.archive}`]);
-    files.set(artifactObject(version, target.archive), bytes);
-  }
-  files.set(
-    `releases/v${version}/checksums.txt`,
-    new TextEncoder().encode(formatChecksums(version, checksumEntries)),
-  );
-  files.set(
-    `releases/v${version}/UNSIGNED`,
-    new TextEncoder().encode(
-      "ToolMirror v0.1 binaries are unsigned. Signing and notarization are out of scope for v0.1.\n",
-    ),
-  );
-  files.set(
-    `releases/v${version}/PIPELINE_PROOF`,
-    new TextEncoder().encode(`${PIPELINE_PROOF_NOTES}\n`),
-  );
-  files.set(
-    "releases/latest.json",
-    new TextEncoder().encode(
-      `${JSON.stringify(buildLatestJson(version, sha256ByTarget), null, 2)}\n`,
-    ),
-  );
+  const files = createReleaseLayout(version, archives(), SOURCE_SHA, sha256);
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) files.delete(key);
     else files.set(key, value);
@@ -67,7 +51,7 @@ function layoutFiles(
   return files;
 }
 
-describe("release pipeline proof layout", () => {
+describe("final release layout", () => {
   test("covers the v0.1 unsigned matrix and R2 key layout", () => {
     expect(RELEASE_TARGETS.map((target) => target.id)).toEqual([
       "darwin-arm64",
@@ -80,22 +64,23 @@ describe("release pipeline proof layout", () => {
       "releases/latest.json",
       "releases/v0.1.0/checksums.txt",
       "releases/v0.1.0/UNSIGNED",
-      "releases/v0.1.0/PIPELINE_PROOF",
+      "releases/v0.1.0/SOURCE",
       "releases/v0.1.0/binaries/toolmirror-darwin-arm64.tar.gz",
       "releases/v0.1.0/binaries/toolmirror-darwin-x64.tar.gz",
       "releases/v0.1.0/binaries/toolmirror-linux-arm64.tar.gz",
       "releases/v0.1.0/binaries/toolmirror-linux-x64.tar.gz",
       "releases/v0.1.0/binaries/toolmirror-windows-x64.tar.gz",
     ]);
+    expect(RELEASE_CHANNEL).toBe("v0.1");
   });
 
-  test("accepts a matching unsigned pipeline-proof layout", () => {
+  test("accepts a matching unsigned final layout", () => {
     expect(verifyReleaseLayout("0.1.0", layoutFiles("0.1.0"), sha256)).toEqual(
       [],
     );
   });
 
-  test("rejects a missing platform, checksum mismatch, or final marker", () => {
+  test("rejects a missing platform, checksum mismatch, or pipeline-proof leftover", () => {
     const missing = layoutFiles("0.1.0", {
       "releases/v0.1.0/binaries/toolmirror-linux-arm64.tar.gz": undefined,
     });
@@ -116,14 +101,38 @@ describe("release pipeline proof layout", () => {
         layoutFiles("0.1.0").get("releases/latest.json"),
       ),
     );
-    latest.final = true;
-    latest.channel = "stable";
-    const finalized = layoutFiles("0.1.0", {
+    latest.final = false;
+    latest.channel = "pipeline-proof";
+    latest.notes = "v0.1 pipeline-proof artifacts. Not a final release.";
+    const leftover = layoutFiles("0.1.0", {
       "releases/latest.json": new TextEncoder().encode(JSON.stringify(latest)),
+      "releases/v0.1.0/PIPELINE_PROOF": new TextEncoder().encode(
+        "Not a final release\n",
+      ),
     });
-    const errors = verifyReleaseLayout("0.1.0", finalized, sha256).join("\n");
-    expect(errors).toContain("pipeline-proof");
-    expect(errors).toContain("must not be marked final");
+    const errors = verifyReleaseLayout("0.1.0", leftover, sha256).join("\n");
+    expect(errors).toContain(PIPELINE_PROOF_REUSE_ERROR);
+    expect(errors).toContain("must be marked final");
+
+    const reused = layoutFiles("0.1.0", {
+      "releases/v0.1.0/binaries/toolmirror-linux-x64.tar.gz":
+        new TextEncoder().encode("pipeline-proof-archive:linux-x64"),
+    });
+    expect(verifyReleaseLayout("0.1.0", reused, sha256).join("\n")).toContain(
+      PIPELINE_PROOF_REUSE_ERROR,
+    );
+  });
+
+  test("requires the SOURCE marker to match the final git SHA", () => {
+    expect(
+      verifyReleaseLayout(
+        "0.1.0",
+        layoutFiles("0.1.0"),
+        sha256,
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      ).join("\n"),
+    ).toContain("SOURCE marker does not match the final source SHA");
+    expect(sourceMarker(SOURCE_SHA)).toContain("final=true");
   });
 
   test("parses sha256sum checksums and maps upload keys 1:1 onto R2", async () => {
@@ -143,9 +152,10 @@ describe("release pipeline proof layout", () => {
       },
     );
     expect(uploaded).toEqual([...keys]);
+    expect(keys).not.toContain("releases/v0.1.0/PIPELINE_PROOF");
   });
 
-  test("GitHub Actions matrix builds every supported target and publishes the R2 layout", () => {
+  test("GitHub Actions rebuilds every target from final source and gates publication", () => {
     const workflow = readFileSync(
       join(root, ".github/workflows/release.yml"),
       "utf8",
@@ -154,10 +164,91 @@ describe("release pipeline proof layout", () => {
       expect(workflow).toContain(target.bunTarget);
       expect(workflow).toContain(target.id);
     }
+    expect(workflow).toContain("name: Final release");
+    expect(workflow).toContain("bun test");
+    expect(workflow).toContain("bun run test:e2e");
+    expect(workflow).toContain("bun run web:build");
+    expect(workflow).toContain("bun ./tooling/release-build.ts --target");
     expect(workflow).toContain("bun run release:verify");
-    expect(workflow).toContain("bun run release:upload");
+    expect(workflow).toContain("bun run release:smoke-installers");
+    expect(workflow).toContain("bun run web:smoke");
+    expect(workflow).toContain("bun run release:deploy");
+    expect(workflow).toContain("bun run release:smoke-endpoints");
+    expect(workflow).toContain('RELEASE_REQUIRE_UPLOAD: "1"');
+    expect(workflow).toContain('RELEASE_REQUIRE_DEPLOY: "1"');
     expect(workflow).toContain("pipeline-proof");
+    expect(workflow).not.toContain("publish-pipeline-proof");
     expect(workflow).not.toContain("notarytool");
     expect(workflow).not.toContain("codesign");
+    expect(workflow).not.toContain("aws s3 cp");
+    expect(workflow).not.toContain("r2.dev");
+    const testIndex = workflow.indexOf("name: test");
+    const buildIndex = workflow.indexOf(
+      "bun ./tooling/release-build.ts --target",
+    );
+    const verifyIndex = workflow.indexOf("bun run release:verify");
+    const installerIndex = workflow.indexOf("bun run release:smoke-installers");
+    const deployIndex = workflow.indexOf("bun run release:deploy");
+    const uploadIndex = workflow.lastIndexOf("bun run release:upload");
+    expect(testIndex).toBeGreaterThan(-1);
+    expect(testIndex).toBeLessThan(buildIndex);
+    expect(buildIndex).toBeLessThan(verifyIndex);
+    expect(verifyIndex).toBeLessThan(installerIndex);
+    expect(installerIndex).toBeLessThan(deployIndex);
+    expect(deployIndex).toBeLessThan(uploadIndex);
+  });
+
+  test("workerd and release endpoint smoke reject pipeline-proof leftovers", async () => {
+    const responses: Record<string, Response> = {
+      "https://toolmirror.com/api/health": Response.json({ status: "ok" }),
+      "https://toolmirror.com/install.sh": new Response(
+        "# Official ToolMirror installer.\n# v0.1 binaries are unsigned.\n",
+      ),
+      "https://toolmirror.com/install.ps1": new Response(
+        "# Official ToolMirror installer\n# v0.1 binaries are unsigned.\n",
+      ),
+      "https://toolmirror.com/api/v1/cli/pairings": new Response(
+        JSON.stringify({ error: "CLI upgrade required" }),
+        { status: 426 },
+      ),
+      "https://toolmirror.com/api/auth/get-session": Response.json(null),
+      "https://releases.toolmirror.com/releases/latest.json": Response.json(
+        buildLatestJson("0.1.0", {
+          "darwin-arm64": "a".repeat(64),
+          "darwin-x64": "a".repeat(64),
+          "linux-arm64": "a".repeat(64),
+          "linux-x64": "a".repeat(64),
+          "windows-x64": "a".repeat(64),
+        }),
+      ),
+    };
+    const fetchImpl = async (url: string) => {
+      const response = responses[url];
+      if (!response) return new Response("missing", { status: 404 });
+      return response.clone();
+    };
+    expect(
+      await smokeWorkerdEndpoints("https://toolmirror.com", fetchImpl, {
+        requireAuth: true,
+        requireCliGate: true,
+      }),
+    ).toEqual([]);
+    expect(
+      await smokeReleaseManifest("https://releases.toolmirror.com", fetchImpl),
+    ).toEqual([]);
+
+    responses["https://releases.toolmirror.com/releases/latest.json"] =
+      Response.json({
+        channel: "pipeline-proof",
+        final: false,
+        unsigned: true,
+        notes: "pipeline-proof",
+        version: "0.1.0",
+      });
+    expect(
+      (
+        await smokeReleaseManifest("https://releases.toolmirror.com", fetchImpl)
+      ).join("\n"),
+    ).toContain(PIPELINE_PROOF_REUSE_ERROR);
   });
 });

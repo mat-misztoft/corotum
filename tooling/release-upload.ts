@@ -1,10 +1,19 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { S3Client } from "bun";
-import { listUploadKeys, uploadReleaseObjects } from "./release";
+import {
+  isGitSha,
+  listUploadKeys,
+  uploadReleaseObjects,
+  verifyReleaseLayout,
+} from "./release";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const r2Root = join(root, "dist/r2");
+
+function sha256(bytes: Uint8Array): string {
+  return new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+}
 
 function requiredEnv(name: string): string | undefined {
   const value = process.env[name];
@@ -20,6 +29,29 @@ const accountId = requiredEnv("R2_ACCOUNT_ID");
 const accessKeyId = requiredEnv("R2_ACCESS_KEY_ID");
 const secretAccessKey = requiredEnv("R2_SECRET_ACCESS_KEY");
 const bucket = requiredEnv("R2_BUCKET");
+
+const files = new Map<string, Uint8Array>();
+const glob = new Bun.Glob("**/*");
+for await (const path of glob.scan({ cwd: r2Root, onlyFiles: true })) {
+  files.set(
+    path,
+    new Uint8Array(await Bun.file(join(r2Root, path)).arrayBuffer()),
+  );
+}
+const expectedSourceSha = process.env.GITHUB_SHA?.trim().toLowerCase();
+const layoutErrors = verifyReleaseLayout(
+  version,
+  files,
+  sha256,
+  expectedSourceSha && isGitSha(expectedSourceSha)
+    ? expectedSourceSha
+    : undefined,
+);
+if (layoutErrors.length > 0) {
+  console.error("Release publication blocked; layout verification failed:");
+  for (const error of layoutErrors) console.error(`- ${error}`);
+  process.exit(1);
+}
 
 if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
   if (requireUpload) {

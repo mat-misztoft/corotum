@@ -32,4 +32,4 @@ Recorded against the product sources and tests in this repository. v0.1 binaries
 
 ## Release layout
 
-The security suite writes a pipeline-proof unsigned layout under `dist/r2` so `bun run release:verify` can confirm checksums, `latest.json`, and the UNSIGNED/PIPELINE_PROOF markers. Artifacts are not a final release.
+The security suite writes an unsigned final v0.1 layout under `dist/r2` so `bun run release:verify` can confirm checksums, `latest.json`, UNSIGNED, and SOURCE markers. Pipeline-proof binaries are not reused.

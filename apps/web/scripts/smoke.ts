@@ -38,6 +38,16 @@ try {
 
   if (!healthy) throw failure;
 
+  const { smokeWorkerdEndpoints } = await import(
+    "../../../tooling/release-endpoints"
+  );
+  const endpointErrors = await smokeWorkerdEndpoints(
+    `http://127.0.0.1:${port}`,
+  );
+  if (endpointErrors.length > 0) {
+    throw new Error(endpointErrors.join("; "));
+  }
+
   const home = await fetch(`http://127.0.0.1:${port}/`);
   const landing = await home.text();
   const sectionOrder = [

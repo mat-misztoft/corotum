@@ -1,6 +1,11 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { R2_RELEASE_PREFIX, verifyReleaseLayout } from "./release";
+import {
+  isGitSha,
+  R2_RELEASE_PREFIX,
+  RELEASE_CHANNEL,
+  verifyReleaseLayout,
+} from "./release";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const r2Root = join(root, "dist/r2");
@@ -25,18 +30,26 @@ const pkg = (await Bun.file(join(root, "package.json")).json()) as {
   version: string;
 };
 const files = await readLayout();
+const expectedSourceSha = process.env.GITHUB_SHA?.trim().toLowerCase();
 if (files.size === 0) {
   console.error(`No release layout at ${r2Root}`);
   process.exitCode = 1;
 } else {
-  const errors = verifyReleaseLayout(pkg.version, files, sha256);
+  const errors = verifyReleaseLayout(
+    pkg.version,
+    files,
+    sha256,
+    expectedSourceSha && isGitSha(expectedSourceSha)
+      ? expectedSourceSha
+      : undefined,
+  );
   if (errors.length > 0) {
     console.error("Release layout verification failed:");
     for (const error of errors) console.error(`- ${error}`);
     process.exitCode = 1;
   } else {
     console.log(
-      `Release layout: PASS (${R2_RELEASE_PREFIX}/v${pkg.version}, unsigned ${"pipeline-proof"})`,
+      `Release layout: PASS (${R2_RELEASE_PREFIX}/v${pkg.version}, unsigned ${RELEASE_CHANNEL} final)`,
     );
   }
 }

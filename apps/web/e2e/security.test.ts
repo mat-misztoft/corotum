@@ -15,13 +15,10 @@ import { skillId } from "../../../packages/core/src/index";
 import { SaaSProvider } from "../../../packages/saas-provider/src/index";
 import { assertSafeGitSource } from "../../../packages/skills-adapter/src/git-source";
 import {
-  artifactObject,
-  buildLatestJson,
-  formatChecksums,
-  PIPELINE_PROOF_NOTES,
+  createReleaseLayout,
+  type LatestJson,
   RELEASE_TARGETS,
   type ReleaseTargetId,
-  UNSIGNED_NOTICE,
   verifyReleaseLayout,
 } from "../../../tooling/release";
 import { type BillingEnvironment, hasHostedCloudAccess } from "../src/billing";
@@ -148,37 +145,18 @@ function sha256(bytes: Uint8Array): string {
 }
 
 function layoutFiles(version: string): Map<string, Uint8Array> {
-  const sha256ByTarget = {} as Record<ReleaseTargetId, string>;
-  const checksumEntries: Array<readonly [string, string]> = [];
-  const files = new Map<string, Uint8Array>();
-  for (const target of RELEASE_TARGETS) {
-    const bytes = new TextEncoder().encode(
-      `pipeline-proof-archive:${target.id}`,
-    );
-    const digest = sha256(bytes);
-    sha256ByTarget[target.id] = digest;
-    checksumEntries.push([digest, `binaries/${target.archive}`]);
-    files.set(artifactObject(version, target.archive), bytes);
-  }
-  files.set(
-    `releases/v${version}/checksums.txt`,
-    new TextEncoder().encode(formatChecksums(version, checksumEntries)),
+  const archives = Object.fromEntries(
+    RELEASE_TARGETS.map((target) => [
+      target.id,
+      new TextEncoder().encode(`final-archive:${target.id}`),
+    ]),
+  ) as Record<ReleaseTargetId, Uint8Array>;
+  return createReleaseLayout(
+    version,
+    archives,
+    "0123456789abcdef0123456789abcdef01234567",
+    sha256,
   );
-  files.set(
-    `releases/v${version}/UNSIGNED`,
-    new TextEncoder().encode(`${UNSIGNED_NOTICE}\n`),
-  );
-  files.set(
-    `releases/v${version}/PIPELINE_PROOF`,
-    new TextEncoder().encode(`${PIPELINE_PROOF_NOTES}\n`),
-  );
-  files.set(
-    "releases/latest.json",
-    new TextEncoder().encode(
-      `${JSON.stringify(buildLatestJson(version, sha256ByTarget), null, 2)}\n`,
-    ),
-  );
-  return files;
 }
 
 test("security: pairing and token hashes never persist plaintext secrets", async () => {
@@ -597,7 +575,7 @@ test("security: malicious release metadata cannot escape install/update paths or
   const escaped = layoutFiles(version);
   const latest = JSON.parse(
     new TextDecoder().decode(escaped.get("releases/latest.json")),
-  ) as ReturnType<typeof buildLatestJson>;
+  ) as LatestJson;
   latest.artifacts["darwin-arm64"] = {
     ...latest.artifacts["darwin-arm64"],
     object: "releases/v0.1.0/binaries/../../secret.tar.gz",
@@ -620,7 +598,7 @@ test("security: malicious release metadata cannot escape install/update paths or
     const files = layoutFiles("0.1.1");
     const poisoned = JSON.parse(
       new TextDecoder().decode(files.get("releases/latest.json")),
-    ) as ReturnType<typeof buildLatestJson>;
+    ) as LatestJson;
     poisoned.version = "0.1.1/../../etc";
     files.set(
       "releases/latest.json",

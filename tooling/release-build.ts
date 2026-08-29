@@ -6,10 +6,11 @@ import {
   buildLatestJson,
   compiledBinaryName,
   formatChecksums,
-  PIPELINE_PROOF_NOTICE,
+  isGitSha,
   RELEASE_TARGETS,
   type ReleaseTarget,
   type ReleaseTargetId,
+  sourceMarker,
   UNSIGNED_NOTICE,
   versionDir,
 } from "./release";
@@ -34,6 +35,25 @@ async function packageJsonVersion(): Promise<string> {
     version: string;
   };
   return pkg.version;
+}
+
+async function sourceSha(): Promise<string> {
+  const fromEnv = process.env.GITHUB_SHA?.trim().toLowerCase();
+  if (fromEnv && isGitSha(fromEnv)) return fromEnv;
+  const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [out, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    proc.exited,
+  ]);
+  const sha = out.trim().toLowerCase();
+  if (code !== 0 || !isGitSha(sha)) {
+    throw new Error("Final release requires the source git SHA");
+  }
+  return sha;
 }
 
 async function compileTarget(target: ReleaseTarget): Promise<string> {
@@ -126,8 +146,8 @@ async function assemble(version: string): Promise<void> {
     `${UNSIGNED_NOTICE}\n`,
   );
   await Bun.write(
-    join(r2Root, versionDir(version), "PIPELINE_PROOF"),
-    PIPELINE_PROOF_NOTICE,
+    join(r2Root, versionDir(version), "SOURCE"),
+    sourceMarker(await sourceSha()),
   );
   await Bun.write(
     join(r2Root, "releases/latest.json"),
