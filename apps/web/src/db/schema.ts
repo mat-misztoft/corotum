@@ -207,6 +207,33 @@ export const deviceAgents = sqliteTable(
   ],
 );
 
+export const cliPairings = sqliteTable(
+  "cli_pairings",
+  {
+    id: text().primaryKey(),
+    deviceCodeHash: text("device_code_hash").notNull().unique(),
+    userCode: text("user_code").notNull().unique(),
+    status: text().notNull().default("PENDING"),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    deviceId: text("device_id").references(() => devices.id, {
+      onDelete: "cascade",
+    }),
+    deviceName: text("device_name").notNull(),
+    platform: text().notNull(),
+    architecture: text().notNull(),
+    cliVersion: text("cli_version").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    approvedAt: integer("approved_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    check(
+      "cli_pairings_status_check",
+      sql`${table.status} IN ('PENDING', 'APPROVED', 'EXPIRED', 'CONSUMED')`,
+    ),
+  ],
+);
+
 export const idempotencyRecords = sqliteTable("idempotency_records", {
   key: text().primaryKey(),
   actorType: text("actor_type").notNull(),
