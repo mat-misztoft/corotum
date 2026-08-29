@@ -201,6 +201,62 @@ export default function Home() {
           </ol>
         </div>
       </section>
+
+      <section
+        className="git-cloud"
+        id="git-cloud"
+        aria-labelledby="git-cloud-heading"
+      >
+        <div className="git-cloud-heading">
+          <p className="dispatch-label">04 / GIT OR CLOUD</p>
+          <h2 id="git-cloud-heading">One ToolMirror. Two ways to sync.</h2>
+          <p>
+            Keep your state in your own Git repository, or use ToolMirror Cloud
+            for hosted sync, devices, dashboard and WebMCP.
+          </p>
+        </div>
+        <div className="control-plane">
+          <p className="control-plane-axis">
+            TOOLMIRROR CLI <span aria-hidden="true">→</span> DESIRED STATE
+          </p>
+          <div className="backend-route" aria-hidden="true" />
+          <article className="git-band" aria-labelledby="git-sync-heading">
+            <h3 id="git-sync-heading" className="backend-label">
+              GIT SYNC / FREE
+            </h3>
+            <ul>
+              <li>Free</li>
+              <li>Your repository</li>
+              <li>No account</li>
+              <li>Your Git credentials stay local</li>
+              <li>Deterministic manifest + lockfile</li>
+            </ul>
+          </article>
+          <article className="cloud-plane" aria-labelledby="cloud-heading">
+            <h3 id="cloud-heading" className="backend-label">
+              TOOLMIRROR CLOUD
+            </h3>
+            <p className="cloud-price">$5.99/month · $59.90/year</p>
+            <ul>
+              <li>Hosted desired state</li>
+              <li>Dashboard</li>
+              <li>Devices</li>
+              <li>WebMCP</li>
+              <li>No Git state repo to maintain</li>
+            </ul>
+            <p className="cloud-note">
+              Agents manage desired state. Devices become current only when
+              their CLI runs. No daemon, remote force-sync, or stored Git
+              credentials.
+            </p>
+          </article>
+          <div className="migration-route">
+            <p>MIGRATE</p>
+            <code>toolmirror migrate cloud</code>
+            <code>toolmirror migrate git &lt;repo&gt;</code>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

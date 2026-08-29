@@ -473,6 +473,151 @@ a {
   margin: 0;
 }
 
+.git-cloud {
+  border-top: 1px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: clamp(100px, 14vw, 210px) 42px clamp(110px, 14vw, 210px);
+}
+.git-cloud-heading {
+  max-width: 650px;
+}
+.git-cloud-heading h2 {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(3.8rem, 7.5vw, 7.5rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.86;
+  margin: 0;
+  text-transform: uppercase;
+}
+.git-cloud-heading > p:last-child {
+  color: #504b44;
+  font-size: clamp(1.05rem, 1.4vw, 1.25rem);
+  line-height: 1.5;
+  margin: 30px 0 0;
+  max-width: 500px;
+}
+.control-plane {
+  border: 0;
+  display: grid;
+  min-inline-size: 0;
+  padding: 0;
+  grid-template-columns: minmax(280px, 0.72fr) minmax(390px, 1.28fr);
+  margin-top: clamp(64px, 10vw, 130px);
+  position: relative;
+}
+.control-plane-axis {
+  background: var(--paper);
+  font:
+    700 11px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  left: 50%;
+  letter-spacing: 0.1em;
+  margin: 0;
+  padding: 0 8px;
+  position: absolute;
+  top: -25px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 1;
+}
+.backend-route {
+  background: var(--vermillion);
+  bottom: 0;
+  left: 50%;
+  position: absolute;
+  top: -12px;
+  width: 3px;
+}
+.git-band,
+.cloud-plane {
+  min-height: 380px;
+  padding: clamp(28px, 4vw, 58px);
+}
+.git-band {
+  align-self: end;
+  background: #e5ddd0;
+  color: var(--ink);
+  margin-top: 66px;
+}
+.cloud-plane {
+  background: var(--machine);
+  color: var(--paper);
+  margin-bottom: 74px;
+}
+.backend-label,
+.migration-route p {
+  font:
+    700 11px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+.cloud-plane .backend-label {
+  color: #f1c1b8;
+}
+.git-band ul,
+.cloud-plane ul {
+  list-style: none;
+  margin: 36px 0 0;
+  padding: 0;
+}
+.git-band li,
+.cloud-plane li {
+  border-top: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  font-size: clamp(0.95rem, 1.25vw, 1.1rem);
+  line-height: 1.35;
+  padding: 13px 0;
+}
+.git-band li:last-child,
+.cloud-plane li:last-child {
+  border-bottom: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+.cloud-price {
+  color: #f1c1b8;
+  font:
+    700 clamp(0.9rem, 1.4vw, 1.1rem) ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  margin: 18px 0 0;
+}
+.cloud-note {
+  color: #c9c1b5;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  margin: 28px 0 0;
+  max-width: 36ch;
+}
+.migration-route {
+  background: var(--ink);
+  color: var(--paper);
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr max-content max-content;
+  padding: 20px clamp(28px, 4vw, 58px);
+  position: relative;
+  z-index: 1;
+}
+.migration-route p {
+  align-self: center;
+  color: #c9c1b5;
+}
+.migration-route code {
+  font:
+    12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 850px) {
   .landing-header {
     padding: 0 20px;
@@ -506,6 +651,32 @@ a {
   }
   .product-flow {
     padding: 96px 20px;
+  }
+  .git-cloud {
+    padding: 96px 20px;
+  }
+  .control-plane {
+    display: block;
+    margin-top: 70px;
+  }
+  .control-plane-axis {
+    left: 20px;
+    transform: none;
+    white-space: normal;
+  }
+  .backend-route {
+    display: none;
+  }
+  .git-band,
+  .cloud-plane {
+    margin: 0;
+    min-height: auto;
+  }
+  .cloud-plane {
+    margin-top: 3px;
+  }
+  .migration-route {
+    grid-template-columns: 1fr;
   }
   .flow-story {
     display: block;
@@ -550,6 +721,20 @@ a {
     margin-left: -20px;
     margin-right: -20px;
     padding: 25px 20px;
+  }
+  .git-cloud-heading h2 {
+    font-size: clamp(3.4rem, 16vw, 5.3rem);
+  }
+  .git-band,
+  .cloud-plane {
+    margin-left: -20px;
+    margin-right: -20px;
+    padding: 32px 20px;
+  }
+  .migration-route {
+    margin-left: -20px;
+    margin-right: -20px;
+    padding: 20px;
   }
   .machine-room {
     margin-left: -20px;
