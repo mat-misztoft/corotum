@@ -572,6 +572,7 @@ export type ActualStateClassification =
   | "MISSING"
   | "DRIFTED"
   | "REMOVE_CANDIDATE"
+  | "UNMANAGE_CANDIDATE"
   | "PENDING_RESOLUTION";
 
 export type ClassifiedSkill = Readonly<{
@@ -581,7 +582,8 @@ export type ClassifiedSkill = Readonly<{
 
 export type ReconcileOperation =
   | Readonly<{ kind: "INSTALL"; skill: LockedSkill }>
-  | Readonly<{ kind: "REMOVE"; skillId: SkillId }>;
+  | Readonly<{ kind: "REMOVE"; skillId: SkillId }>
+  | Readonly<{ kind: "UNMANAGE"; skillId: SkillId }>;
 
 export type ReconcilePlan = Readonly<{
   classifications: readonly ClassifiedSkill[];
@@ -592,10 +594,13 @@ export type ReconcilePlan = Readonly<{
  * Classifies desired and local state without touching a filesystem. An actual
  * unowned skill and a modified owned skill intentionally produce no ordinary
  * sync operation: both require an explicit user decision or restore flow.
+ * When an offline revision history is supplied, UNMANAGE transitions preserve
+ * owned local content instead of scheduling its deletion.
  */
 export function planReconcile(
   desired: DesiredState,
   actual: ActualState,
+  transitions: readonly RevisionTransition[] = [],
 ): ReconcilePlan {
   const locksById = new Map(
     desired.lockfile.skills.map((skill) => [skill.id, skill]),
@@ -643,11 +648,23 @@ export function planReconcile(
     ActualSkillState,
   ][]) {
     if (!manifestIds.has(id)) {
+      const disposition = offlineSkillDisposition(desired, transitions, id);
+      const shouldUnmanage = local.managed && disposition === "UNMANAGE";
+
       classifications.push({
         skillId: id,
-        classification: local.managed ? "REMOVE_CANDIDATE" : "UNMANAGED",
+        classification: !local.managed
+          ? "UNMANAGED"
+          : shouldUnmanage
+            ? "UNMANAGE_CANDIDATE"
+            : "REMOVE_CANDIDATE",
       });
-      if (local.managed) operations.push({ kind: "REMOVE", skillId: id });
+      if (local.managed) {
+        operations.push({
+          kind: shouldUnmanage ? "UNMANAGE" : "REMOVE",
+          skillId: id,
+        });
+      }
     }
   }
 

@@ -11,6 +11,7 @@ import {
   planReconcile,
   type Result,
   revisionId,
+  type SkillId,
   type StateProvider,
   serializeLockfile,
   serializeManifest,
@@ -365,6 +366,105 @@ describe("actual-state diff and reconcile planning", () => {
     expect(aggregateTargetOutcomes(["CONFLICT", "DEVICE_ERROR"])).toBe(
       "PARTIAL_SUCCESS",
     );
+  });
+});
+
+describe("offline transition safety contracts", () => {
+  const source = "https://github.com/example/skills.git";
+  const removed = skillId("sk_01JOfflineRemove");
+  const unmanaged = skillId("sk_01JOfflineUnmanage");
+  const readded = skillId("sk_01JOfflineReadd");
+
+  const desired = (skills: readonly SkillId[]) => ({
+    manifest: {
+      version: 1 as const,
+      skills: skills.map((id) => ({
+        id,
+        source,
+        skill: id.slice(4).toLowerCase(),
+        ref: "main",
+        targets: "all" as const,
+        resolutionStatus: "RESOLVED" as const,
+      })),
+    },
+    lockfile: {
+      version: 1 as const,
+      skills: skills.map((id) => ({
+        id,
+        source,
+        skill: id.slice(4).toLowerCase(),
+        ref: "main",
+        repository: source,
+        revision: "abc123",
+        path: `skills/${id.slice(4).toLowerCase()}`,
+        contentHash: `sha256:${id}:locked`,
+      })),
+    },
+  });
+
+  test("offline REMOVE deletes only assets with recorded managed ownership", () => {
+    const plan = planReconcile(
+      desired([]),
+      {
+        skills: {
+          [removed]: { managed: true, contentHash: "sha256:locked" },
+          [unmanaged]: { managed: false, contentHash: "sha256:local" },
+        },
+      },
+      [{ type: "REMOVE", skillId: removed, metadata: {} }],
+    );
+
+    expect(plan.classifications).toEqual([
+      { skillId: removed, classification: "REMOVE_CANDIDATE" },
+      { skillId: unmanaged, classification: "UNMANAGED" },
+    ]);
+    expect(plan.operations).toEqual([{ kind: "REMOVE", skillId: removed }]);
+  });
+
+  test("offline UNMANAGE preserves local content by removing ownership, not content", () => {
+    const plan = planReconcile(
+      desired([]),
+      {
+        skills: { [unmanaged]: { managed: true, contentHash: "sha256:kept" } },
+      },
+      [{ type: "UNMANAGE", skillId: unmanaged, metadata: {} }],
+    );
+
+    expect(plan.classifications).toEqual([
+      { skillId: unmanaged, classification: "UNMANAGE_CANDIDATE" },
+    ]);
+    expect(plan.operations).toEqual([{ kind: "UNMANAGE", skillId: unmanaged }]);
+  });
+
+  test("UNMANAGE followed by ADD does not overwrite changed unmanaged content", () => {
+    const plan = planReconcile(
+      desired([readded]),
+      {
+        skills: {
+          [readded]: { managed: false, contentHash: "sha256:changed" },
+        },
+      },
+      [
+        { type: "UNMANAGE", skillId: readded, metadata: {} },
+        { type: "ADD", skillId: readded, metadata: {} },
+      ],
+    );
+
+    expect(plan.classifications).toEqual([
+      { skillId: readded, classification: "UNMANAGED" },
+    ]);
+    expect(plan.operations).toEqual([]);
+  });
+
+  test("ordinary sync never overwrites a drifted managed skill", () => {
+    const plan = planReconcile(desired([readded]), {
+      skills: { [readded]: { managed: true, contentHash: "sha256:changed" } },
+    });
+
+    expect(plan.classifications).toEqual([
+      { skillId: readded, classification: "DRIFTED" },
+    ]);
+    expect(plan.operations).toEqual([]);
   });
 });
 
