@@ -17,6 +17,7 @@ Leave `TOOLMIRROR_HOSTED` unset or set it to `false`. Only `true` or `1` turns o
 - A GitHub OAuth App
 - A Google OAuth App
 - Public HTTPS origin for the Worker
+- An independently configured transactional email service/binding for magic-link delivery
 
 Creem, a Creem account, and hosted toolmirror.com subscription products are not prerequisites.
 
@@ -74,7 +75,7 @@ Create the OAuth apps with:
 
 Replace the origin with your `BETTER_AUTH_URL`. Partial OAuth (id without secret, or only one provider) is rejected.
 
-This OAuth setup is the entire sign-in path for self-hosted Cloud. It is independent of Creem and of hosted toolmirror.com billing.
+OAuth and email magic-link sign-in are independent of Creem and of hosted toolmirror.com billing.
 
 ## Environment variables
 
@@ -90,6 +91,7 @@ Required for a production self-host:
 | `GOOGLE_CLIENT_ID` | `vars` | |
 | `TOOLMIRROR_ENVIRONMENT` | `vars` | `production` |
 | `TOOLMIRROR_HOSTED` | `vars` | `false` or omit |
+| `AUTH_EMAIL_FROM` | `.dev.vars` locally; Worker environment in production | Sender address from your own sending domain |
 
 Example `vars` (do not put secrets here):
 
@@ -104,6 +106,22 @@ Example `vars` (do not put secrets here):
 ```
 
 Do not set hosted billing variables. Hosted ToolMirror billing is not required for self-hosted Cloud.
+
+## Email magic links
+
+The `/sign-in` page supports GitHub, Google, and passwordless email links. Email requests always show the same confirmation for new and existing addresses, so the flow does not disclose account existence. Links are hashed at rest, expire, can be used once, and reject unsafe redirects.
+
+A self-hosted deployment must provide its **own** email-delivery configuration. It must not use ToolMirror-owned Cloudflare Email Service resources, sender domains, or hosted credentials, and it does not require hosted entitlement or Creem. The shipped Worker integration expects an `EMAIL` Cloudflare `send_email` binding and an `AUTH_EMAIL_FROM` sender address; configure both in your own Cloudflare account and for your own onboarded sending domain, or replace the application email boundary with your independently operated transport.
+
+For local development, put only the email sender setting in `apps/web/.dev.vars`:
+
+```dotenv
+AUTH_EMAIL_FROM=auth@toolmirror.com
+```
+
+Use your own sender address in a real self-host. `EMAIL` is not a `.dev.vars` secret: it is the Worker `send_email` binding declared in `wrangler.jsonc`. That binding path does not require an email API key. Ensure your chosen provider has enabled sending and that its required sender-domain DNS/authentication records are live before testing real delivery.
+
+Authentication and pairing remain available without a subscription. In contrast, the hosted `toolmirror.com` deployment uses its own Cloudflare Email Service binding and separately gates paid Cloud operations with Creem; self-hosted Cloud stays usable without Creem.
 
 Optional CLI-side variables, used on devices rather than the Worker:
 

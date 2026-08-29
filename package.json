@@ -26,7 +26,7 @@
     "check:boundaries": "bun ./scripts/check-architecture-boundaries.mjs",
     "lint": "bun run check:boundaries && bunx biome check .",
     "docs:check": "bun ./tooling/docs-check.ts",
-    "test:e2e": "bun test apps/web/e2e",
+    "test:e2e": "bun ./tooling/test-e2e.ts",
     "test:cli:invalid-target": "! ./scripts/build-cli.sh bun-invalid-x64",
     "typecheck": "bunx tsc --noEmit",
     "verify:cli": "./scripts/verify-cli.sh"

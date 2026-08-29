@@ -85,8 +85,9 @@ export function documentedWebMcpTools(markdown: string): readonly string[] {
 }
 
 function includesAll(haystack: string, needles: readonly string[]): string[] {
+  const plain = haystack.replaceAll(/[`*]/g, "").toLowerCase();
   return needles.filter(
-    (needle) => !haystack.toLowerCase().includes(needle.toLowerCase()),
+    (needle) => !plain.includes(needle.replaceAll(/[`*]/g, "").toLowerCase()),
   );
 }
 
@@ -191,6 +192,42 @@ export async function checkDocs(
       findings.push({
         file: "docs/hosted-cloud.md",
         message: `Hosted docs must document ${env}.`,
+      });
+    }
+  }
+
+  for (const [file, markdown, required] of [
+    [
+      "docs/hosted-cloud.md",
+      hosted,
+      [
+        "Email Sending",
+        "sending domain",
+        "DNS",
+        "AUTH_EMAIL_FROM=auth@toolmirror.com",
+        "send_email",
+        "EMAIL",
+        "does not need a separate email API key",
+        "beta",
+      ],
+    ],
+    [
+      "docs/self-hosting.md",
+      selfHost,
+      [
+        "own email-delivery configuration",
+        "ToolMirror-owned Cloudflare Email Service resources",
+        "AUTH_EMAIL_FROM=auth@toolmirror.com",
+        "EMAIL is not a `.dev.vars` secret",
+        "does not require an email API key",
+        "Creem",
+      ],
+    ],
+  ] as const) {
+    for (const missing of includesAll(markdown, required)) {
+      findings.push({
+        file,
+        message: `Missing email authentication documentation: ${missing}.`,
       });
     }
   }
