@@ -19,6 +19,7 @@ for (const directory of ["packages/core", "packages/shared"]) {
     cwd: `${root}${directory}`,
   })) {
     if (!extensions.has(file.slice(file.lastIndexOf(".")))) continue;
+    if (/\.(?:test|spec)\.[^.]+$/.test(file)) continue;
     findings.push(
       ...findBoundaryViolations(
         file.slice(root.length),

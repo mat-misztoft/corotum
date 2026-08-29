@@ -7,6 +7,10 @@
     "moduleResolution": "bundler",
     "skipLibCheck": true
   },
-  "include": ["tooling/**/*.ts"],
+  "include": [
+    "tooling/**/*.ts",
+    "packages/core/src/**/*.ts",
+    "packages/shared/src/**/*.ts"
+  ],
   "exclude": ["**/*.test.ts"]
 }
