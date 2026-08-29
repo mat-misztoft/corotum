@@ -356,6 +356,210 @@ export type PushDesiredStateInput = Readonly<{
   idempotencyKey?: string;
 }>;
 
+export type RevisionTransitionType =
+  | "ADD"
+  | "REMOVE"
+  | "UNMANAGE"
+  | "UPDATE"
+  | "SET_REF"
+  | "ADOPT";
+
+/**
+ * Compact operation data retained with a revision snapshot. Providers use it
+ * to preserve remove versus unmanage behavior for devices that were offline.
+ */
+export type RevisionTransition = Readonly<{
+  type: RevisionTransitionType;
+  skillId: SkillId;
+  metadata: Readonly<Record<string, string>>;
+}>;
+
+const revisionTransitionSchema = z
+  .object({
+    type: z.enum(["ADD", "REMOVE", "UNMANAGE", "UPDATE", "SET_REF", "ADOPT"]),
+    skillId: nonEmptyString,
+    metadata: z.record(nonEmptyString, z.string()).default({}),
+  })
+  .strict();
+
+function sortMetadata(
+  metadata: Readonly<Record<string, string>>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(metadata).sort(([left], [right]) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    ),
+  );
+}
+
+/** Parses stored revision transition metadata without provider dependencies. */
+export function parseRevisionTransition(source: string): RevisionTransition {
+  try {
+    const parsed = revisionTransitionSchema.safeParse(JSON.parse(source));
+    if (!parsed.success) throw validationError("Invalid revision transition.");
+    return {
+      type: parsed.data.type,
+      skillId: skillId(parsed.data.skillId),
+      metadata: sortMetadata(parsed.data.metadata),
+    };
+  } catch (error) {
+    if (error instanceof DomainValidationError) throw error;
+    throw validationError("Invalid revision transition.");
+  }
+}
+
+/** Produces deterministic JSON for provider revision metadata. */
+export function serializeRevisionTransition(
+  transition: RevisionTransition,
+): string {
+  const normalized = parseRevisionTransition(JSON.stringify(transition));
+  return `${JSON.stringify({
+    type: normalized.type,
+    skillId: normalized.skillId,
+    metadata: normalized.metadata,
+  })}\n`;
+}
+
+export type OfflineSkillDisposition =
+  | "MANAGED"
+  | "REMOVE"
+  | "UNMANAGE"
+  | "UNKNOWN";
+
+/**
+ * The newest desired snapshot is authoritative. Transition metadata only
+ * decides how to handle a skill absent from that snapshot.
+ */
+export function offlineSkillDisposition(
+  latest: DesiredState,
+  transitions: readonly RevisionTransition[],
+  skillId: SkillId,
+): OfflineSkillDisposition {
+  if (latest.manifest.skills.some((skill) => skill.id === skillId)) {
+    return "MANAGED";
+  }
+
+  for (let index = transitions.length - 1; index >= 0; index -= 1) {
+    const transition = transitions[index];
+    if (transition.skillId !== skillId) continue;
+    if (transition.type === "REMOVE") return "REMOVE";
+    if (transition.type === "UNMANAGE") return "UNMANAGE";
+  }
+
+  return "UNKNOWN";
+}
+
+export type DesiredStateMergeConflict = Readonly<{
+  skillId: SkillId;
+  base: ManifestSkill | null;
+  remote: ManifestSkill | null;
+  local: ManifestSkill | null;
+}>;
+
+export type DesiredStateMergeResult =
+  | Readonly<{ kind: "merged"; state: DesiredState }>
+  | Readonly<{
+      kind: "conflict";
+      conflicts: readonly DesiredStateMergeConflict[];
+    }>;
+
+function skillEntries(state: DesiredState): Map<SkillId, string> {
+  const locks = new Map(
+    state.lockfile.skills.map((skill) => [skill.id, skill]),
+  );
+  return new Map(
+    state.manifest.skills.map((skill) => [
+      skill.id,
+      JSON.stringify({ skill, lock: locks.get(skill.id) ?? null }),
+    ]),
+  );
+}
+
+function skillById(state: DesiredState, id: SkillId): ManifestSkill | null {
+  return state.manifest.skills.find((skill) => skill.id === id) ?? null;
+}
+
+/**
+ * Merges two edits made from the same desired-state snapshot. Different skill
+ * IDs merge independently; competing edits to one skill remain explicit.
+ */
+export function mergeDesiredStates(
+  base: DesiredState,
+  remote: DesiredState,
+  local: DesiredState,
+  mode: StateMode,
+): DesiredStateMergeResult {
+  const normalizedBase = validateDesiredState(base, mode);
+  const normalizedRemote = validateDesiredState(remote, mode);
+  const normalizedLocal = validateDesiredState(local, mode);
+  const baseEntries = skillEntries(normalizedBase);
+  const remoteEntries = skillEntries(normalizedRemote);
+  const localEntries = skillEntries(normalizedLocal);
+  const ids = new Set<SkillId>([
+    ...baseEntries.keys(),
+    ...remoteEntries.keys(),
+    ...localEntries.keys(),
+  ]);
+  const selected = new Map<SkillId, DesiredState>();
+  const conflicts: DesiredStateMergeConflict[] = [];
+
+  for (const id of ids) {
+    const before = baseEntries.get(id);
+    const remoteChange = remoteEntries.get(id);
+    const localChange = localEntries.get(id);
+    const remoteChanged = remoteChange !== before;
+    const localChanged = localChange !== before;
+
+    if (remoteChanged && localChanged && remoteChange !== localChange) {
+      conflicts.push({
+        skillId: id,
+        base: skillById(normalizedBase, id),
+        remote: skillById(normalizedRemote, id),
+        local: skillById(normalizedLocal, id),
+      });
+      continue;
+    }
+
+    const chosen = localChanged ? localChange : remoteChange;
+    if (chosen !== undefined) {
+      selected.set(id, localChanged ? normalizedLocal : normalizedRemote);
+    }
+  }
+
+  if (conflicts.length > 0) {
+    return {
+      kind: "conflict",
+      conflicts: conflicts.sort((left, right) =>
+        left.skillId < right.skillId
+          ? -1
+          : left.skillId > right.skillId
+            ? 1
+            : 0,
+      ),
+    };
+  }
+
+  const skills = [...selected]
+    .map(([id, state]) => skillById(state, id))
+    .filter((skill): skill is ManifestSkill => skill !== null);
+  const locks = [...selected]
+    .map(([id, state]) =>
+      state.lockfile.skills.find((skill) => skill.id === id),
+    )
+    .filter((skill): skill is LockedSkill => skill !== undefined);
+
+  return {
+    kind: "merged",
+    state: validateDesiredState(
+      {
+        manifest: { version: 1, skills },
+        lockfile: { version: 1, skills: locks },
+      },
+      mode,
+    ),
+  };
+}
+
 /** Portable contract implemented by Git and Cloud state providers. */
 export interface StateProvider {
   pull(): Promise<Result<DesiredStateEnvelope>>;

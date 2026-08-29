@@ -3,14 +3,18 @@ import {
   type ActualState,
   aggregateTargetOutcomes,
   type DesiredStateEnvelope,
+  mergeDesiredStates,
+  offlineSkillDisposition,
   parseLockfile,
   parseManifest,
+  parseRevisionTransition,
   planReconcile,
   type Result,
   revisionId,
   type StateProvider,
   serializeLockfile,
   serializeManifest,
+  serializeRevisionTransition,
   skillId,
   validateDesiredState,
 } from "./index";
@@ -361,5 +365,120 @@ describe("actual-state diff and reconcile planning", () => {
     expect(aggregateTargetOutcomes(["CONFLICT", "DEVICE_ERROR"])).toBe(
       "PARTIAL_SUCCESS",
     );
+  });
+});
+
+describe("revision transitions and domain merges", () => {
+  const source = "https://github.com/example/skills.git";
+  const managed = skillId("sk_01JManaged");
+  const remoteOnly = skillId("sk_01JRemote");
+  const localOnly = skillId("sk_01JLocal");
+
+  const state = (skills: readonly { id: typeof managed; ref?: string }[]) => ({
+    manifest: {
+      version: 1 as const,
+      skills: skills.map(({ id, ref = "main" }) => ({
+        id,
+        source,
+        skill: id.slice(4).toLowerCase(),
+        ref,
+        targets: "all" as const,
+        resolutionStatus: "RESOLVED" as const,
+      })),
+    },
+    lockfile: {
+      version: 1 as const,
+      skills: skills.map(({ id, ref = "main" }) => ({
+        id,
+        source,
+        skill: id.slice(4).toLowerCase(),
+        ref,
+        repository: source,
+        revision: `${id}-${ref}`,
+        path: `skills/${id.slice(4).toLowerCase()}`,
+        contentHash: `sha256:${id}-${ref}`,
+      })),
+    },
+  });
+
+  test("round-trips every transition with deterministic metadata", () => {
+    const types = [
+      "ADD",
+      "REMOVE",
+      "UNMANAGE",
+      "UPDATE",
+      "SET_REF",
+      "ADOPT",
+    ] as const;
+
+    for (const type of types) {
+      const transition = {
+        type,
+        skillId: managed,
+        metadata: { after: "new", before: "old" },
+      } as const;
+      expect(
+        parseRevisionTransition(serializeRevisionTransition(transition)),
+      ).toEqual(transition);
+    }
+  });
+
+  test("treats a later add as managed when an offline device returns", () => {
+    const transitions = [
+      { type: "UNMANAGE" as const, skillId: managed, metadata: {} },
+      {
+        type: "ADD" as const,
+        skillId: managed,
+        metadata: { source: "restore" },
+      },
+    ];
+
+    expect(
+      offlineSkillDisposition(state([{ id: managed }]), transitions, managed),
+    ).toBe("MANAGED");
+    expect(offlineSkillDisposition(state([]), transitions, managed)).toBe(
+      "UNMANAGE",
+    );
+  });
+
+  test("merges independent changes and reports incompatible same-skill changes", () => {
+    const base = state([{ id: managed }]);
+    const merged = mergeDesiredStates(
+      base,
+      state([{ id: managed }, { id: remoteOnly }]),
+      state([{ id: managed }, { id: localOnly }]),
+      "git",
+    );
+
+    expect(merged).toEqual({
+      kind: "merged",
+      state: expect.objectContaining({
+        manifest: expect.objectContaining({
+          skills: expect.arrayContaining([
+            expect.objectContaining({ id: managed }),
+            expect.objectContaining({ id: remoteOnly }),
+            expect.objectContaining({ id: localOnly }),
+          ]),
+        }),
+      }),
+    });
+    expect(
+      mergeDesiredStates(
+        base,
+        state([{ id: managed, ref: "remote" }]),
+        state([{ id: managed, ref: "local" }]),
+        "git",
+      ),
+    ).toEqual({
+      kind: "conflict",
+      conflicts: [
+        expect.objectContaining({
+          skillId: managed,
+          base: expect.objectContaining({ ref: "main" }),
+          remote: expect.objectContaining({ ref: "remote" }),
+          local: expect.objectContaining({ ref: "local" }),
+        }),
+      ],
+    });
   });
 });
