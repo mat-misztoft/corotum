@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline/promises";
 
 import { CLI_VERSION, runCli } from "./cli";
+import { applyPendingCliUpdate, createCliUpdateDeps } from "./cli-update";
 import { ConfigStore } from "./config";
 import { resolvePlatformPaths } from "./platform";
 import { CliTelemetry, noOpTelemetryEmitter } from "./telemetry";
@@ -32,6 +33,27 @@ const telemetry = new CliTelemetry(
   noOpTelemetryEmitter(),
   { version: CLI_VERSION, os: process.platform, architecture: process.arch },
 );
+
+if (process.platform === "win32") {
+  try {
+    const pending = await applyPendingCliUpdate(
+      createCliUpdateDeps({
+        currentVersion: CLI_VERSION,
+        homeDir: homedir(),
+        env: process.env,
+        platform: process.platform,
+        arch: process.arch,
+      }),
+    );
+    if (pending.status === "failed") {
+      process.stderr.write(`${pending.message}\n`);
+    }
+  } catch (error) {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : "Pending CLI update failed."}\n`,
+    );
+  }
+}
 
 const exitCode = await runCli(Bun.argv.slice(2), undefined, telemetry);
 if (exitCode !== 0) process.exitCode = exitCode;

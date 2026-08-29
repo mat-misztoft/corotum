@@ -16,6 +16,7 @@
     "release:upload": "bun ./tooling/release-upload.ts",
     "release:verify": "bun ./tooling/release-verify.ts",
     "test:installers": "bun test ./tooling/installers.test.ts",
+    "test:cli-update": "bun test ./apps/cli/src/cli-update.test.ts",
     "db:migrate": "bun run --cwd apps/web db:migrate",
     "web:build": "bun run --cwd apps/web build",
     "web:smoke": "bun run --cwd apps/web smoke",

@@ -7,6 +7,7 @@ import {
   exitCodeFor,
   jsonEnvelope,
 } from "./cli-contracts";
+import { registerCliUpdateCommand } from "./cli-update-command";
 import { CloudAuthError } from "./cloud-auth";
 import { registerCloudAuthCommands } from "./cloud-auth-command";
 import { registerConfigCommand } from "./config-command";
@@ -70,6 +71,7 @@ export function createCli(
   registerRemoveCommands(program, io);
   registerRestoreCommand(program, io);
   registerUpdateCommand(program, io);
+  registerCliUpdateCommand(program, io, CLI_VERSION);
   registerSetRefCommand(program, io);
   registerSyncCommands(program, io);
   registerConfigCommand(program, io);
