@@ -17,6 +17,7 @@ import {
   uploadReleaseObjects,
   verifyReleaseLayout,
 } from "./release";
+import { emailReleaseConfigurationErrors } from "./release-email-config";
 import {
   smokeReleaseManifest,
   smokeWorkerdEndpoints,
@@ -155,6 +156,35 @@ describe("final release layout", () => {
     expect(keys).not.toContain("releases/v0.1.0/PIPELINE_PROOF");
   });
 
+  test("production email preflight checks the sender, deployed secret name, and EMAIL binding without values", () => {
+    const config = { send_email: [{ name: "EMAIL" }] };
+    expect(
+      emailReleaseConfigurationErrors({
+        authEmailFrom: "auth@toolmirror.com",
+        config,
+        remoteSecrets: [{ name: "AUTH_EMAIL_FROM" }],
+      }),
+    ).toEqual([]);
+    expect(
+      emailReleaseConfigurationErrors({
+        authEmailFrom: undefined,
+        config: {},
+        remoteSecrets: [],
+      }),
+    ).toEqual([
+      "AUTH_EMAIL_FROM is required for the production email release.",
+      "EMAIL Worker binding is required for the production email release.",
+      "AUTH_EMAIL_FROM is not configured on the deployed Worker.",
+    ]);
+    expect(
+      emailReleaseConfigurationErrors({
+        authEmailFrom: "not-an-email",
+        config,
+        remoteSecrets: [{ name: "AUTH_EMAIL_FROM" }],
+      }),
+    ).toEqual(["AUTH_EMAIL_FROM must be a valid email address."]);
+  });
+
   test("GitHub Actions rebuilds every target from final source and gates publication", () => {
     const workflow = readFileSync(
       join(root, ".github/workflows/release.yml"),
@@ -176,6 +206,9 @@ describe("final release layout", () => {
     expect(workflow).toContain("bun run release:smoke-endpoints");
     expect(workflow).toContain('RELEASE_REQUIRE_UPLOAD: "1"');
     expect(workflow).toContain('RELEASE_REQUIRE_DEPLOY: "1"');
+    expect(workflow).toContain(
+      "AUTH_EMAIL_FROM: $" + "{{ secrets.AUTH_EMAIL_FROM }}",
+    );
     expect(workflow).toContain("pipeline-proof");
     expect(workflow).not.toContain("publish-pipeline-proof");
     expect(workflow).not.toContain("notarytool");

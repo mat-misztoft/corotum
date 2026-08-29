@@ -101,6 +101,7 @@ jobs:
           RELEASE_REQUIRE_DEPLOY: "1"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AUTH_EMAIL_FROM: ${{ secrets.AUTH_EMAIL_FROM }}
       - run: bun run release:smoke-endpoints
         env:
           TOOLMIRROR_SMOKE_ORIGIN: ${{ secrets.TOOLMIRROR_SMOKE_ORIGIN }}

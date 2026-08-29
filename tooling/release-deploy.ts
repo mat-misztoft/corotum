@@ -20,6 +20,19 @@ if (!token) {
   process.exit(0);
 }
 
+const preflight = Bun.spawn(["bun", "./tooling/release-email-config.ts"], {
+  cwd: fileURLToPath(new URL("..", import.meta.url)),
+  stdout: "inherit",
+  stderr: "inherit",
+  env: process.env,
+});
+if ((await preflight.exited) !== 0) {
+  console.error(
+    "Production email configuration failed; deployment must not continue.",
+  );
+  process.exit(1);
+}
+
 const args = ["wrangler", "deploy"];
 const env: Record<string, string> = {
   ...process.env,
