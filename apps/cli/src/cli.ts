@@ -1,12 +1,12 @@
 import { Command, CommanderError } from "commander";
-
+import { registerAddCommand } from "./add-command";
+import { registerAdoptCommand } from "./adopt-command";
 import {
   type CliOutcome,
   ExitCode,
   exitCodeFor,
   jsonEnvelope,
 } from "./cli-contracts";
-import { registerAddCommand } from "./add-command";
 import { registerInitCommand } from "./init-command";
 
 export const CLI_VERSION = "0.1.0";
@@ -56,6 +56,7 @@ export function createCli(
 
   registerInitCommand(program, io);
   registerAddCommand(program, io);
+  registerAdoptCommand(program, io);
 
   program.action(() => {
     const options = program.opts<CliOptions>();
