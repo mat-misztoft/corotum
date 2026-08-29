@@ -254,3 +254,10 @@ export const idempotencyRecords = sqliteTable("idempotency_records", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
 });
+
+/** Operational throttle state; not a domain entity. */
+export const rateLimitWindows = sqliteTable("rate_limit_windows", {
+  key: text().primaryKey(),
+  count: integer().notNull(),
+  windowStart: integer("window_start").notNull(),
+});

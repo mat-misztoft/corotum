@@ -329,7 +329,10 @@ test("token HTTP issuance, logout, and revoke never leak the plaintext secret af
   const issuedResponse = await handleIssueDeviceToken(
     apiRequest(`/api/v1/cli/pairings/${pairing.id}/token`, {
       method: "POST",
-      headers: { "x-toolmirror-device-code": pairing.deviceCode },
+      headers: {
+        "x-toolmirror-cli-version": "0.1.0",
+        "x-toolmirror-device-code": pairing.deviceCode,
+      },
     }),
     db,
     pairing.id,
@@ -345,7 +348,10 @@ test("token HTTP issuance, logout, and revoke never leak the plaintext secret af
   const replay = await handleIssueDeviceToken(
     apiRequest(`/api/v1/cli/pairings/${pairing.id}/token`, {
       method: "POST",
-      headers: { "x-toolmirror-device-code": pairing.deviceCode },
+      headers: {
+        "x-toolmirror-cli-version": "0.1.0",
+        "x-toolmirror-device-code": pairing.deviceCode,
+      },
     }),
     db,
     pairing.id,
@@ -356,7 +362,10 @@ test("token HTTP issuance, logout, and revoke never leak the plaintext secret af
   const loggedOut = await handleLogoutDevice(
     apiRequest("/api/v1/cli/logout", {
       method: "POST",
-      headers: { "x-toolmirror-device-token": issued.token },
+      headers: {
+        "x-toolmirror-cli-version": "0.1.0",
+        "x-toolmirror-device-token": issued.token,
+      },
     }),
     db,
   );
@@ -423,7 +432,10 @@ test("token HTTP exchange without the secret device code is unauthorized", async
   const { db } = await tokenDb();
   const pairing = await createPairing(db, device, 1_000);
   const response = await handleIssueDeviceToken(
-    apiRequest(`/api/v1/cli/pairings/${pairing.id}/token`, { method: "POST" }),
+    apiRequest(`/api/v1/cli/pairings/${pairing.id}/token`, {
+      method: "POST",
+      headers: { "x-toolmirror-cli-version": "0.1.0" },
+    }),
     db,
     pairing.id,
   );

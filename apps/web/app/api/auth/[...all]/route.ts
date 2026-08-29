@@ -1,8 +1,30 @@
 import { env } from "cloudflare:workers";
 import { toNextJsHandler } from "better-auth/next-js";
 import { type AuthEnvironment, createAuth } from "../../../../src/auth";
+import { protectCloudRequest } from "../../../../src/cloud-protect";
+import type { RateLimitDatabase } from "../../../../src/rate-limit";
 
 // vinext's generated `cloudflare:workers` type does not include app bindings.
-const handlers = toNextJsHandler(createAuth(env as unknown as AuthEnvironment));
+const workerEnv = env as unknown as AuthEnvironment;
+const handlers = toNextJsHandler(createAuth(workerEnv));
 
-export const { GET, POST } = handlers;
+async function withAuthRateLimit(
+  request: Request,
+  handler: (request: Request) => Promise<Response>,
+) {
+  const blocked = await protectCloudRequest(
+    request,
+    workerEnv.DB as unknown as RateLimitDatabase,
+    { kind: "pairingAuth" },
+  );
+  if (blocked) return blocked;
+  return handler(request);
+}
+
+export function GET(request: Request) {
+  return withAuthRateLimit(request, handlers.GET);
+}
+
+export function POST(request: Request) {
+  return withAuthRateLimit(request, handlers.POST);
+}

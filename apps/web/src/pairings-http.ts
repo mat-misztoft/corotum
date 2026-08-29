@@ -1,4 +1,5 @@
 import { isSameOrigin, jsonError, readJson } from "./api";
+import { protectCloudRequest } from "./cloud-protect";
 import {
   approvePairing,
   createPairing,
@@ -27,6 +28,11 @@ export async function handleCreatePairing(
   request: Request,
   db: PairingDatabase,
 ) {
+  const blocked = await protectCloudRequest(request, db, {
+    kind: "pairingAuth",
+    requireCli: true,
+  });
+  if (blocked) return blocked;
   const body = await readJson(request);
   if (!body || typeof body !== "object")
     return jsonError("Invalid request", 400);
@@ -55,6 +61,11 @@ export async function handleGetPairing(
   db: PairingDatabase,
   id: string,
 ) {
+  const blocked = await protectCloudRequest(request, db, {
+    kind: "pairingAuth",
+    requireCli: true,
+  });
+  if (blocked) return blocked;
   const deviceCode = request.headers.get("x-toolmirror-device-code");
   if (!deviceCode) return jsonError("Device code is required", 401);
   try {
@@ -70,6 +81,10 @@ export async function handleApprovePairing(
   id: string,
   userId: string | null,
 ) {
+  const blocked = await protectCloudRequest(request, db, {
+    kind: "pairingAuth",
+  });
+  if (blocked) return blocked;
   if (!isSameOrigin(request)) return jsonError("Invalid request origin", 403);
   if (!userId) return jsonError("Authentication required", 401);
   const body = await readJson(request);

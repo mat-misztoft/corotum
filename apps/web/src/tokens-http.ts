@@ -1,4 +1,5 @@
 import { isSameOrigin, jsonError } from "./api";
+import { clientIp, protectCloudRequest } from "./cloud-protect";
 import { PairingNotFoundError } from "./pairings";
 import {
   DeviceNotFoundError,
@@ -34,6 +35,11 @@ export async function handleIssueDeviceToken(
   db: TokenDatabase,
   pairingId: string,
 ) {
+  const blocked = await protectCloudRequest(request, db, {
+    kind: "pairingAuth",
+    requireCli: true,
+  });
+  if (blocked) return blocked;
   const deviceCode = request.headers.get("x-toolmirror-device-code");
   if (!deviceCode) return jsonError("Device code is required", 401);
   try {
@@ -46,6 +52,11 @@ export async function handleIssueDeviceToken(
 }
 
 export async function handleLogoutDevice(request: Request, db: TokenDatabase) {
+  const blocked = await protectCloudRequest(request, db, {
+    kind: "pairingAuth",
+    requireCli: true,
+  });
+  if (blocked) return blocked;
   const token = deviceTokenFrom(request);
   if (!token) return jsonError("Device token is required", 401);
   try {
@@ -62,6 +73,11 @@ export async function handleRevokeDevice(
   deviceId: string,
   userId: string | null,
 ) {
+  const blocked = await protectCloudRequest(request, db, {
+    kind: "mutation",
+    identity: userId ? `user:${userId}` : `ip:${clientIp(request)}`,
+  });
+  if (blocked) return blocked;
   if (!isSameOrigin(request)) return jsonError("Invalid request origin", 403);
   if (!userId) return jsonError("Authentication required", 401);
   try {

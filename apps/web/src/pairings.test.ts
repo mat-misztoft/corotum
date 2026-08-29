@@ -273,6 +273,7 @@ test("pairing HTTP flow creates, polls, approves once, and refuses a second exch
   const created = await handleCreatePairing(
     pairingRequest("/api/v1/cli/pairings", {
       method: "POST",
+      headers: { "x-toolmirror-cli-version": "0.1.0" },
       body: JSON.stringify(device),
     }),
     db,
@@ -287,7 +288,10 @@ test("pairing HTTP flow creates, polls, approves once, and refuses a second exch
 
   const pending = await handleGetPairing(
     pairingRequest(`/api/v1/cli/pairings/${pairing.id}`, {
-      headers: { "x-toolmirror-device-code": pairing.deviceCode },
+      headers: {
+        "x-toolmirror-cli-version": "0.1.0",
+        "x-toolmirror-device-code": pairing.deviceCode,
+      },
     }),
     db,
     pairing.id,
@@ -360,7 +364,9 @@ test("polling without the secret device code is unauthorized", async () => {
   const { db } = await pairingDb();
   const created = await createPairing(db, device, 1_000);
   const response = await handleGetPairing(
-    pairingRequest(`/api/v1/cli/pairings/${created.id}`),
+    pairingRequest(`/api/v1/cli/pairings/${created.id}`, {
+      headers: { "x-toolmirror-cli-version": "0.1.0" },
+    }),
     db,
     created.id,
   );

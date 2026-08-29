@@ -50,6 +50,13 @@
       "when": 1787989579710,
       "tag": "0006_overjoyed_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787990233580,
+      "tag": "0007_friendly_terror",
+      "breakpoints": true
     }
   ]
 }
