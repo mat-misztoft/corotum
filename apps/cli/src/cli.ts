@@ -11,6 +11,7 @@ import { CloudAuthError } from "./cloud-auth";
 import { registerCloudAuthCommands } from "./cloud-auth-command";
 import { registerConfigCommand } from "./config-command";
 import { registerInitCommand } from "./init-command";
+import { registerMigrateCommand } from "./migrate-command";
 import { registerRemoveCommands } from "./remove-command";
 import { registerRestoreCommand } from "./restore-command";
 import { registerSetRefCommand } from "./set-ref-command";
@@ -73,6 +74,7 @@ export function createCli(
   registerSyncCommands(program, io);
   registerConfigCommand(program, io);
   registerCloudAuthCommands(program, io);
+  registerMigrateCommand(program, io);
 
   program.action(() => {
     const options = program.opts<CliOptions>();
