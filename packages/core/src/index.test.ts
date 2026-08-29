@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   type ActualState,
+  aggregateTargetOutcomes,
   type DesiredStateEnvelope,
   parseLockfile,
   parseManifest,
+  planReconcile,
   type Result,
   revisionId,
   type StateProvider,
@@ -218,5 +220,146 @@ describe("deterministic manifest and lockfile schemas", () => {
         "cloud",
       ),
     ).toThrow("only Cloud PENDING_RESOLUTION");
+  });
+});
+
+describe("actual-state diff and reconcile planning", () => {
+  const source = "https://github.com/example/skills.git";
+  const synced = skillId("sk_01JSynced");
+  const unmanaged = skillId("sk_01JUnmanaged");
+  const missing = skillId("sk_01JMissing");
+  const drifted = skillId("sk_01JDrifted");
+  const pending = skillId("sk_01JPending");
+  const removed = skillId("sk_01JRemoved");
+  const unknown = skillId("sk_01JUnknown");
+  const resolvedIds = [synced, unmanaged, missing, drifted];
+
+  const desired = {
+    manifest: {
+      version: 1 as const,
+      skills: [
+        ...resolvedIds.map((id) => ({
+          id,
+          source,
+          skill: id.slice(4).toLowerCase(),
+          ref: "main",
+          targets: "all" as const,
+          resolutionStatus: "RESOLVED" as const,
+        })),
+        {
+          id: pending,
+          source,
+          skill: "pending",
+          ref: "main",
+          targets: "all" as const,
+          resolutionStatus: "PENDING_RESOLUTION" as const,
+        },
+      ],
+    },
+    lockfile: {
+      version: 1 as const,
+      skills: resolvedIds.map((id) => ({
+        id,
+        source,
+        skill: id.slice(4).toLowerCase(),
+        ref: "main",
+        repository: source,
+        revision: "abc123",
+        path: `skills/${id.slice(4).toLowerCase()}`,
+        contentHash: `sha256:${id}`,
+      })),
+    },
+  };
+
+  const actual: ActualState = {
+    skills: {
+      [synced]: { managed: true, contentHash: `sha256:${synced}` },
+      [unmanaged]: { managed: false, contentHash: `sha256:${unmanaged}` },
+      [drifted]: { managed: true, contentHash: "sha256:changed" },
+      [removed]: { managed: true, contentHash: "sha256:old" },
+      [unknown]: { managed: false, contentHash: "sha256:local" },
+    },
+  };
+
+  test("classifies every local safety state and plans only safe sync operations", () => {
+    const plan = planReconcile(desired, actual);
+
+    expect(plan.classifications).toEqual(
+      expect.arrayContaining([
+        { skillId: synced, classification: "MANAGED_SYNCED" },
+        { skillId: unmanaged, classification: "UNMANAGED" },
+        { skillId: missing, classification: "MISSING" },
+        { skillId: drifted, classification: "DRIFTED" },
+        { skillId: pending, classification: "PENDING_RESOLUTION" },
+        { skillId: removed, classification: "REMOVE_CANDIDATE" },
+        { skillId: unknown, classification: "UNMANAGED" },
+      ]),
+    );
+    expect(plan.operations).toEqual([
+      expect.objectContaining({
+        kind: "INSTALL",
+        skill: expect.objectContaining({ id: missing }),
+      }),
+      { kind: "REMOVE", skillId: removed },
+    ]);
+    expect(
+      plan.operations.some((operation) =>
+        operation.kind === "INSTALL"
+          ? operation.skill.id === unmanaged || operation.skill.id === drifted
+          : operation.skillId === unmanaged || operation.skillId === drifted,
+      ),
+    ).toBeFalse();
+  });
+
+  test("returns a stable plan regardless of source collection order", () => {
+    const reversed = {
+      manifest: {
+        ...desired.manifest,
+        skills: [...desired.manifest.skills].reverse(),
+      },
+      lockfile: {
+        ...desired.lockfile,
+        skills: [...desired.lockfile.skills].reverse(),
+      },
+    };
+    const reversedActual: ActualState = {
+      skills: Object.fromEntries(
+        Object.entries(actual.skills).reverse(),
+      ) as ActualState["skills"],
+    };
+
+    expect(planReconcile(desired, actual)).toEqual(
+      planReconcile(reversed, reversedActual),
+    );
+  });
+
+  test("rejects a resolved skill without locked content", () => {
+    expect(() =>
+      planReconcile(
+        {
+          manifest: desired.manifest,
+          lockfile: {
+            ...desired.lockfile,
+            skills: desired.lockfile.skills.filter(
+              (skill) => skill.id !== missing,
+            ),
+          },
+        },
+        actual,
+      ),
+    ).toThrow(`Resolved skill ${missing} has no lock entry.`);
+  });
+
+  test("aggregates target outcomes safely", () => {
+    expect(aggregateTargetOutcomes(["SUCCESS", "SUCCESS"])).toBe("SUCCESS");
+    expect(aggregateTargetOutcomes(["SUCCESS", "AUTH_REQUIRED"])).toBe(
+      "PARTIAL_SUCCESS",
+    );
+    expect(aggregateTargetOutcomes(["CONFLICT"])).toBe("CONFLICT");
+    expect(aggregateTargetOutcomes(["AUTH_REQUIRED"])).toBe("AUTH_REQUIRED");
+    expect(aggregateTargetOutcomes(["DEVICE_ERROR"])).toBe("DEVICE_ERROR");
+    expect(aggregateTargetOutcomes(["CONFLICT", "DEVICE_ERROR"])).toBe(
+      "PARTIAL_SUCCESS",
+    );
   });
 });

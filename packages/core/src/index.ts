@@ -361,3 +361,136 @@ export interface StateProvider {
   pull(): Promise<Result<DesiredStateEnvelope>>;
   push(input: PushDesiredStateInput): Promise<Result<DesiredStateEnvelope>>;
 }
+
+export type ActualStateClassification =
+  | "MANAGED_SYNCED"
+  | "UNMANAGED"
+  | "MISSING"
+  | "DRIFTED"
+  | "REMOVE_CANDIDATE"
+  | "PENDING_RESOLUTION";
+
+export type ClassifiedSkill = Readonly<{
+  skillId: SkillId;
+  classification: ActualStateClassification;
+}>;
+
+export type ReconcileOperation =
+  | Readonly<{ kind: "INSTALL"; skill: LockedSkill }>
+  | Readonly<{ kind: "REMOVE"; skillId: SkillId }>;
+
+export type ReconcilePlan = Readonly<{
+  classifications: readonly ClassifiedSkill[];
+  operations: readonly ReconcileOperation[];
+}>;
+
+/**
+ * Classifies desired and local state without touching a filesystem. An actual
+ * unowned skill and a modified owned skill intentionally produce no ordinary
+ * sync operation: both require an explicit user decision or restore flow.
+ */
+export function planReconcile(
+  desired: DesiredState,
+  actual: ActualState,
+): ReconcilePlan {
+  const locksById = new Map(
+    desired.lockfile.skills.map((skill) => [skill.id, skill]),
+  );
+  const manifestIds = new Set(desired.manifest.skills.map((skill) => skill.id));
+  const classifications: ClassifiedSkill[] = [];
+  const operations: ReconcileOperation[] = [];
+
+  for (const skill of desired.manifest.skills) {
+    const local = actual.skills[skill.id];
+    const lock = locksById.get(skill.id);
+
+    if (skill.resolutionStatus === "PENDING_RESOLUTION") {
+      classifications.push({
+        skillId: skill.id,
+        classification: "PENDING_RESOLUTION",
+      });
+      continue;
+    }
+
+    if (!lock) {
+      throw validationError(`Resolved skill ${skill.id} has no lock entry.`);
+    }
+
+    if (!local || local.contentHash === null) {
+      classifications.push({ skillId: skill.id, classification: "MISSING" });
+      operations.push({ kind: "INSTALL", skill: lock });
+      continue;
+    }
+
+    if (!local.managed) {
+      classifications.push({ skillId: skill.id, classification: "UNMANAGED" });
+      continue;
+    }
+
+    classifications.push({
+      skillId: skill.id,
+      classification:
+        local.contentHash === lock.contentHash ? "MANAGED_SYNCED" : "DRIFTED",
+    });
+  }
+
+  for (const [id, local] of Object.entries(actual.skills) as [
+    SkillId,
+    ActualSkillState,
+  ][]) {
+    if (!manifestIds.has(id)) {
+      classifications.push({
+        skillId: id,
+        classification: local.managed ? "REMOVE_CANDIDATE" : "UNMANAGED",
+      });
+      if (local.managed) operations.push({ kind: "REMOVE", skillId: id });
+    }
+  }
+
+  const compareSkillIds = (left: SkillId, right: SkillId) =>
+    left < right ? -1 : left > right ? 1 : 0;
+  const bySkillId = <T extends { skillId: SkillId }>(left: T, right: T) =>
+    compareSkillIds(left.skillId, right.skillId);
+  classifications.sort(bySkillId);
+  operations.sort((left, right) => {
+    const leftId = left.kind === "INSTALL" ? left.skill.id : left.skillId;
+    const rightId = right.kind === "INSTALL" ? right.skill.id : right.skillId;
+    return (
+      compareSkillIds(leftId, rightId) ||
+      (left.kind < right.kind ? -1 : left.kind > right.kind ? 1 : 0)
+    );
+  });
+
+  return { classifications, operations };
+}
+
+export type TargetOutcome =
+  | "SUCCESS"
+  | "CONFLICT"
+  | "AUTH_REQUIRED"
+  | "DEVICE_ERROR";
+
+export type ReconcileOutcome =
+  | "SUCCESS"
+  | "PARTIAL_SUCCESS"
+  | "CONFLICT"
+  | "AUTH_REQUIRED"
+  | "DEVICE_ERROR";
+
+/** Aggregates target results without discarding an all-target failure cause. */
+export function aggregateTargetOutcomes(
+  outcomes: readonly TargetOutcome[],
+): ReconcileOutcome {
+  if (
+    outcomes.length === 0 ||
+    outcomes.every((outcome) => outcome === "SUCCESS")
+  ) {
+    return "SUCCESS";
+  }
+
+  const unique = new Set(outcomes);
+  if (unique.size === 1) {
+    for (const outcome of unique) return outcome;
+  }
+  return "PARTIAL_SUCCESS";
+}
