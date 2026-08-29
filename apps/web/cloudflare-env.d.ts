@@ -15,4 +15,5 @@ interface Env {
   CREEM_PRODUCT_MONTHLY?: string;
   CREEM_PRODUCT_ANNUAL?: string;
   CREEM_API_URL?: string;
+  TOOLMIRROR_TELEMETRY: AnalyticsEngineDataset;
 }
