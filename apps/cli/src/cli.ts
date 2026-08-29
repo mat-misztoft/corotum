@@ -6,6 +6,7 @@ import {
   exitCodeFor,
   jsonEnvelope,
 } from "./cli-contracts";
+import { registerAddCommand } from "./add-command";
 import { registerInitCommand } from "./init-command";
 
 export const CLI_VERSION = "0.1.0";
@@ -54,6 +55,7 @@ export function createCli(
     .exitOverride();
 
   registerInitCommand(program, io);
+  registerAddCommand(program, io);
 
   program.action(() => {
     const options = program.opts<CliOptions>();

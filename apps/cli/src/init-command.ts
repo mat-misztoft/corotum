@@ -75,6 +75,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
       });
       if (result.kind === "refused" || result.kind === "selection-required") throw new Error(result.kind === "refused" ? result.reason : "Divergent local skills require an explicit interactive selection.");
       await configStore.set("agents", { ...config.agents, ...Object.fromEntries(enabledAgentIds.map((id) => [id, { enabled: true }])) });
+      await configStore.set("gitRepository", repository);
       await configStore.set("mode", "git");
       io.writeOutput(`Initialized Git Sync at revision ${result.revision}.\n`);
       } finally {

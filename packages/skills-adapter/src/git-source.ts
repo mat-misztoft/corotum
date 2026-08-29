@@ -49,6 +49,8 @@ export type ResolvedGitSkill = Readonly<{
   contentHash: string;
 }>;
 
+export type DiscoveredGitSkill = Readonly<{ name: string; path: string }>;
+
 /** Rejects HTTP(S) URLs with user info before any Git process can be started. */
 export function assertSafeGitSource(source: string): void {
   if (source.trim().length === 0) {
@@ -99,6 +101,33 @@ export const runSystemGit: GitCommandRunner = async ({ args, cwd }) => {
 /** Resolves and materializes exact Git content using only system Git and local temporary state. */
 export class GitSkillMaterializer {
   constructor(private readonly runGit: GitCommandRunner = runSystemGit) {}
+
+  /** Lists global Agent Skills by their SKILL.md directory at an exact ref. */
+  async discover(
+    sourceInput: string,
+    ref: string,
+  ): Promise<readonly DiscoveredGitSkill[]> {
+    const source = normalizeGitSource(sourceInput);
+    const checkout = await this.clone(source);
+    try {
+      const revision = await this.commit(checkout, ref);
+      const result = await this.runGit({
+        args: ["ls-tree", "-r", "--name-only", revision],
+        cwd: checkout,
+      });
+      if (result.exitCode !== 0) throw gitFailure(result.stderr);
+      const paths = new TextDecoder()
+        .decode(result.stdout)
+        .split("\n")
+        .filter((path) => path.endsWith("/SKILL.md"))
+        .map((path) => path.slice(0, -"/SKILL.md".length));
+      return paths
+        .map((path) => ({ name: path.split("/").at(-1) as string, path }))
+        .sort((left, right) => left.path.localeCompare(right.path));
+    } finally {
+      await rm(checkout, { force: true, recursive: true });
+    }
+  }
 
   async resolve(input: ResolveGitSkillInput): Promise<ResolvedGitSkill> {
     const source = normalizeGitSource(input.source);
@@ -217,7 +246,10 @@ export class GitSkillMaterializer {
     return result.stdout;
   }
 
-  private async hashArchive(archive: Uint8Array, path: string): Promise<string> {
+  private async hashArchive(
+    archive: Uint8Array,
+    path: string,
+  ): Promise<string> {
     const temporary = await mkdtemp(join(tmpdir(), "toolmirror-git-hash-"));
     try {
       const file = join(temporary, "skill.tar");

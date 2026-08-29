@@ -94,6 +94,25 @@ describe("GitSkillMaterializer", () => {
     expect(results[0]?.path).toBe("skills/example");
   });
 
+  test("discovers each skill directory from a multi-skill source", async () => {
+    const source = await fixture();
+    await mkdir(join(source.directory, "skills", "second"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(source.directory, "skills", "second", "SKILL.md"),
+      "# Second\n",
+    );
+    await git(["-C", source.directory, "add", "."]);
+    await git(["-C", source.directory, "commit", "-m", "second skill"]);
+    expect(
+      await new GitSkillMaterializer().discover(source.directory, "main"),
+    ).toEqual([
+      { name: "example", path: "skills/example" },
+      { name: "second", path: "skills/second" },
+    ]);
+  });
+
   test("materializes only content matching the locked hash", async () => {
     const source = await fixture();
     const materializer = new GitSkillMaterializer();

@@ -13,6 +13,7 @@ const configSchema = z
     deviceId: z.string().min(1).nullable(),
     skillsStoragePath: z.string().min(1).nullable(),
     gitStoragePath: z.string().min(1).nullable(),
+    gitRepository: z.string().min(1).nullable().default(null),
     telemetry: z.boolean().nullable(),
     agents: z.record(z.string(), z.object({ enabled: z.boolean() })),
   })
@@ -36,6 +37,7 @@ export const defaultConfig = (): ToolMirrorConfig => ({
   deviceId: null,
   skillsStoragePath: null,
   gitStoragePath: null,
+  gitRepository: null,
   telemetry: null,
   agents: {},
 });
