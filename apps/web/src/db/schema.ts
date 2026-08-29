@@ -234,6 +234,17 @@ export const cliPairings = sqliteTable(
   ],
 );
 
+export const deviceTokens = sqliteTable("device_tokens", {
+  id: text().primaryKey(),
+  deviceId: text("device_id")
+    .notNull()
+    .references(() => devices.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+  revokedAt: integer("revoked_at", { mode: "timestamp" }),
+});
+
 export const idempotencyRecords = sqliteTable("idempotency_records", {
   key: text().primaryKey(),
   actorType: text("actor_type").notNull(),
