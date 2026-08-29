@@ -32,11 +32,15 @@ try {
   if (!healthy) throw failure;
 
   const home = await fetch(`http://127.0.0.1:${port}/`);
+  const landing = await home.text();
   if (
     !home.ok ||
-    !(await home.text()).includes("Keep your agent skills in sync.")
+    !landing.includes("Keep your agent skills in sync.") ||
+    !landing.includes("One state. Everywhere.") ||
+    !landing.includes("From skill to synced state.") ||
+    !landing.includes("RECONCILE")
   ) {
-    throw new Error("landing hero did not render through workerd");
+    throw new Error("landing state flow did not render through workerd");
   }
 } finally {
   process.kill();
