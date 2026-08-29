@@ -10,6 +10,7 @@
   "include": [
     "tooling/**/*.ts",
     "apps/cli/src/**/*.ts",
+    "packages/agent-targets/src/**/*.ts",
     "packages/core/src/**/*.ts",
     "packages/shared/src/**/*.ts",
     "packages/skills-adapter/src/**/*.ts"
