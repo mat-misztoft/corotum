@@ -360,6 +360,21 @@ describe("GitStateProvider", () => {
     );
 
     const restarted = new GitStateProvider(storage, source.bare);
+    const readable = await restarted.pullReadOnly();
+    expect(readable).toEqual(
+      expect.objectContaining({
+        kind: "success",
+        value: expect.objectContaining({
+          state: expect.objectContaining({
+            manifest: expect.objectContaining({
+              skills: expect.arrayContaining([
+                expect.objectContaining({ ref: "pending" }),
+              ]),
+            }),
+          }),
+        }),
+      }),
+    );
     const blocked = await restarted.push(
       { state: state(false, "later"), baseRevision: initial.value.revisionId },
       { type: "SET_REF", skillId: skillId("sk_gitA"), metadata: {} },

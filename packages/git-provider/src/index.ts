@@ -255,9 +255,26 @@ export class GitStateProvider implements StateProvider {
   }
 
   async pull(): Promise<Result<DesiredStateEnvelope>> {
+    return this.pullInternal(true);
+  }
+
+  /** Reads the current local desired state without retrying a pending mutation. */
+  async pullReadOnly(): Promise<Result<DesiredStateEnvelope>> {
+    return this.pullInternal(false);
+  }
+
+  private async pullInternal(
+    retryPending: boolean,
+  ): Promise<Result<DesiredStateEnvelope>> {
     try {
       await this.preflight();
       const cache = await this.cache();
+      if (!retryPending) {
+        // The updater contacts each skill source itself. Reading this committed
+        // local snapshot avoids turning an unresolved PENDING_PUSH into a
+        // write/rebase attempt and keeps update --check safely available.
+        return { kind: "success", value: await this.readState(cache) };
+      }
       const pending = await this.retryPendingPush(cache);
       if (pending.kind === "pending" || pending.kind === "conflict") {
         return {
