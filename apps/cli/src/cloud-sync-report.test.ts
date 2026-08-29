@@ -1,0 +1,94 @@
+import { expect, test } from "bun:test";
+import {
+  CloudSyncReportError,
+  CloudSyncReportService,
+  deviceSyncAggregateFrom,
+  sanitizeSyncErrorMessage,
+} from "./cloud-sync-report";
+
+test("sync reports must use this device’s locally verified applied revision", async () => {
+  const requests: Request[] = [];
+  const service = new CloudSyncReportService({
+    origin: "https://toolmirror.com",
+    deviceId: "dev_1",
+    credentials: {
+      load: async () => ({
+        schemaVersion: 1 as const,
+        cloudDeviceToken: "device-token-secret",
+      }),
+    },
+    fetch: async (input, init) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return Response.json({
+        deviceId: "dev_1",
+        workspaceId: "ws_1",
+        appliedRevisionId: "rev_local",
+        appliedRevisionSequence: 1,
+        syncStatus: "SYNCED",
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        lastSyncAt: 4_000,
+      });
+    },
+  });
+
+  await expect(
+    service.report({
+      lastAppliedRevision: "rev_local",
+      appliedRevisionId: "rev_other",
+      aggregate: { status: "SYNCED" },
+    }),
+  ).rejects.toThrow(CloudSyncReportError);
+
+  await expect(
+    service.report({
+      lastAppliedRevision: null,
+      appliedRevisionId: null,
+      aggregate: { status: "SYNCED" },
+    }),
+  ).rejects.toThrow("locally verified applied revision");
+
+  const receipt = await service.report({
+    lastAppliedRevision: "rev_local",
+    appliedRevisionId: "rev_local",
+    aggregate: { status: "SYNCED" },
+  });
+  expect(receipt.deviceId).toBe("dev_1");
+  expect(requests).toHaveLength(1);
+  expect(requests[0].url).toBe(
+    "https://toolmirror.com/api/v1/devices/dev_1/sync-report",
+  );
+  expect(requests[0].url).not.toContain("dev_2");
+  expect(await requests[0].json()).toEqual({
+    appliedRevisionId: "rev_local",
+    syncStatus: "SYNCED",
+    lastErrorCode: null,
+    lastErrorMessage: null,
+  });
+});
+
+test("partial target outcomes stay visible in the reported aggregate", () => {
+  expect(
+    deviceSyncAggregateFrom({
+      kind: "partial",
+      execution: {
+        operations: [
+          { status: "SUCCESS" },
+          {
+            status: "ERROR",
+            error: "Failed to write /Users/ada/.agents/skill",
+          },
+        ],
+      },
+      snapshot: { plan: { classifications: [] } },
+    }),
+  ).toEqual({
+    status: "PARTIALLY_SYNCED",
+    lastErrorCode: "TARGET_ERROR",
+    lastErrorMessage: "A local target failed.",
+  });
+  expect(sanitizeSyncErrorMessage("device-token-secret leaked")).toBe(
+    "A local target failed.",
+  );
+});

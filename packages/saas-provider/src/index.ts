@@ -9,10 +9,25 @@ import {
   type StateProvider,
   validateDesiredState,
 } from "../../core/src/index";
+import {
+  CLI_VERSION_HEADER,
+  DEVICE_TOKEN_HEADER,
+  IDEMPOTENCY_KEY_HEADER,
+} from "./headers";
 
-export const DEVICE_TOKEN_HEADER = "x-toolmirror-device-token";
-export const CLI_VERSION_HEADER = "x-toolmirror-cli-version";
-export const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
+export {
+  CLI_VERSION_HEADER,
+  DEVICE_TOKEN_HEADER,
+  IDEMPOTENCY_KEY_HEADER,
+} from "./headers";
+export {
+  DEVICE_SYNC_STATUSES,
+  type DeviceSyncReportPayload,
+  type DeviceSyncReportReceipt,
+  type DeviceSyncStatus,
+  type PostDeviceSyncReportOptions,
+  postDeviceSyncReport,
+} from "./sync-report";
 /** Provider-local stand-in for a Cloud workspace that has no revision yet. */
 export const UNINITIALIZED_CLOUD_REVISION = revisionId("rev_uninitialized");
 
