@@ -218,6 +218,42 @@ export class GitStateProvider implements StateProvider {
     private readonly runGit: GitCommandRunner = runSystemGit,
   ) {}
 
+  /**
+   * Seeds an entirely empty remote with the initial desired state. There is no
+   * prior transition to replay, so the first commit intentionally has no
+   * transition file; later mutations always carry one.
+   */
+  async bootstrap(state: DesiredState): Promise<Result<DesiredStateEnvelope>> {
+    try {
+      await this.preflight();
+      const cache = await this.cache();
+      if (await this.hasHead(cache)) {
+        return { kind: "failure", error: { code: "CONFLICT", message: "ToolMirror is already initialized for this Git repository." } };
+      }
+      if (await this.readPending()) {
+        return { kind: "failure", error: { code: "CONFLICT", message: "Resolve the previous PENDING_PUSH before changing desired state." } };
+      }
+      const validated = validateDesiredState(state, "git");
+      await Promise.all([
+        writeFile(join(cache, manifestFile), serializeManifest(validated.manifest)),
+        writeFile(join(cache, lockfileFile), serializeLockfile(validated.lockfile)),
+      ]);
+      await this.command(cache, ["add", "--", manifestFile, lockfileFile]);
+      await this.command(cache, ["-c", "user.name=ToolMirror", "-c", "user.email=toolmirror@users.noreply.github.com", "commit", "--no-gpg-sign", "-m", "toolmirror: initialize"]);
+      try {
+        await this.command(cache, ["push", "-u", "origin", "HEAD"]);
+      } catch {
+        // An empty remote has no base commit. The empty marker tells retry that
+        // it can safely retry the initial push rather than merge snapshots.
+        await this.writePending({ baseRevision: "" });
+        return { kind: "failure", error: { code: "CONFLICT", message: "Desired state was committed locally and is waiting to be pushed." } };
+      }
+      return { kind: "success", value: await this.readState(cache) };
+    } catch (error) {
+      return { kind: "failure", error: gitError(error) };
+    }
+  }
+
   async pull(): Promise<Result<DesiredStateEnvelope>> {
     try {
       await this.preflight();
@@ -369,6 +405,15 @@ export class GitStateProvider implements StateProvider {
   ): Promise<PendingPushStatus> {
     const pending = await this.readPending();
     if (!pending) return { kind: "none" };
+    if (pending.baseRevision === "") {
+      try {
+        await this.command(cache, ["push", "-u", "origin", "HEAD"]);
+        await this.clearPending();
+        return { kind: "resolved" };
+      } catch {
+        return { kind: "pending" };
+      }
+    }
 
     await this.command(cache, ["fetch", "--quiet", "origin"]);
     const [head, upstream] = await Promise.all([
@@ -565,6 +610,13 @@ export class GitStateProvider implements StateProvider {
     throw new Error(
       result.stderr.trim() || "Git could not inspect the desired-state change.",
     );
+  }
+
+  private async hasHead(cache: string): Promise<boolean> {
+    const result = await this.runGit({ args: ["rev-parse", "--verify", "HEAD"], cwd: cache });
+    if (result.exitCode === 0) return true;
+    if (result.exitCode === 128 || result.exitCode === 1) return false;
+    throw new Error(result.stderr.trim() || "Git could not inspect the desired-state repository.");
   }
 
   private async revision(cache: string): Promise<string> {

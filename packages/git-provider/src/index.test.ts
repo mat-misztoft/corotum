@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  chmod,
   cp,
   mkdtemp,
   readdir,
@@ -108,6 +109,27 @@ async function git(args: readonly string[]): Promise<string> {
 }
 
 describe("GitStateProvider", () => {
+  test("keeps an initial push pending until an empty remote accepts it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "toolmirror-git-bootstrap-"));
+    temporaryDirectories.push(root);
+    const bare = join(root, "remote.git");
+    await git(["init", "--bare", bare]);
+    const hook = join(bare, "hooks", "pre-receive");
+    await writeFile(hook, "#!/bin/sh\nexit 1\n");
+    await chmod(hook, 0o755);
+
+    const provider = new GitStateProvider(join(root, "cache"), bare);
+    expect(await provider.bootstrap(state())).toMatchObject({
+      kind: "failure",
+      error: { code: "CONFLICT" },
+    });
+    await rm(hook);
+    expect(await provider.pull()).toMatchObject({
+      kind: "success",
+      value: { state: state() },
+    });
+  });
+
   test("stops before creating its cache when Git preflight fails", async () => {
     const source = await fixture();
     const storage = join(source.worktree, "toolmirror-cache");

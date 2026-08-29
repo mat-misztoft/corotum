@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type { LockedSkill } from "../../core/src/index";
+import { hashSkillDirectory } from "./canonical-store";
 
 export type GitSourceErrorCode =
   | "AUTH_REQUIRED"
@@ -112,7 +113,7 @@ export class GitSkillMaterializer {
         repository: source,
         revision,
         path,
-        contentHash: contentHash(archive),
+        contentHash: await this.hashArchive(archive, path),
       };
     } finally {
       await rm(checkout, { force: true, recursive: true });
@@ -135,17 +136,16 @@ export class GitSkillMaterializer {
         );
       }
       const archive = await this.archive(checkout, revision, path);
-      if (contentHash(archive) !== lock.contentHash) {
+      await mkdir(staging, { recursive: true });
+      await writeFile(join(staging, "skill.tar"), archive);
+      await this.extract(join(staging, "skill.tar"), staging, path);
+      await rm(join(staging, "skill.tar"), { force: true });
+      if ((await hashSkillDirectory(staging)) !== lock.contentHash) {
         throw new GitSourceError(
           "HASH_MISMATCH",
           "Locked skill content does not match its expected hash.",
         );
       }
-
-      await mkdir(staging, { recursive: true });
-      await writeFile(join(staging, "skill.tar"), archive);
-      await this.extract(join(staging, "skill.tar"), staging, path);
-      await rm(join(staging, "skill.tar"), { force: true });
       await mkdir(dirname(destination), { recursive: true });
       await rm(destination, { force: true, recursive: true });
       await rename(staging, destination);
@@ -217,6 +217,19 @@ export class GitSkillMaterializer {
     return result.stdout;
   }
 
+  private async hashArchive(archive: Uint8Array, path: string): Promise<string> {
+    const temporary = await mkdtemp(join(tmpdir(), "toolmirror-git-hash-"));
+    try {
+      const file = join(temporary, "skill.tar");
+      await writeFile(file, archive);
+      await this.extract(file, temporary, path);
+      await rm(file, { force: true });
+      return await hashSkillDirectory(temporary);
+    } finally {
+      await rm(temporary, { force: true, recursive: true });
+    }
+  }
+
   private async extract(
     archive: string,
     destination: string,
@@ -261,10 +274,6 @@ function normalizeSkillPath(path: string): string {
     );
   }
   return normalized;
-}
-
-function contentHash(content: Uint8Array): string {
-  return `sha256:${new Bun.CryptoHasher("sha256").update(content).digest("hex")}`;
 }
 
 function gitFailure(stderr: string): GitSourceError {
