@@ -353,6 +353,14 @@ test("hosted Cloud sync-report requires entitlement while self-host does not", a
   });
 });
 
+const updateChecks = [
+  { skillId: "sk_01Jpublic", status: "UP_TO_DATE" },
+  { skillId: "sk_01Javailable", status: "UPDATE_AVAILABLE" },
+  { skillId: "sk_01Junknown", status: "UNKNOWN" },
+  { skillId: "sk_01Jprivate", status: "AUTH_REQUIRED" },
+  { skillId: "sk_01Jfailed", status: "CHECK_FAILED" },
+] as const;
+
 const mixedTargets = [
   {
     skillId: skill,
@@ -420,6 +428,7 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
       appliedRevisionId: revision.revisionId,
       syncStatus: "SYNCED",
       targets: mixedTargets,
+      updates: updateChecks,
     }),
     db,
     issued.deviceId,
@@ -490,6 +499,17 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
     }),
   );
 
+  const partialUpdateReport = await handlePostDeviceSyncReport(
+    reportRequest(issued.deviceId, issued.token, {
+      appliedRevisionId: revision.revisionId,
+      syncStatus: "PARTIALLY_SYNCED",
+      updates: [{ skillId: "sk_01Jpublic", status: "UP_TO_DATE" }],
+    }),
+    db,
+    issued.deviceId,
+  );
+  expect(partialUpdateReport.status).toBe(200);
+
   const view = await handleGetDeviceTargetStatus(
     new Request(`https://toolmirror.com/api/v1/devices/${issued.deviceId}`, {
       headers: { origin: "https://toolmirror.com" },
@@ -502,6 +522,7 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
   const body = (await view.json()) as {
     syncStatus: string;
     targets: readonly { agentId: string; status: string }[];
+    updates: readonly { skillId: string; status: string; checkedAt: number }[];
   };
   expect(body.syncStatus).toBe("PARTIALLY_SYNCED");
   expect(body.targets.map((target) => target.status).sort()).toEqual([
@@ -510,6 +531,13 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
     "ERROR",
     "SYNCED",
   ]);
+  expect(body.updates).toEqual(
+    [...updateChecks]
+      .sort((left, right) => left.skillId.localeCompare(right.skillId))
+      .map((update) => ({ ...update, checkedAt: expect.any(Number) })),
+  );
+  expect(JSON.stringify(body.updates)).not.toContain("https://");
+  expect(JSON.stringify(body.updates)).not.toContain("/");
 
   const stranger = await handleGetDeviceTargetStatus(
     new Request(`https://toolmirror.com/api/v1/devices/${issued.deviceId}`, {

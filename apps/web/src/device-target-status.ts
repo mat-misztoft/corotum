@@ -1,3 +1,4 @@
+import type { DeviceSkillUpdateRecord } from "./sync-report";
 import { DeviceNotFoundError, type TokenDatabase } from "./tokens";
 
 export const DEVICE_TARGET_STATUSES = [
@@ -54,6 +55,7 @@ export type DeviceTargetStatusView = Readonly<{
   lastErrorMessage: string | null;
   lastSyncAt: number | null;
   targets: readonly Omit<DeviceSkillTargetRecord, "deviceId" | "workspaceId">[];
+  updates: readonly DeviceSkillUpdateRecord[];
 }>;
 
 export class InvalidDeviceTargetError extends Error {
@@ -203,6 +205,25 @@ export async function replaceDeviceSkillTargets(
   ]);
 }
 
+export async function listDeviceSkillUpdates(
+  db: TokenDatabase,
+  deviceId: string,
+  workspaceId: string,
+): Promise<readonly DeviceSkillUpdateRecord[]> {
+  const rows = await db
+    .prepare(
+      `SELECT skill_id AS skillId,
+              status,
+              checked_at AS checkedAt
+       FROM device_skill_updates
+       WHERE device_id = ? AND workspace_id = ?
+       ORDER BY skill_id`,
+    )
+    .bind(deviceId, workspaceId)
+    .all<DeviceSkillUpdateRecord>();
+  return rows.results ?? [];
+}
+
 export async function listDeviceSkillTargets(
   db: TokenDatabase,
   deviceId: string,
@@ -264,6 +285,11 @@ export async function readDeviceTargetStatus(
   return {
     ...membership,
     targets: await listDeviceSkillTargets(
+      db,
+      membership.deviceId,
+      membership.workspaceId,
+    ),
+    updates: await listDeviceSkillUpdates(
       db,
       membership.deviceId,
       membership.workspaceId,

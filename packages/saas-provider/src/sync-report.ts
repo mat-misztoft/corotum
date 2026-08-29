@@ -29,12 +29,28 @@ export type DeviceTargetReport = Readonly<{
   contentHash?: string | null;
 }>;
 
+export const DEVICE_UPDATE_STATUSES = [
+  "UP_TO_DATE",
+  "UPDATE_AVAILABLE",
+  "UNKNOWN",
+  "AUTH_REQUIRED",
+  "CHECK_FAILED",
+] as const;
+
+export type DeviceUpdateStatus = (typeof DEVICE_UPDATE_STATUSES)[number];
+
+export type DeviceUpdateReport = Readonly<{
+  skillId: string;
+  status: DeviceUpdateStatus;
+}>;
+
 export type DeviceSyncReportPayload = Readonly<{
   appliedRevisionId: string | null;
   syncStatus: DeviceSyncStatus;
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
   targets?: readonly DeviceTargetReport[];
+  updates?: readonly DeviceUpdateReport[];
 }>;
 
 export type DeviceSyncReportReceipt = Readonly<{
@@ -105,6 +121,14 @@ export async function postDeviceSyncReport(
                   errorCode: target.errorCode ?? null,
                   errorMessage: target.errorMessage ?? null,
                   contentHash: target.contentHash ?? null,
+                })),
+              }
+            : {}),
+          ...(options.report.updates
+            ? {
+                updates: options.report.updates.map((update) => ({
+                  skillId: update.skillId,
+                  status: update.status,
                 })),
               }
             : {}),

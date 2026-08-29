@@ -243,6 +243,33 @@ export const deviceSkillTargets = sqliteTable(
   ],
 );
 
+/** Last device-performed upstream check for each desired skill. */
+export const deviceSkillUpdates = sqliteTable(
+  "device_skill_updates",
+  {
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => devices.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    skillId: text("skill_id").notNull(),
+    status: text().notNull(),
+    checkedAt: integer("checked_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("device_skill_updates_unique").on(
+      table.deviceId,
+      table.workspaceId,
+      table.skillId,
+    ),
+    check(
+      "device_skill_updates_status_check",
+      sql`${table.status} IN ('UP_TO_DATE', 'UPDATE_AVAILABLE', 'UNKNOWN', 'AUTH_REQUIRED', 'CHECK_FAILED')`,
+    ),
+  ],
+);
+
 export const cliPairings = sqliteTable(
   "cli_pairings",
   {

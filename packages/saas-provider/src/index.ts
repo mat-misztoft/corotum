@@ -23,11 +23,14 @@ export {
 export {
   DEVICE_SYNC_STATUSES,
   DEVICE_TARGET_STATUSES,
+  DEVICE_UPDATE_STATUSES,
   type DeviceSyncReportPayload,
   type DeviceSyncReportReceipt,
   type DeviceSyncStatus,
   type DeviceTargetReport,
   type DeviceTargetStatus,
+  type DeviceUpdateReport,
+  type DeviceUpdateStatus,
   type PostDeviceSyncReportOptions,
   postDeviceSyncReport,
 } from "./sync-report";

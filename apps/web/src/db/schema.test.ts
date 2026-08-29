@@ -31,6 +31,20 @@ test("devices retain only device metadata, never filesystem or target-state blob
   expect(devices).not.toContain("status_json");
 });
 
+test("device update checks retain only skill IDs, status, and check time", async () => {
+  const updates = await Bun.file(
+    new URL("../../migrations/0010_sharp_landau.sql", import.meta.url),
+  ).text();
+  expect(updates).toContain("CREATE TABLE `device_skill_updates`");
+  expect(updates).toContain("device_skill_updates_unique");
+  expect(updates).toContain(
+    "'UP_TO_DATE', 'UPDATE_AVAILABLE', 'UNKNOWN', 'AUTH_REQUIRED', 'CHECK_FAILED'",
+  );
+  expect(updates).not.toContain("repository");
+  expect(updates).not.toContain("path");
+  expect(updates).not.toContain("credential");
+});
+
 test("device skill targets live in dedicated relational rows", async () => {
   const { readdirSync } = await import("node:fs");
   const { join } = await import("node:path");

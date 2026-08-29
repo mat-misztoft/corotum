@@ -25,6 +25,7 @@ export type DeviceSyncReportInput = Readonly<{
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   targets?: readonly DeviceTargetReportInput[];
+  updates?: readonly DeviceUpdateReportInput[];
 }>;
 
 export type DeviceSyncReportRecord = Readonly<{
@@ -36,6 +37,27 @@ export type DeviceSyncReportRecord = Readonly<{
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   lastSyncAt: number;
+}>;
+
+export const DEVICE_UPDATE_STATUSES = [
+  "UP_TO_DATE",
+  "UPDATE_AVAILABLE",
+  "UNKNOWN",
+  "AUTH_REQUIRED",
+  "CHECK_FAILED",
+] as const;
+
+export type DeviceUpdateStatus = (typeof DEVICE_UPDATE_STATUSES)[number];
+
+export type DeviceUpdateReportInput = Readonly<{
+  skillId: string;
+  status: string;
+}>;
+
+export type DeviceSkillUpdateRecord = Readonly<{
+  skillId: string;
+  status: DeviceUpdateStatus;
+  checkedAt: number;
 }>;
 
 export type SyncReportDatabase = TokenDatabase;
@@ -56,6 +78,60 @@ export class SyncReportRevisionError extends Error {
 
 function isDeviceSyncStatus(value: string): value is DeviceSyncStatus {
   return (DEVICE_SYNC_STATUSES as readonly string[]).includes(value);
+}
+
+function isDeviceUpdateStatus(value: string): value is DeviceUpdateStatus {
+  return (DEVICE_UPDATE_STATUSES as readonly string[]).includes(value);
+}
+
+function normalizeUpdates(
+  updates: readonly DeviceUpdateReportInput[],
+  now: number,
+): DeviceSkillUpdateRecord[] {
+  const seen = new Set<string>();
+  return updates.map((update) => {
+    if (!/^sk_[A-Za-z0-9]+$/.test(update.skillId)) {
+      throw new InvalidSyncReportError("A valid skill ID is required");
+    }
+    if (!isDeviceUpdateStatus(update.status)) {
+      throw new InvalidSyncReportError("A valid update status is required");
+    }
+    if (seen.has(update.skillId)) {
+      throw new InvalidSyncReportError("Each skill can have one update status");
+    }
+    seen.add(update.skillId);
+    return { skillId: update.skillId, status: update.status, checkedAt: now };
+  });
+}
+
+async function upsertDeviceSkillUpdates(
+  db: SyncReportDatabase,
+  input: Readonly<{
+    deviceId: string;
+    workspaceId: string;
+    updates: readonly DeviceSkillUpdateRecord[];
+  }>,
+) {
+  await db.batch(
+    input.updates.map((update) =>
+      db
+        .prepare(
+          `INSERT INTO device_skill_updates (
+             device_id, workspace_id, skill_id, status, checked_at
+           ) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(device_id, workspace_id, skill_id) DO UPDATE SET
+             status = excluded.status,
+             checked_at = excluded.checked_at`,
+        )
+        .bind(
+          input.deviceId,
+          input.workspaceId,
+          update.skillId,
+          update.status,
+          update.checkedAt,
+        ),
+    ),
+  );
 }
 
 function clipError(value: string | null) {
@@ -119,6 +195,7 @@ export async function acceptDeviceSyncReport(
   const targets = input.targets
     ? normalizeDeviceTargets(input.targets, now)
     : null;
+  const updates = input.updates ? normalizeUpdates(input.updates, now) : null;
   const syncStatus =
     targets && targets.length > 0
       ? aggregateDeviceSyncStatus(targets, {
@@ -165,6 +242,13 @@ export async function acceptDeviceSyncReport(
       deviceId: input.deviceId,
       workspaceId: membership.workspaceId,
       targets,
+    });
+  }
+  if (updates) {
+    await upsertDeviceSkillUpdates(db, {
+      deviceId: input.deviceId,
+      workspaceId: membership.workspaceId,
+      updates,
     });
   }
 

@@ -62,6 +62,7 @@ export async function handlePostDeviceSyncReport(
       lastErrorCode?: unknown;
       lastErrorMessage?: unknown;
       targets?: unknown;
+      updates?: unknown;
     };
     if (
       payload.appliedRevisionId !== undefined &&
@@ -76,6 +77,10 @@ export async function handlePostDeviceSyncReport(
     const targets = parseTargets(payload.targets);
     if (targets === "invalid") {
       return jsonError("A valid device skill target is required", 400);
+    }
+    const updates = parseUpdates(payload.updates);
+    if (updates === "invalid") {
+      return jsonError("A valid device update report is required", 400);
     }
     return Response.json(
       await acceptDeviceSyncReport(db, {
@@ -94,11 +99,30 @@ export async function handlePostDeviceSyncReport(
             ? payload.lastErrorMessage
             : null,
         targets,
+        updates,
       }),
     );
   } catch (error) {
     return reportError(error);
   }
+}
+
+function parseUpdates(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return "invalid" as const;
+  const updates = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return "invalid" as const;
+    const update = item as { skillId?: unknown; status?: unknown };
+    if (
+      typeof update.skillId !== "string" ||
+      typeof update.status !== "string"
+    ) {
+      return "invalid" as const;
+    }
+    updates.push({ skillId: update.skillId, status: update.status });
+  }
+  return updates;
 }
 
 function parseTargets(value: unknown) {

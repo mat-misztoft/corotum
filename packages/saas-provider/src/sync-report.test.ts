@@ -63,6 +63,36 @@ test("postDeviceSyncReport sends only this device id and aggregate", async () =>
   });
 });
 
+test("postDeviceSyncReport includes device-performed update checks", async () => {
+  const requests: Request[] = [];
+  await postDeviceSyncReport({
+    origin: "https://toolmirror.com",
+    deviceId: "dev_1",
+    deviceToken: "device-token-secret",
+    fetch: async (input, init) => {
+      requests.push(new Request(input, init));
+      return Response.json({
+        deviceId: "dev_1",
+        workspaceId: "ws_1",
+        appliedRevisionId: null,
+        appliedRevisionSequence: 0,
+        syncStatus: "ERROR",
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        lastSyncAt: 4_000,
+      });
+    },
+    report: {
+      appliedRevisionId: null,
+      syncStatus: "ERROR",
+      updates: [{ skillId: "sk_01Jreview", status: "AUTH_REQUIRED" }],
+    },
+  });
+  expect(await requests[0].json()).toMatchObject({
+    updates: [{ skillId: "sk_01Jreview", status: "AUTH_REQUIRED" }],
+  });
+});
+
 test("Cloud origin must not include embedded credentials", async () => {
   expect(
     await postDeviceSyncReport({
