@@ -30,3 +30,25 @@ test("devices retain only device metadata, never filesystem or target-state blob
   expect(devices).not.toContain("path");
   expect(devices).not.toContain("status_json");
 });
+
+test("device skill targets live in dedicated relational rows", async () => {
+  const { readdirSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const directory = fileURLToPath(
+    new URL("../../migrations/", import.meta.url),
+  );
+  const sql = (
+    await Promise.all(
+      readdirSync(directory)
+        .filter((file) => file.endsWith(".sql"))
+        .map((file) => Bun.file(join(directory, file)).text()),
+    )
+  ).join("\n");
+  expect(sql).toContain("CREATE TABLE `device_skill_targets`");
+  expect(sql).toContain("`skill_id`");
+  expect(sql).toContain("`agent_id`");
+  expect(sql).toContain("`content_hash`");
+  expect(sql).toContain("device_skill_targets_unique");
+  expect(sql).toContain("'SYNCED', 'DRIFTED', 'AUTH_REQUIRED', 'ERROR'");
+});

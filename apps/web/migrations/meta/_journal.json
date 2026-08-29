@@ -64,6 +64,13 @@
       "when": 1787992146033,
       "tag": "0008_stiff_kate_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1787993648541,
+      "tag": "0009_glossy_sebastian_shaw",
+      "breakpoints": true
     }
   ]
 }

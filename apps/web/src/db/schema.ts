@@ -207,6 +207,42 @@ export const deviceAgents = sqliteTable(
   ],
 );
 
+/** Current per-device/skill/agent outcome. Dashboard reads these rows, never a devices JSON blob. */
+export const deviceSkillTargets = sqliteTable(
+  "device_skill_targets",
+  {
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => devices.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    skillId: text("skill_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    status: text().notNull(),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    contentHash: text("content_hash"),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("device_skill_targets_unique").on(
+      table.deviceId,
+      table.workspaceId,
+      table.skillId,
+      table.agentId,
+    ),
+    check(
+      "device_skill_targets_agent_id_check",
+      sql`${table.agentId} IN ('codex', 'claude-code', 'pi', 'gemini-cli', 'opencode', 'cursor', 'windsurf', 'cline', 'roo-code', 'github-copilot', 'kiro-cli')`,
+    ),
+    check(
+      "device_skill_targets_status_check",
+      sql`${table.status} IN ('SYNCED', 'DRIFTED', 'AUTH_REQUIRED', 'ERROR')`,
+    ),
+  ],
+);
+
 export const cliPairings = sqliteTable(
   "cli_pairings",
   {

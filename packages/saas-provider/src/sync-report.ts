@@ -11,11 +11,30 @@ export const DEVICE_SYNC_STATUSES = [
 
 export type DeviceSyncStatus = (typeof DEVICE_SYNC_STATUSES)[number];
 
+export const DEVICE_TARGET_STATUSES = [
+  "SYNCED",
+  "DRIFTED",
+  "AUTH_REQUIRED",
+  "ERROR",
+] as const;
+
+export type DeviceTargetStatus = (typeof DEVICE_TARGET_STATUSES)[number];
+
+export type DeviceTargetReport = Readonly<{
+  skillId: string;
+  agentId: string;
+  status: DeviceTargetStatus;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  contentHash?: string | null;
+}>;
+
 export type DeviceSyncReportPayload = Readonly<{
   appliedRevisionId: string | null;
   syncStatus: DeviceSyncStatus;
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
+  targets?: readonly DeviceTargetReport[];
 }>;
 
 export type DeviceSyncReportReceipt = Readonly<{
@@ -77,6 +96,18 @@ export async function postDeviceSyncReport(
           syncStatus: options.report.syncStatus,
           lastErrorCode: options.report.lastErrorCode ?? null,
           lastErrorMessage: options.report.lastErrorMessage ?? null,
+          ...(options.report.targets
+            ? {
+                targets: options.report.targets.map((target) => ({
+                  skillId: target.skillId,
+                  agentId: target.agentId,
+                  status: target.status,
+                  errorCode: target.errorCode ?? null,
+                  errorMessage: target.errorMessage ?? null,
+                  contentHash: target.contentHash ?? null,
+                })),
+              }
+            : {}),
         }),
       },
     );

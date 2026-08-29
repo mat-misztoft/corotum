@@ -4,6 +4,7 @@ import {
   requireHostedCloudAccess,
 } from "./billing";
 import { protectCloudRequest } from "./cloud-protect";
+import { InvalidDeviceTargetError } from "./device-target-status";
 import {
   acceptDeviceSyncReport,
   InvalidSyncReportError,
@@ -26,7 +27,8 @@ function reportError(error: unknown) {
     return jsonError(error.message, 404);
   if (
     error instanceof InvalidSyncReportError ||
-    error instanceof SyncReportRevisionError
+    error instanceof SyncReportRevisionError ||
+    error instanceof InvalidDeviceTargetError
   ) {
     return jsonError(error.message, 400);
   }
@@ -59,6 +61,7 @@ export async function handlePostDeviceSyncReport(
       syncStatus?: unknown;
       lastErrorCode?: unknown;
       lastErrorMessage?: unknown;
+      targets?: unknown;
     };
     if (
       payload.appliedRevisionId !== undefined &&
@@ -69,6 +72,10 @@ export async function handlePostDeviceSyncReport(
     }
     if (typeof payload.syncStatus !== "string") {
       return jsonError("A valid device sync aggregate is required", 400);
+    }
+    const targets = parseTargets(payload.targets);
+    if (targets === "invalid") {
+      return jsonError("A valid device skill target is required", 400);
     }
     return Response.json(
       await acceptDeviceSyncReport(db, {
@@ -86,9 +93,52 @@ export async function handlePostDeviceSyncReport(
           typeof payload.lastErrorMessage === "string"
             ? payload.lastErrorMessage
             : null,
+        targets,
       }),
     );
   } catch (error) {
     return reportError(error);
   }
+}
+
+function parseTargets(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return "invalid" as const;
+  const targets = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return "invalid" as const;
+    const target = item as {
+      skillId?: unknown;
+      agentId?: unknown;
+      status?: unknown;
+      errorCode?: unknown;
+      errorMessage?: unknown;
+      contentHash?: unknown;
+    };
+    if (
+      typeof target.skillId !== "string" ||
+      typeof target.agentId !== "string"
+    ) {
+      return "invalid" as const;
+    }
+    if (typeof target.status !== "string") return "invalid" as const;
+    if (
+      target.contentHash !== undefined &&
+      target.contentHash !== null &&
+      typeof target.contentHash !== "string"
+    ) {
+      return "invalid" as const;
+    }
+    targets.push({
+      skillId: target.skillId,
+      agentId: target.agentId,
+      status: target.status,
+      errorCode: typeof target.errorCode === "string" ? target.errorCode : null,
+      errorMessage:
+        typeof target.errorMessage === "string" ? target.errorMessage : null,
+      contentHash:
+        typeof target.contentHash === "string" ? target.contentHash : null,
+    });
+  }
+  return targets;
 }

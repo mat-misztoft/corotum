@@ -1,4 +1,11 @@
-import type { WorkspaceDatabase } from "./workspaces";
+import {
+  aggregateDeviceSyncStatus,
+  type DeviceTargetReportInput,
+  lastErrorFromTargets,
+  normalizeDeviceTargets,
+  replaceDeviceSkillTargets,
+} from "./device-target-status";
+import type { TokenDatabase } from "./tokens";
 import { WorkspaceAccessError } from "./workspaces";
 
 export const DEVICE_SYNC_STATUSES = [
@@ -17,6 +24,7 @@ export type DeviceSyncReportInput = Readonly<{
   syncStatus: string;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
+  targets?: readonly DeviceTargetReportInput[];
 }>;
 
 export type DeviceSyncReportRecord = Readonly<{
@@ -30,7 +38,7 @@ export type DeviceSyncReportRecord = Readonly<{
   lastSyncAt: number;
 }>;
 
-export type SyncReportDatabase = WorkspaceDatabase;
+export type SyncReportDatabase = TokenDatabase;
 
 export class InvalidSyncReportError extends Error {
   constructor(message = "A valid device sync report is required") {
@@ -57,8 +65,9 @@ function clipError(value: string | null) {
 }
 
 /**
- * Stores the reporting device’s verified applied revision and aggregate only.
- * It never writes another device’s membership or executes remote sync.
+ * Stores the reporting device’s verified applied revision, optional target
+ * rows, and the derived aggregate. It never writes another device or executes
+ * remote sync.
  */
 export async function acceptDeviceSyncReport(
   db: SyncReportDatabase,
@@ -78,13 +87,19 @@ export async function acceptDeviceSyncReport(
 
   const membership = await db
     .prepare(
-      `SELECT workspace_id AS workspaceId,
-              applied_revision_sequence AS appliedRevisionSequence
+      `SELECT device_workspaces.workspace_id AS workspaceId,
+              device_workspaces.applied_revision_sequence AS appliedRevisionSequence,
+              workspaces.current_revision_sequence AS currentRevisionSequence
        FROM device_workspaces
-       WHERE device_id = ? AND is_active = 1`,
+       JOIN workspaces ON workspaces.id = device_workspaces.workspace_id
+       WHERE device_workspaces.device_id = ? AND device_workspaces.is_active = 1`,
     )
     .bind(input.deviceId)
-    .first<{ workspaceId: string; appliedRevisionSequence: number }>();
+    .first<{
+      workspaceId: string;
+      appliedRevisionSequence: number;
+      currentRevisionSequence: number;
+    }>();
   if (!membership) throw new WorkspaceAccessError();
 
   let appliedRevisionSequence = membership.appliedRevisionSequence;
@@ -101,10 +116,26 @@ export async function acceptDeviceSyncReport(
     appliedRevisionSequence = revision.sequence;
   }
 
+  const targets = input.targets
+    ? normalizeDeviceTargets(input.targets, now)
+    : null;
+  const syncStatus =
+    targets && targets.length > 0
+      ? aggregateDeviceSyncStatus(targets, {
+          applied: appliedRevisionSequence,
+          current: membership.currentRevisionSequence,
+        })
+      : input.syncStatus;
+  const fromTargets =
+    targets && targets.length > 0 ? lastErrorFromTargets(targets) : null;
   const lastErrorCode =
-    input.syncStatus === "SYNCED" ? null : clipError(input.lastErrorCode);
+    syncStatus === "SYNCED" || syncStatus === "BEHIND"
+      ? null
+      : (fromTargets?.lastErrorCode ?? clipError(input.lastErrorCode));
   const lastErrorMessage =
-    input.syncStatus === "SYNCED" ? null : clipError(input.lastErrorMessage);
+    syncStatus === "SYNCED" || syncStatus === "BEHIND"
+      ? null
+      : (fromTargets?.lastErrorMessage ?? clipError(input.lastErrorMessage));
 
   const updated = await db
     .prepare(
@@ -118,7 +149,7 @@ export async function acceptDeviceSyncReport(
     )
     .bind(
       appliedRevisionSequence,
-      input.syncStatus,
+      syncStatus,
       now,
       lastErrorCode,
       lastErrorMessage,
@@ -129,13 +160,20 @@ export async function acceptDeviceSyncReport(
   if ((updated as { meta?: { changes?: number } }).meta?.changes !== 1) {
     throw new WorkspaceAccessError();
   }
+  if (targets) {
+    await replaceDeviceSkillTargets(db, {
+      deviceId: input.deviceId,
+      workspaceId: membership.workspaceId,
+      targets,
+    });
+  }
 
   return {
     deviceId: input.deviceId,
     workspaceId: membership.workspaceId,
     appliedRevisionId: input.appliedRevisionId,
     appliedRevisionSequence,
-    syncStatus: input.syncStatus,
+    syncStatus,
     lastErrorCode,
     lastErrorMessage,
     lastSyncAt: now,

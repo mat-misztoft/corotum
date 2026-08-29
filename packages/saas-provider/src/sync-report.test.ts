@@ -76,3 +76,55 @@ test("Cloud origin must not include embedded credentials", async () => {
     error: { code: "VALIDATION_ERROR" },
   });
 });
+
+test("postDeviceSyncReport includes per-agent target outcomes when provided", async () => {
+  const requests: Request[] = [];
+  await postDeviceSyncReport({
+    origin: "https://toolmirror.com",
+    deviceId: "dev_1",
+    deviceToken: "device-token-secret",
+    fetch: async (input, init) => {
+      requests.push(new Request(input, init));
+      return Response.json({
+        deviceId: "dev_1",
+        workspaceId: "ws_1",
+        appliedRevisionId: "rev_1",
+        appliedRevisionSequence: 1,
+        syncStatus: "PARTIALLY_SYNCED",
+        lastErrorCode: "TARGET_ERROR",
+        lastErrorMessage: "One agent target failed.",
+        lastSyncAt: 4_000,
+      });
+    },
+    report: {
+      appliedRevisionId: "rev_1",
+      syncStatus: "PARTIALLY_SYNCED",
+      targets: [
+        {
+          skillId: "sk_01Jreview",
+          agentId: "codex",
+          status: "ERROR",
+          errorCode: "TARGET_ERROR",
+          errorMessage: "One agent target failed.",
+          contentHash: null,
+        },
+      ],
+    },
+  });
+  expect(await requests[0].json()).toEqual({
+    appliedRevisionId: "rev_1",
+    syncStatus: "PARTIALLY_SYNCED",
+    lastErrorCode: null,
+    lastErrorMessage: null,
+    targets: [
+      {
+        skillId: "sk_01Jreview",
+        agentId: "codex",
+        status: "ERROR",
+        errorCode: "TARGET_ERROR",
+        errorMessage: "One agent target failed.",
+        contentHash: null,
+      },
+    ],
+  });
+});

@@ -1,6 +1,7 @@
 import {
   type DeviceSyncReportReceipt,
   type DeviceSyncStatus,
+  type DeviceTargetReport,
   postDeviceSyncReport,
 } from "../../../packages/saas-provider/src/index";
 import { cloudOriginFrom } from "./cloud-auth";
@@ -11,6 +12,8 @@ export type DeviceSyncAggregate = Readonly<{
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
 }>;
+
+export type { DeviceTargetReport };
 
 export type CloudSyncReportDependencies = Readonly<{
   origin: string;
@@ -85,6 +88,7 @@ export class CloudSyncReportService {
     lastAppliedRevision: string | null;
     appliedRevisionId: string | null;
     aggregate: DeviceSyncAggregate;
+    targets?: readonly DeviceTargetReport[];
   }): Promise<DeviceSyncReportReceipt> {
     if (input.appliedRevisionId !== input.lastAppliedRevision) {
       throw new CloudSyncReportError(
@@ -115,6 +119,14 @@ export class CloudSyncReportService {
         lastErrorMessage: sanitizeSyncErrorMessage(
           input.aggregate.lastErrorMessage,
         ),
+        targets: input.targets?.map((target) => ({
+          skillId: target.skillId,
+          agentId: target.agentId,
+          status: target.status,
+          errorCode: target.errorCode ?? null,
+          errorMessage: sanitizeSyncErrorMessage(target.errorMessage),
+          contentHash: target.contentHash ?? null,
+        })),
       },
     });
     if (result.kind === "success") return result.value;

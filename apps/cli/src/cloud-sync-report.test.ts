@@ -92,3 +92,55 @@ test("partial target outcomes stay visible in the reported aggregate", () => {
     "A local target failed.",
   );
 });
+
+test("sync reports send sanitized per-agent target outcomes", async () => {
+  const requests: Request[] = [];
+  const service = new CloudSyncReportService({
+    origin: "https://toolmirror.com",
+    deviceId: "dev_1",
+    credentials: {
+      load: async () => ({
+        schemaVersion: 1 as const,
+        cloudDeviceToken: "device-token-secret",
+      }),
+    },
+    fetch: async (input, init) => {
+      requests.push(new Request(input, init));
+      return Response.json({
+        deviceId: "dev_1",
+        workspaceId: "ws_1",
+        appliedRevisionId: "rev_local",
+        appliedRevisionSequence: 1,
+        syncStatus: "PARTIALLY_SYNCED",
+        lastErrorCode: "TARGET_ERROR",
+        lastErrorMessage: "A local target failed.",
+        lastSyncAt: 4_000,
+      });
+    },
+  });
+
+  await service.report({
+    lastAppliedRevision: "rev_local",
+    appliedRevisionId: "rev_local",
+    aggregate: { status: "PARTIALLY_SYNCED" },
+    targets: [
+      {
+        skillId: "sk_01Jreview",
+        agentId: "codex",
+        status: "ERROR",
+        errorMessage: "Failed to write /Users/ada/.agents/skill",
+      },
+    ],
+  });
+  expect(await requests[0].json()).toMatchObject({
+    targets: [
+      {
+        skillId: "sk_01Jreview",
+        agentId: "codex",
+        status: "ERROR",
+        errorMessage: "A local target failed.",
+        contentHash: null,
+      },
+    ],
+  });
+});

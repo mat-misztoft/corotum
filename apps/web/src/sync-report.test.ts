@@ -10,6 +10,7 @@ import {
   postDeviceSyncReport,
   SaaSProvider,
 } from "../../../packages/saas-provider/src/index";
+import { handleGetDeviceTargetStatus } from "./device-target-status-http";
 import { approvePairing, createPairing } from "./pairings";
 import { handleGetWorkspaceState, handlePutWorkspaceState } from "./state-http";
 import { handlePostDeviceSyncReport } from "./sync-report-http";
@@ -350,6 +351,175 @@ test("hosted Cloud sync-report requires entitlement while self-host does not", a
     syncStatus: "ERROR",
     appliedRevisionSequence: 0,
   });
+});
+
+const mixedTargets = [
+  {
+    skillId: skill,
+    agentId: "codex",
+    status: "SYNCED",
+    errorCode: null,
+    errorMessage: null,
+    contentHash: "sha256:ok",
+  },
+  {
+    skillId: skill,
+    agentId: "pi",
+    status: "DRIFTED",
+    errorCode: null,
+    errorMessage: null,
+    contentHash: "sha256:drift",
+  },
+  {
+    skillId: skill,
+    agentId: "claude-code",
+    status: "AUTH_REQUIRED",
+    errorCode: "AUTH_REQUIRED",
+    errorMessage: "Private repository access is required.",
+    contentHash: null,
+  },
+  {
+    skillId: skill,
+    agentId: "cursor",
+    status: "ERROR",
+    errorCode: "TARGET_ERROR",
+    errorMessage: "One agent target failed.",
+    contentHash: null,
+  },
+] as const;
+
+test("reported device/skill/agent outcomes persist in dedicated target rows", async () => {
+  const { sqlite, db } = await reportDb();
+  const issued = await pairDevice(db, sqlite, "studio", 1_000);
+  const workspaceId = issued.workspaceId as string;
+  const created = await handlePutWorkspaceState(
+    new Request(
+      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      {
+        method: "PUT",
+        headers: {
+          [CLI_VERSION_HEADER]: "0.1.0",
+          [DEVICE_TOKEN_HEADER]: issued.token,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          state: desired,
+          baseRevision: null,
+          idempotencyKey: "key-1",
+          transition,
+        }),
+      },
+    ),
+    db,
+    workspaceId,
+  );
+  const revision = (await created.json()) as { revisionId: string };
+
+  const accepted = await handlePostDeviceSyncReport(
+    reportRequest(issued.deviceId, issued.token, {
+      appliedRevisionId: revision.revisionId,
+      syncStatus: "SYNCED",
+      targets: mixedTargets,
+    }),
+    db,
+    issued.deviceId,
+  );
+  expect(accepted.status).toBe(200);
+  expect(await accepted.json()).toMatchObject({
+    deviceId: issued.deviceId,
+    syncStatus: "PARTIALLY_SYNCED",
+    lastErrorCode: "TARGET_ERROR",
+    lastErrorMessage: "One agent target failed.",
+  });
+
+  const rows = sqlite
+    .query(
+      `SELECT device_id AS deviceId,
+              workspace_id AS workspaceId,
+              skill_id AS skillId,
+              agent_id AS agentId,
+              status,
+              error_code AS errorCode,
+              error_message AS errorMessage,
+              content_hash AS contentHash,
+              updated_at AS updatedAt
+       FROM device_skill_targets
+       ORDER BY agent_id`,
+    )
+    .all() as Record<string, unknown>[];
+  expect(rows).toHaveLength(4);
+  expect(rows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        deviceId: issued.deviceId,
+        workspaceId,
+        skillId: skill,
+        agentId: "codex",
+        status: "SYNCED",
+        errorCode: null,
+        errorMessage: null,
+        contentHash: "sha256:ok",
+      }),
+      expect.objectContaining({
+        agentId: "pi",
+        status: "DRIFTED",
+        contentHash: "sha256:drift",
+      }),
+      expect.objectContaining({
+        agentId: "claude-code",
+        status: "AUTH_REQUIRED",
+        errorCode: "AUTH_REQUIRED",
+      }),
+      expect.objectContaining({
+        agentId: "cursor",
+        status: "ERROR",
+        errorCode: "TARGET_ERROR",
+        errorMessage: "One agent target failed.",
+      }),
+    ]),
+  );
+  expect(
+    sqlite
+      .query("SELECT sql FROM sqlite_master WHERE name = 'devices'")
+      .get() as {
+      sql: string;
+    },
+  ).toEqual(
+    expect.objectContaining({
+      sql: expect.not.stringContaining("json"),
+    }),
+  );
+
+  const view = await handleGetDeviceTargetStatus(
+    new Request(`https://toolmirror.com/api/v1/devices/${issued.deviceId}`, {
+      headers: { origin: "https://toolmirror.com" },
+    }),
+    db,
+    issued.deviceId,
+    "user_1",
+  );
+  expect(view.status).toBe(200);
+  const body = (await view.json()) as {
+    syncStatus: string;
+    targets: readonly { agentId: string; status: string }[];
+  };
+  expect(body.syncStatus).toBe("PARTIALLY_SYNCED");
+  expect(body.targets.map((target) => target.status).sort()).toEqual([
+    "AUTH_REQUIRED",
+    "DRIFTED",
+    "ERROR",
+    "SYNCED",
+  ]);
+
+  const stranger = await handleGetDeviceTargetStatus(
+    new Request(`https://toolmirror.com/api/v1/devices/${issued.deviceId}`, {
+      headers: { origin: "https://toolmirror.com" },
+    }),
+    db,
+    issued.deviceId,
+    "user_other",
+  );
+  expect(stranger.status).toBe(404);
 });
 
 test("postDeviceSyncReport talks to /sync-report without pulling or executing remote sync", async () => {
