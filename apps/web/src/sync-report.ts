@@ -196,13 +196,19 @@ export async function acceptDeviceSyncReport(
     ? normalizeDeviceTargets(input.targets, now)
     : null;
   const updates = input.updates ? normalizeUpdates(input.updates, now) : null;
-  const syncStatus =
+  let syncStatus =
     targets && targets.length > 0
       ? aggregateDeviceSyncStatus(targets, {
           applied: appliedRevisionSequence,
           current: membership.currentRevisionSequence,
         })
       : input.syncStatus;
+  if (
+    appliedRevisionSequence < membership.currentRevisionSequence &&
+    syncStatus === "SYNCED"
+  ) {
+    syncStatus = "BEHIND";
+  }
   const fromTargets =
     targets && targets.length > 0 ? lastErrorFromTargets(targets) : null;
   const lastErrorCode =

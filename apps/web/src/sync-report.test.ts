@@ -628,3 +628,80 @@ test("postDeviceSyncReport talks to /sync-report without pulling or executing re
       }),
   ).toBe(false);
 });
+
+test("a SYNCED report for a stale applied revision is stored as BEHIND", async () => {
+  const { sqlite, db } = await reportDb();
+  const issued = await pairDevice(db, sqlite, "studio", 1_000);
+  const workspaceId = issued.workspaceId as string;
+  const first = await handlePutWorkspaceState(
+    new Request(
+      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      {
+        method: "PUT",
+        headers: {
+          [CLI_VERSION_HEADER]: "0.1.0",
+          [DEVICE_TOKEN_HEADER]: issued.token,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          state: desired,
+          baseRevision: null,
+          idempotencyKey: "key-1",
+          transition,
+        }),
+      },
+    ),
+    db,
+    workspaceId,
+  );
+  const revision = (await first.json()) as { revisionId: string };
+  const empty = {
+    manifest: { version: 1 as const, skills: [] },
+    lockfile: { version: 1 as const, skills: [] },
+  };
+  const second = await handlePutWorkspaceState(
+    new Request(
+      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      {
+        method: "PUT",
+        headers: {
+          [CLI_VERSION_HEADER]: "0.1.0",
+          [DEVICE_TOKEN_HEADER]: issued.token,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          state: empty,
+          baseRevision: revision.revisionId,
+          idempotencyKey: "key-2",
+          transition: {
+            type: "REMOVE",
+            skillId: skill,
+            metadata: {},
+          },
+        }),
+      },
+    ),
+    db,
+    workspaceId,
+  );
+  expect(second.status).toBe(200);
+
+  const accepted = await handlePostDeviceSyncReport(
+    reportRequest(issued.deviceId, issued.token, {
+      appliedRevisionId: revision.revisionId,
+      syncStatus: "SYNCED",
+    }),
+    db,
+    issued.deviceId,
+  );
+  expect(accepted.status).toBe(200);
+  expect(await accepted.json()).toMatchObject({
+    deviceId: issued.deviceId,
+    syncStatus: "BEHIND",
+    appliedRevisionSequence: 1,
+  });
+  expect(membership(sqlite, issued.deviceId)).toMatchObject({
+    syncStatus: "BEHIND",
+    appliedRevisionSequence: 1,
+  });
+});
