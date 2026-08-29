@@ -6,4 +6,16 @@
 
 body {
   margin: 0;
+  background: #f7f5f0;
+  color: #171717;
+  font-family: Arial, sans-serif;
 }
+
+.dashboard { max-width: 1000px; margin: auto; padding: 32px 24px 80px; }
+.dashboard nav { display: flex; gap: 20px; border-bottom: 1px solid #c9c6bd; padding-bottom: 16px; }
+.dashboard nav strong { margin-right: auto; } .dashboard a { color: inherit; }
+.dashboard header { margin: 72px 0 40px; } .dashboard h1 { font-size: clamp(2.5rem, 7vw, 5rem); margin: 8px 0; letter-spacing: -.06em; }
+.dashboard section { border-top: 2px solid #171717; padding: 18px 0 30px; margin-top: 32px; }
+.dashboard table { border-collapse: collapse; width: 100%; text-align: left; } .dashboard th, .dashboard td { padding: 12px 6px; border-bottom: 1px solid #d6d2c8; }
+.dashboard .device { border-bottom: 1px solid #d6d2c8; padding: 8px 0 16px; } .dashboard .device h3 { margin-bottom: 0; } .dashboard .device span { font: 12px monospace; color: #ad301d; }
+.dashboard code, .dashboard .eyebrow { font-family: ui-monospace, monospace; } .dashboard .eyebrow { font-size: 12px; text-transform: uppercase; }
