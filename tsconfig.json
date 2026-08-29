@@ -9,6 +9,7 @@
   },
   "include": [
     "tooling/**/*.ts",
+    "apps/cli/src/**/*.ts",
     "packages/core/src/**/*.ts",
     "packages/shared/src/**/*.ts"
   ],

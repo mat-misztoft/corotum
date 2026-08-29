@@ -1,0 +1,142 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import {
+  ConfigStore,
+  CredentialsStore,
+  defaultConfig,
+  effectiveStoragePaths,
+} from "./config";
+import { resolvePlatformPaths, type ToolMirrorPaths } from "./platform";
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((path) => rm(path, { recursive: true, force: true })),
+  );
+});
+
+async function temporaryPaths(): Promise<ToolMirrorPaths> {
+  const root = await mkdtemp(join(tmpdir(), "toolmirror-config-"));
+  temporaryDirectories.push(root);
+  return {
+    configDir: join(root, "config"),
+    configFile: join(root, "config", "config.json"),
+    credentialsFile: join(root, "config", "credentials.json"),
+    dataDir: join(root, "data"),
+    gitDir: join(root, "data", "git"),
+    runtimeDir: join(root, "runtime"),
+    skillsDir: join(root, "data", "skills"),
+    stateDir: join(root, "state"),
+  };
+}
+
+describe("platform paths", () => {
+  test("resolves platform conventions and XDG overrides from fixtures", () => {
+    expect(
+      resolvePlatformPaths({ homeDir: "/home/alex", platform: "linux" }),
+    ).toMatchObject({
+      configFile: "/home/alex/.config/toolmirror/config.json",
+      dataDir: "/home/alex/.local/share/toolmirror",
+      stateDir: "/home/alex/.local/state/toolmirror",
+      runtimeDir: "/home/alex/.local/state/toolmirror/toolmirror",
+    });
+    expect(
+      resolvePlatformPaths({
+        homeDir: "/home/alex",
+        platform: "linux",
+        env: {
+          XDG_CONFIG_HOME: "/config",
+          XDG_DATA_HOME: "/data",
+          XDG_STATE_HOME: "/state",
+          XDG_RUNTIME_DIR: "/run/user/42",
+        },
+      }),
+    ).toMatchObject({
+      configDir: "/config/toolmirror",
+      dataDir: "/data/toolmirror",
+      stateDir: "/state/toolmirror",
+      runtimeDir: "/run/user/42/toolmirror",
+    });
+    expect(
+      resolvePlatformPaths({ homeDir: "/Users/alex", platform: "darwin" }),
+    ).toMatchObject({
+      configDir: "/Users/alex/Library/Application Support/ToolMirror",
+      dataDir: "/Users/alex/Library/Application Support/ToolMirror",
+    });
+    expect(
+      resolvePlatformPaths({
+        homeDir: "C:\\Users\\alex",
+        platform: "win32",
+        env: { APPDATA: "C:\\Roaming", LOCALAPPDATA: "C:\\Local" },
+      }),
+    ).toMatchObject({
+      configDir: "C:\\Roaming/ToolMirror",
+      dataDir: "C:\\Local/ToolMirror",
+      runtimeDir: "C:\\Local/ToolMirror/runtime",
+    });
+  });
+});
+
+describe("local configuration", () => {
+  test("rejects invalid manual and programmatic configuration without replacing valid config", async () => {
+    const paths = await temporaryPaths();
+    const config = new ConfigStore(paths);
+    const written = await config.set("skillsStoragePath", "/managed-skills");
+    expect(written.skillsStoragePath).toBe("/managed-skills");
+
+    await writeFile(paths.configFile, '{"schemaVersion":2}\n');
+    await expect(config.list()).rejects.toThrow();
+
+    await writeFile(paths.configFile, JSON.stringify(written));
+    await expect(config.set("telemetry", "yes")).rejects.toThrow();
+    expect(await config.list()).toEqual(written);
+  });
+
+  test("uses platform defaults without moving data when a storage setting changes", async () => {
+    const paths = await temporaryPaths();
+    const config = new ConfigStore(paths);
+    expect(effectiveStoragePaths(await config.list(), paths)).toEqual({
+      gitStoragePath: paths.gitDir,
+      skillsStoragePath: paths.skillsDir,
+    });
+
+    await config.set("skillsStoragePath", "/another-store");
+    expect(
+      effectiveStoragePaths(await config.list(), paths).skillsStoragePath,
+    ).toBe("/another-store");
+    await expect(stat(paths.skillsDir)).rejects.toThrow();
+    expect(defaultConfig().gitStoragePath).toBeNull();
+  });
+});
+
+describe("credentials", () => {
+  test("stores credentials separately with restrictive permissions", async () => {
+    const paths = await temporaryPaths();
+    const config = new ConfigStore(paths);
+    const credentials = new CredentialsStore(paths);
+
+    await config.set("mode", "cloud");
+    await credentials.save({
+      schemaVersion: 1,
+      cloudDeviceToken: "secret-token",
+    });
+
+    expect(await readFile(paths.configFile, "utf8")).not.toContain(
+      "secret-token",
+    );
+    expect(await credentials.load()).toEqual({
+      schemaVersion: 1,
+      cloudDeviceToken: "secret-token",
+    });
+    if (process.platform !== "win32") {
+      expect((await stat(paths.configDir)).mode & 0o777).toBe(0o700);
+      expect((await stat(paths.credentialsFile)).mode & 0o777).toBe(0o600);
+    }
+  });
+});
