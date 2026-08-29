@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./db/schema";
+import type { CloudflareEmailBinding } from "./email";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
 export type AuthEnvironment = {
@@ -12,6 +13,8 @@ export type AuthEnvironment = {
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  AUTH_EMAIL_FROM?: string;
+  EMAIL?: CloudflareEmailBinding;
   TOOLMIRROR_HOSTED?: string;
   TOOLMIRROR_ENVIRONMENT?: "development" | "production";
 };

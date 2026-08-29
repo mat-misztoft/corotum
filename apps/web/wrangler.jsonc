@@ -17,6 +17,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["auth@toolmirror.com"]
+    }
+  ],
   "analytics_engine_datasets": [
     {
       "binding": "TOOLMIRROR_TELEMETRY",

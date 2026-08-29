@@ -8,6 +8,8 @@ interface Env {
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  AUTH_EMAIL_FROM?: string;
+  EMAIL: SendEmail;
   TOOLMIRROR_HOSTED?: string;
   TOOLMIRROR_ENVIRONMENT?: "development" | "production";
   CREEM_API_KEY?: string;
