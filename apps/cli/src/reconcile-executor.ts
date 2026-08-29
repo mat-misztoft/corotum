@@ -155,11 +155,15 @@ export class LocalReconcileExecutor {
 
     const state: LocalOperationalState = {
       schemaVersion: 1,
-      lastAppliedRevision: operations.every(
-        (operation) => operation.status === "SUCCESS",
-      )
-        ? input.revision
-        : input.state.lastAppliedRevision,
+      lastAppliedRevision:
+        operations.every((operation) => operation.status === "SUCCESS") &&
+        !input.plan.classifications.some(
+          (classification) =>
+            classification.classification === "DRIFTED" ||
+            classification.classification === "PENDING_RESOLUTION",
+        )
+          ? input.revision
+          : input.state.lastAppliedRevision,
       skills,
     };
     await this.stateStore.save(state);

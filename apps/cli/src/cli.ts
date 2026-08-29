@@ -11,6 +11,7 @@ import { registerInitCommand } from "./init-command";
 import { registerRemoveCommands } from "./remove-command";
 import { registerRestoreCommand } from "./restore-command";
 import { registerSetRefCommand } from "./set-ref-command";
+import { registerSyncCommands } from "./sync-command";
 import { registerUpdateCommand } from "./update-command";
 
 export const CLI_VERSION = "0.1.0";
@@ -65,6 +66,7 @@ export function createCli(
   registerRestoreCommand(program, io);
   registerUpdateCommand(program, io);
   registerSetRefCommand(program, io);
+  registerSyncCommands(program, io);
 
   program.action(() => {
     const options = program.opts<CliOptions>();

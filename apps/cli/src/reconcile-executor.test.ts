@@ -125,9 +125,46 @@ describe("LocalReconcileExecutor", () => {
       targetOutcomes: [{ status: "EXPOSED" }],
     });
     expect(result.state.skills[lock.id]?.contentHash).toBe(lock.contentHash);
+    expect(result.state.lastAppliedRevision).toBe("1");
     expect(await hashSkillDirectory(join(root, "canonical", lock.id))).toBe(
       lock.contentHash,
     );
+  });
+
+  test("does not advance the applied revision while another skill is drifted", async () => {
+    const { root, source, lock, desired, state } = await fixture();
+    const executor = new LocalReconcileExecutor(
+      new LocalOperationalStateStore(join(root, "state.json")),
+      new CanonicalSkillStore(join(root, "canonical")),
+      {
+        materialize: async (_lock: LockedSkill, destination: string) => {
+          await mkdir(destination);
+          await writeFile(
+            join(destination, "SKILL.md"),
+            await readFile(join(source, "SKILL.md")),
+          );
+        },
+      } as never,
+      {
+        expose: async () => ({ ownership: [], outcomes: [] }),
+      } as never,
+    );
+
+    const result = await executor.execute({
+      plan: {
+        classifications: [
+          { skillId: "sk_drifted" as SkillId, classification: "DRIFTED" },
+        ],
+        operations: [{ kind: "INSTALL", skill: lock }],
+      },
+      desired,
+      revision: "1" as never,
+      state,
+      enabledAgentIds: [],
+      homeDir: root,
+    });
+
+    expect(result.state.lastAppliedRevision).toBeNull();
   });
 
   test("continues after a source failure and retains target-level errors", async () => {
