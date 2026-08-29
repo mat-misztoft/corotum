@@ -12,7 +12,8 @@
   "scripts": {
     "build:cli": "./scripts/build-cli.sh bun-darwin-arm64",
     "build:cli:linux": "./scripts/build-cli.sh bun-linux-x64",
-    "lint": "bunx biome check .",
+    "check:boundaries": "bun ./scripts/check-architecture-boundaries.mjs",
+    "lint": "bun run check:boundaries && bunx biome check .",
     "test:cli:invalid-target": "! ./scripts/build-cli.sh bun-invalid-x64",
     "typecheck": "bunx tsc --noEmit",
     "verify:cli": "./scripts/verify-cli.sh"
