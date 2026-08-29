@@ -57,8 +57,14 @@ function serialize(value: unknown): string {
   return JSON.stringify(value);
 }
 
+export const emptyDesiredState: DesiredState = {
+  manifest: { version: 1, skills: [] },
+  lockfile: { version: 1, skills: [] },
+};
+
 function materializedSkillStatements(
   db: RevisionDatabase,
+  workspaceId: string,
   revision: CloudRevision,
   now: number,
 ): BoundStatement[] {
@@ -74,7 +80,7 @@ function materializedSkillStatements(
          WHERE EXISTS (SELECT 1 FROM workspace_revisions WHERE id = ? AND workspace_id = ?)`,
       )
       .bind(
-        revision.id,
+        workspaceId,
         skill.id,
         skill.source,
         skill.skill,
@@ -87,7 +93,7 @@ function materializedSkillStatements(
         skill.resolutionStatus,
         now,
         revision.id,
-        revision.id,
+        workspaceId,
       );
   });
 }
@@ -180,7 +186,7 @@ export async function mutateDesiredState(
         "DELETE FROM workspace_skills WHERE workspace_id = ? AND EXISTS (SELECT 1 FROM workspace_revisions WHERE id = ? AND workspace_id = ?)",
       )
       .bind(input.workspaceId, revision.id, input.workspaceId),
-    ...materializedSkillStatements(db, revision, now),
+    ...materializedSkillStatements(db, input.workspaceId, revision, now),
     db
       .prepare(
         "UPDATE workspaces SET current_revision_sequence = ?, updated_at = ? WHERE id = ? AND owner_user_id = ? AND EXISTS (SELECT 1 FROM workspace_revisions WHERE id = ? AND workspace_id = ?)",
@@ -212,4 +218,49 @@ export async function mutateDesiredState(
   }
 
   return revision;
+}
+
+/** Reads the authoritative current snapshot, or an empty state before the first revision. */
+export async function loadCurrentDesiredState(
+  db: WorkspaceDatabase,
+  userId: string,
+  workspaceId: string,
+): Promise<
+  CloudRevision | { id: null; sequence: number; state: DesiredState }
+> {
+  await requireWorkspaceAccess(db, userId, workspaceId);
+  const row = await db
+    .prepare(
+      `SELECT w.current_revision_sequence AS sequence,
+              wr.id AS id,
+              wr.manifest_json AS manifestJson,
+              wr.lockfile_json AS lockfileJson
+       FROM workspaces w
+       LEFT JOIN workspace_revisions wr
+         ON wr.workspace_id = w.id
+        AND wr.revision_sequence = w.current_revision_sequence
+       WHERE w.id = ? AND w.owner_user_id = ?`,
+    )
+    .bind(workspaceId, userId)
+    .first<{
+      sequence: number;
+      id: string | null;
+      manifestJson: string | null;
+      lockfileJson: string | null;
+    }>();
+  if (!row) throw new RevisionConflictError();
+  if (!row.id || row.manifestJson === null || row.lockfileJson === null) {
+    return { id: null, sequence: row.sequence, state: emptyDesiredState };
+  }
+  return {
+    id: row.id,
+    sequence: row.sequence,
+    state: validateDesiredState(
+      {
+        manifest: JSON.parse(row.manifestJson),
+        lockfile: JSON.parse(row.lockfileJson),
+      },
+      "cloud",
+    ),
+  };
 }

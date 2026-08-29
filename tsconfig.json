@@ -16,6 +16,7 @@
     "packages/agent-targets/src/**/*.ts",
     "packages/core/src/**/*.ts",
     "packages/git-provider/src/**/*.ts",
+    "packages/saas-provider/src/**/*.ts",
     "packages/shared/src/**/*.ts",
     "packages/skills-adapter/src/**/*.ts"
   ],

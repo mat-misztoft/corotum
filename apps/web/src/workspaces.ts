@@ -74,3 +74,18 @@ export class WorkspaceAccessError extends Error {
     this.name = "WorkspaceAccessError";
   }
 }
+
+/** Confirms the device is an active member of the requested workspace. */
+export async function requireDeviceWorkspaceAccess(
+  db: WorkspaceDatabase,
+  deviceId: string,
+  workspaceId: string,
+): Promise<void> {
+  const membership = await db
+    .prepare(
+      "SELECT workspace_id AS workspaceId FROM device_workspaces WHERE device_id = ? AND workspace_id = ? AND is_active = 1",
+    )
+    .bind(deviceId, workspaceId)
+    .first<{ workspaceId: string }>();
+  if (!membership) throw new WorkspaceAccessError();
+}

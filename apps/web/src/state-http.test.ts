@@ -1,0 +1,316 @@
+import { Database } from "bun:sqlite";
+import { expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { skillId } from "../../../packages/core/src/index";
+import {
+  CLI_VERSION_HEADER,
+  DEVICE_TOKEN_HEADER,
+  SaaSProvider,
+  UNINITIALIZED_CLOUD_REVISION,
+} from "../../../packages/saas-provider/src/index";
+import { approvePairing, createPairing } from "./pairings";
+import { handleGetWorkspaceState, handlePutWorkspaceState } from "./state-http";
+import { issueDeviceToken, type TokenDatabase } from "./tokens";
+
+const migrationsDirectory = fileURLToPath(
+  new URL("../migrations/", import.meta.url),
+);
+const migrationFiles = readdirSync(migrationsDirectory)
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
+const device = {
+  name: "studio",
+  platform: "darwin",
+  architecture: "arm64",
+  cliVersion: "0.1.0",
+};
+const skill = skillId("sk_01JSaasState");
+const source = "https://github.com/example/skills.git";
+const desired = {
+  manifest: {
+    version: 1 as const,
+    skills: [
+      {
+        id: skill,
+        source,
+        skill: "review",
+        ref: "main",
+        targets: "all" as const,
+        resolutionStatus: "RESOLVED" as const,
+      },
+    ],
+  },
+  lockfile: {
+    version: 1 as const,
+    skills: [
+      {
+        id: skill,
+        source,
+        skill: "review",
+        ref: "main",
+        repository: source,
+        revision: "abc123",
+        path: "skills/review",
+        contentHash: "sha256:locked",
+      },
+    ],
+  },
+};
+const transition = { type: "ADD" as const, skillId: skill, metadata: {} };
+
+async function stateDb() {
+  const sqlite = new Database(":memory:");
+  sqlite.exec("PRAGMA foreign_keys = ON");
+  for (const file of migrationFiles) {
+    const sql = await Bun.file(join(migrationsDirectory, file)).text();
+    for (const statement of sql.split("--> statement-breakpoint")) {
+      const trimmed = statement.trim();
+      if (trimmed) sqlite.exec(trimmed);
+    }
+  }
+
+  const db: TokenDatabase = {
+    prepare(query: string) {
+      return {
+        bind(...values: unknown[]) {
+          return {
+            async first<T>() {
+              return (sqlite.query(query).get(...values) as T) ?? null;
+            },
+            async run() {
+              const result = sqlite.query(query).run(...values);
+              return { meta: { changes: Number(result.changes) } };
+            },
+            async all<T>() {
+              return { results: sqlite.query(query).all(...values) as T[] };
+            },
+          };
+        },
+      };
+    },
+    async batch(statements) {
+      sqlite.exec("BEGIN IMMEDIATE");
+      try {
+        const results = [];
+        for (const statement of statements) results.push(await statement.run());
+        sqlite.exec("COMMIT");
+        return results;
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  };
+
+  return { sqlite, db };
+}
+
+async function pairedDevice(db: TokenDatabase, sqlite: Database) {
+  sqlite
+    .query(
+      "INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+    )
+    .run("user_1", "Ada", "ada@example.com", Date.now(), Date.now());
+  const pairing = await createPairing(db, device, 1_000);
+  await approvePairing(db, "user_1", pairing.id, pairing.userCode, 2_000);
+  const issued = await issueDeviceToken(
+    db,
+    pairing.id,
+    pairing.deviceCode,
+    3_000,
+  );
+  return { issued, workspaceId: issued.workspaceId as string };
+}
+
+function apiRequest(
+  path: string,
+  init?: ConstructorParameters<typeof Request>[1],
+) {
+  return new Request(`https://toolmirror.com${path}`, init);
+}
+
+function stateRequest(
+  workspaceId: string,
+  token: string,
+  init?: ConstructorParameters<typeof Request>[1],
+) {
+  return apiRequest(`/api/v1/workspaces/${workspaceId}/state`, {
+    ...init,
+    headers: {
+      [CLI_VERSION_HEADER]: "0.1.0",
+      [DEVICE_TOKEN_HEADER]: token,
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
+test("an authenticated device can pull empty Cloud state and push an idempotent update", async () => {
+  const { sqlite, db } = await stateDb();
+  const { issued, workspaceId } = await pairedDevice(db, sqlite);
+
+  const empty = await handleGetWorkspaceState(
+    stateRequest(workspaceId, issued.token),
+    db,
+    workspaceId,
+  );
+  expect(empty.status).toBe(200);
+  expect(await empty.json()).toEqual({
+    revisionId: null,
+    revisionSequence: 0,
+    state: {
+      manifest: { version: 1, skills: [] },
+      lockfile: { version: 1, skills: [] },
+    },
+  });
+
+  const created = await handlePutWorkspaceState(
+    stateRequest(workspaceId, issued.token, {
+      method: "PUT",
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: null,
+        idempotencyKey: "key-1",
+        transition,
+      }),
+    }),
+    db,
+    workspaceId,
+  );
+  expect(created.status).toBe(200);
+  const first = (await created.json()) as {
+    revisionId: string;
+    revisionSequence: number;
+    state: unknown;
+  };
+  expect(first.revisionSequence).toBe(1);
+  expect(first.state).toEqual(desired);
+  expect(
+    sqlite
+      .query(
+        "SELECT skill_id AS skillId, workspace_id AS workspaceId FROM workspace_skills",
+      )
+      .all(),
+  ).toEqual([{ skillId: skill, workspaceId }]);
+
+  const retry = await handlePutWorkspaceState(
+    stateRequest(workspaceId, issued.token, {
+      method: "PUT",
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: null,
+        idempotencyKey: "key-1",
+        transition,
+      }),
+    }),
+    db,
+    workspaceId,
+  );
+  expect(await retry.json()).toEqual(first);
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get(),
+  ).toEqual({ count: 1 });
+
+  const stale = await handlePutWorkspaceState(
+    stateRequest(workspaceId, issued.token, {
+      method: "PUT",
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: "rev_stale",
+        idempotencyKey: "key-2",
+        transition,
+      }),
+    }),
+    db,
+    workspaceId,
+  );
+  expect(stale.status).toBe(409);
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get(),
+  ).toEqual({ count: 1 });
+});
+
+test("device-token SaaSProvider pull/push talks to /api/v1 without login or reporting", async () => {
+  const { sqlite, db } = await stateDb();
+  const { issued, workspaceId } = await pairedDevice(db, sqlite);
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    expect(url.pathname).toBe(`/api/v1/workspaces/${workspaceId}/state`);
+    expect(url.pathname).not.toContain("login");
+    expect(url.pathname).not.toContain("report");
+    expect(url.pathname).not.toContain("pairings");
+    if (request.method === "GET") {
+      return handleGetWorkspaceState(request, db, workspaceId);
+    }
+    return handlePutWorkspaceState(request, db, workspaceId);
+  };
+  const provider = new SaaSProvider({
+    origin: "https://toolmirror.com",
+    workspaceId,
+    deviceToken: issued.token,
+    fetch: fetchImpl,
+  });
+
+  const pulled = await provider.pull();
+  expect(pulled).toMatchObject({
+    kind: "success",
+    value: {
+      revisionId: UNINITIALIZED_CLOUD_REVISION,
+      revisionSequence: 0,
+    },
+  });
+
+  if (pulled.kind !== "success") throw new Error("expected pull success");
+  const pushed = await provider.push(
+    {
+      state: desired,
+      baseRevision: pulled.value.revisionId,
+      idempotencyKey: "provider-1",
+    },
+    transition,
+  );
+  expect(pushed).toMatchObject({
+    kind: "success",
+    value: { revisionSequence: 1, state: desired },
+  });
+  if (pushed.kind !== "success") throw new Error("expected push success");
+
+  const conflict = await provider.push(
+    { state: desired, baseRevision: null, idempotencyKey: "provider-2" },
+    transition,
+  );
+  expect(conflict).toMatchObject({
+    kind: "failure",
+    error: { code: "CONFLICT" },
+  });
+
+  const replay = await provider.push(
+    { state: desired, baseRevision: null, idempotencyKey: "provider-1" },
+    transition,
+  );
+  expect(replay).toEqual(pushed);
+});
+
+test("workspace state requires a device token and a compatible CLI", async () => {
+  const { sqlite, db } = await stateDb();
+  const { workspaceId } = await pairedDevice(db, sqlite);
+  const missingToken = await handleGetWorkspaceState(
+    apiRequest(`/api/v1/workspaces/${workspaceId}/state`, {
+      headers: { [CLI_VERSION_HEADER]: "0.1.0" },
+    }),
+    db,
+    workspaceId,
+  );
+  expect(missingToken.status).toBe(401);
+
+  const incompatible = await handleGetWorkspaceState(
+    apiRequest(`/api/v1/workspaces/${workspaceId}/state`, {
+      headers: { [CLI_VERSION_HEADER]: "0.0.1" },
+    }),
+    db,
+    workspaceId,
+  );
+  expect(incompatible.status).toBe(426);
+});
