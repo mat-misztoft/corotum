@@ -7,6 +7,8 @@ import {
   exitCodeFor,
   jsonEnvelope,
 } from "./cli-contracts";
+import { CloudAuthError } from "./cloud-auth";
+import { registerCloudAuthCommands } from "./cloud-auth-command";
 import { registerConfigCommand } from "./config-command";
 import { registerInitCommand } from "./init-command";
 import { registerRemoveCommands } from "./remove-command";
@@ -70,6 +72,7 @@ export function createCli(
   registerSetRefCommand(program, io);
   registerSyncCommands(program, io);
   registerConfigCommand(program, io);
+  registerCloudAuthCommands(program, io);
 
   program.action(() => {
     const options = program.opts<CliOptions>();
@@ -136,6 +139,7 @@ function outcomeFor(error: unknown): CliOutcome {
   ) {
     return "SUCCESS";
   }
+  if (error instanceof CloudAuthError) return error.outcome;
   return "GENERAL_ERROR";
 }
 

@@ -14,6 +14,8 @@ export const telemetryCommandNames = [
   "status",
   "diff",
   "config",
+  "login",
+  "logout",
 ] as const;
 
 type TelemetryCommandName = (typeof telemetryCommandNames)[number];

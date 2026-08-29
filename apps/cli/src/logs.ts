@@ -72,7 +72,7 @@ export function sanitizeLogValue(value: unknown, key = ""): LogValue {
 }
 
 function isSensitiveKey(key: string): boolean {
-  return /(token|secret|credential|password|skill.?content|sensitive.?path)/i.test(
+  return /(token|secret|credential|password|skill.?content|sensitive.?path|device.?code|user.?code)/i.test(
     key,
   );
 }
