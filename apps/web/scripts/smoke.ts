@@ -40,13 +40,26 @@ try {
 
   const home = await fetch(`http://127.0.0.1:${port}/`);
   const landing = await home.text();
+  const sectionOrder = [
+    "Keep your agent skills in sync.",
+    "One state. Everywhere.",
+    "From skill to synced state.",
+    "One ToolMirror. Two ways to sync.",
+    "See every device at a glance.",
+    "One skill. Many agents.",
+    "Set it once. Keep it in sync.",
+  ];
+  const sectionPositions = sectionOrder.map((copy) => landing.indexOf(copy));
+  const ordered =
+    sectionPositions.every((position) => position >= 0) &&
+    sectionPositions.every(
+      (position, index) =>
+        index === 0 || position > (sectionPositions[index - 1] ?? -1),
+    );
   if (
     !home.ok ||
-    !landing.includes("Keep your agent skills in sync.") ||
-    !landing.includes("One state. Everywhere.") ||
-    !landing.includes("From skill to synced state.") ||
+    !ordered ||
     !landing.includes("RECONCILE") ||
-    !landing.includes("One ToolMirror. Two ways to sync.") ||
     !landing.includes("TOOLMIRROR CLI") ||
     !landing.includes("DESIRED STATE") ||
     !landing.includes("GIT SYNC / FREE") ||
@@ -56,21 +69,25 @@ try {
     !landing.includes("Your Git credentials stay local") ||
     !landing.includes("Hosted desired state") ||
     !landing.includes("No daemon, remote force-sync, or stored Git") ||
-    !landing.includes("See every device at a glance.") ||
     !landing.includes("Mac Mini") ||
     !landing.includes("AUTH_REQUIRED") ||
     !landing.includes("DRIFTED") ||
-    !landing.includes("One skill. Many agents.") ||
     !landing.includes("Claude Code") ||
     !landing.includes("desired state") ||
     !landing.includes("WebMCP") ||
     !landing.includes("Kiro CLI") ||
     !landing.includes("No remote force-sync.") ||
+    !landing.includes(
+      "Start with ToolMirror Cloud, or use your own Git repository for free.",
+    ) ||
+    !landing.includes("Start with ToolMirror Cloud") ||
+    !landing.includes("View on GitHub") ||
+    !landing.includes("curl -fsSL https://toolmirror.com/install.sh | sh") ||
     landing.includes("sync_device") ||
     landing.includes("sync_all_devices")
   ) {
     throw new Error(
-      "landing devices and agents sections did not render through workerd",
+      "landing final CTA and seven-section order did not render through workerd",
     );
   }
 } finally {

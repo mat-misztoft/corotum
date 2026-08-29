@@ -27,7 +27,7 @@ a {
   --vermillion: #df492f;
   min-height: 100dvh;
   border-top: 14px solid var(--vermillion);
-  overflow: hidden;
+  overflow-x: clip;
 }
 
 .landing-header {
@@ -60,8 +60,8 @@ a {
 .landing-header nav a {
   text-underline-offset: 4px;
 }
-.landing-header a:focus-visible,
-.button:focus-visible {
+.landing a:focus-visible,
+.landing button:focus-visible {
   outline: 3px solid var(--vermillion);
   outline-offset: 4px;
 }
@@ -69,7 +69,7 @@ a {
 .hero {
   display: grid;
   gap: clamp(48px, 7vw, 112px);
-  grid-template-columns: minmax(0, 0.9fr) minmax(450px, 1.1fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   margin: 0 auto;
   max-width: 1440px;
   min-height: calc(100dvh - 82px);
@@ -142,8 +142,10 @@ a {
   font-size: 12px;
   line-height: 1.45;
   margin-top: 42px;
+  max-width: 100%;
   overflow-wrap: anywhere;
   padding: 17px 19px;
+  user-select: all;
   width: fit-content;
 }
 
@@ -234,7 +236,7 @@ a {
 .state-everywhere {
   display: grid;
   gap: clamp(48px, 8vw, 130px);
-  grid-template-columns: minmax(260px, 0.65fr) minmax(460px, 1.35fr);
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr);
   margin: 0 auto;
   max-width: 1440px;
   padding: clamp(100px, 14vw, 220px) 42px;
@@ -354,7 +356,7 @@ a {
 .flow-story {
   display: grid;
   gap: clamp(36px, 7vw, 120px);
-  grid-template-columns: minmax(250px, 0.75fr) minmax(360px, 1.25fr);
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
   margin: 0 auto;
   max-width: 1440px;
 }
@@ -503,7 +505,7 @@ a {
   display: grid;
   min-inline-size: 0;
   padding: 0;
-  grid-template-columns: minmax(280px, 0.72fr) minmax(390px, 1.28fr);
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
   margin-top: clamp(64px, 10vw, 130px);
   position: relative;
 }
@@ -600,7 +602,10 @@ a {
   display: grid;
   gap: 14px;
   grid-column: 1 / -1;
-  grid-template-columns: 1fr max-content max-content;
+  grid-template-columns: minmax(0, 1fr) minmax(0, max-content) minmax(
+      0,
+      max-content
+    );
   padding: 20px clamp(28px, 4vw, 58px);
   position: relative;
   z-index: 1;
@@ -628,7 +633,7 @@ a {
   color: var(--paper);
   display: grid;
   gap: clamp(36px, 6vw, 88px);
-  grid-template-columns: minmax(260px, 0.9fr) minmax(340px, 1.1fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   padding: clamp(42px, 6vw, 88px);
   position: relative;
 }
@@ -778,6 +783,68 @@ a {
   margin: 28px 0 0;
   max-width: 62ch;
 }
+.final-cta {
+  border-top: 8px solid var(--vermillion);
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: clamp(64px, 8vw, 120px) 42px clamp(88px, 12vw, 160px);
+}
+.final-cta h2 {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(3.4rem, 7vw, 6.4rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.88;
+  margin: 0;
+  max-width: 11ch;
+  text-transform: uppercase;
+}
+.final-cta > p:last-of-type {
+  color: #504b44;
+  font-size: clamp(1.05rem, 1.4vw, 1.25rem);
+  line-height: 1.5;
+  margin: 28px 0 32px;
+  max-width: 36ch;
+}
+.final-cta .install-command {
+  margin-top: 36px;
+}
+
+@media (max-width: 1100px) {
+  .agent-matrix thead {
+    display: none;
+  }
+  .agent-matrix,
+  .agent-matrix tbody,
+  .agent-matrix tr,
+  .agent-matrix th,
+  .agent-matrix td {
+    display: block;
+    width: 100%;
+  }
+  .agent-matrix tr {
+    border-top: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+    padding: 16px 0 8px;
+  }
+  .agent-matrix tbody tr:last-child {
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  }
+  .agent-matrix th,
+  .agent-matrix td {
+    border: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+  .agent-matrix td::before {
+    color: #5c5750;
+    content: attr(data-agent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
 
 @media (max-width: 850px) {
   .landing-header {
@@ -832,38 +899,11 @@ a {
   .agents {
     padding: 96px 20px;
   }
-  .agent-matrix thead {
-    display: none;
+  .final-cta {
+    padding: 72px 20px 96px;
   }
-  .agent-matrix,
-  .agent-matrix tbody,
-  .agent-matrix tr,
-  .agent-matrix th,
-  .agent-matrix td {
-    display: block;
+  .install-command {
     width: 100%;
-  }
-  .agent-matrix tr {
-    border-top: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
-    padding: 16px 0 8px;
-  }
-  .agent-matrix tbody tr:last-child {
-    border-bottom: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
-  }
-  .agent-matrix th,
-  .agent-matrix td {
-    border: 0;
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-  }
-  .agent-matrix td::before {
-    color: #5c5750;
-    content: attr(data-agent);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
   .control-plane {
     display: block;
@@ -943,7 +983,8 @@ a {
     padding: 32px 20px;
   }
   .device-dispatch h2,
-  .agents-intro h2 {
+  .agents-intro h2,
+  .final-cta h2 {
     font-size: clamp(3.1rem, 15vw, 4.6rem);
   }
   .status-board th,

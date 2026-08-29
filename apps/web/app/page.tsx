@@ -366,6 +366,28 @@ export default function Home() {
         </table>
         <p className="agent-roster">Also supported: {moreAgents}</p>
       </section>
+
+      <section className="final-cta" aria-labelledby="final-cta-heading">
+        <p className="dispatch-label">07 / FINAL CTA</p>
+        <h2 id="final-cta-heading">Set it once. Keep it in sync.</h2>
+        <p>
+          Start with ToolMirror Cloud, or use your own Git repository for free.
+        </p>
+        <div className="hero-actions">
+          <a className="button button-primary" href="/dashboard">
+            Start with ToolMirror Cloud
+          </a>
+          <a
+            className="button button-secondary"
+            href="https://github.com/toolmirror/toolmirror"
+          >
+            View on GitHub
+          </a>
+        </div>
+        <code className="install-command">
+          curl -fsSL https://toolmirror.com/install.sh | sh
+        </code>
+      </section>
     </main>
   );
 }
