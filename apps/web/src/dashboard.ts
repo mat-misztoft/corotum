@@ -87,6 +87,17 @@ export type DashboardMutation =
   | { type: "UPDATE"; skillId: string }
   | { type: "SET_REF"; skillId: string; ref: string };
 
+/** Stable mutation response shared by dashboard/API and WebMCP callers. */
+export function dashboardMutationResult(revision: CloudRevision) {
+  return {
+    revisionId: revision.id,
+    revisionSequence: revision.sequence,
+    pendingResolution: revision.state.manifest.skills
+      .filter((skill) => skill.resolutionStatus === "PENDING_RESOLUTION")
+      .map((skill) => skill.id),
+  };
+}
+
 function rejectCredentialUrl(source: string) {
   try {
     const url = new URL(source);

@@ -1,9 +1,14 @@
 import { HostedEntitlementRequiredError } from "./billing";
-import { type DashboardMutation, mutateDashboard, readDashboard } from "./dashboard";
+import {
+  dashboardMutationResult,
+  type DashboardMutation,
+  mutateDashboard,
+  readDashboard,
+} from "./dashboard";
 import { isSameOrigin, jsonError, readJson } from "./api";
 import { InvalidIdempotencyKeyError, RevisionConflictError } from "./revisions";
 
-function errorResponse(error: unknown) {
+export function dashboardMutationErrorResponse(error: unknown) {
   if (error instanceof HostedEntitlementRequiredError) return jsonError(error.message, 402);
   if (error instanceof RevisionConflictError || (error instanceof Error && error.message === "BASE_REVISION_CONFLICT")) return jsonError("The workspace changed before this mutation could be applied.", 409);
   if (error instanceof InvalidIdempotencyKeyError) return jsonError(error.message, 400);
@@ -13,7 +18,7 @@ function errorResponse(error: unknown) {
 
 export async function handleDashboardGet(db: Parameters<typeof readDashboard>[0], userId: string | null) {
   if (!userId) return jsonError("Authentication required", 401);
-  try { return Response.json(await readDashboard(db, userId)); } catch (error) { return errorResponse(error); }
+  try { return Response.json(await readDashboard(db, userId)); } catch (error) { return dashboardMutationErrorResponse(error); }
 }
 
 export async function handleDashboardMutation(
@@ -31,6 +36,6 @@ export async function handleDashboardMutation(
       userId, hosted, baseRevisionId: body.baseRevisionId, idempotencyKey: body.idempotencyKey,
       mutation: body.mutation as DashboardMutation,
     });
-    return Response.json({ revisionId: revision.id, revisionSequence: revision.sequence, pendingResolution: revision.state.manifest.skills.filter((skill) => skill.resolutionStatus === "PENDING_RESOLUTION").map((skill) => skill.id) });
-  } catch (error) { return errorResponse(error); }
+    return Response.json(dashboardMutationResult(revision));
+  } catch (error) { return dashboardMutationErrorResponse(error); }
 }

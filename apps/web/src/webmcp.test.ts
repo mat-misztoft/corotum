@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { HostedEntitlementRequiredError } from "./billing";
-import { executeWebMcpReadOnlyTool } from "./webmcp";
+import {
+  executeWebMcpMutationTool,
+  executeWebMcpReadOnlyTool,
+} from "./webmcp";
+import { handleWebMcpTool } from "./webmcp-http";
 
 function readOnlyDatabase() {
   let writes = 0;
@@ -172,6 +176,78 @@ test("check_skill_updates returns reported status only and has no side effects",
   expect(db.writes()).toBe(0);
 });
 
+function mutationDatabase() {
+  let batches = 0;
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._values: unknown[]) {
+          return {
+            async first<T>() {
+              if (query.includes("FROM workspaces WHERE owner_user_id")) return { id: "ws_1", ownerUserId: "user_1", name: "My workspace" } as T;
+              if (query.includes("FROM idempotency_records")) return null;
+              if (query.includes("FROM workspaces w\n       LEFT JOIN workspace_revisions")) return { sequence: 0, id: null, manifestJson: null, lockfileJson: null } as T;
+              if (query.includes("SELECT current_revision_sequence")) return { currentRevisionSequence: 0 } as T;
+              if (query.includes("FROM workspaces WHERE id = ? AND owner_user_id")) return { id: "ws_1", ownerUserId: "user_1", name: "My workspace" } as T;
+              return null;
+            },
+            async all<T>() { return { results: [] as T[] }; },
+            async run() { return { meta: { changes: 1 } }; },
+          };
+        },
+      };
+    },
+    async batch(_statements: readonly unknown[]) {
+      batches += 1;
+      return [{ meta: { changes: 1 } }, { meta: { changes: 1 } }];
+    },
+    batches: () => batches,
+  };
+  return db;
+}
+
+test("WebMCP mutations delegate to the dashboard service and report pending resolution", async () => {
+  const db = mutationDatabase();
+  const result = await executeWebMcpMutationTool(db as never, {
+    userId: "user_1",
+    hosted: false,
+    tool: "add_skill",
+    baseRevisionId: null,
+    idempotencyKey: "webmcp-add-1",
+    arguments: { source: "https://github.com/example/skills.git", skill: "review", ref: "main" },
+  });
+  expect(result.revisionSequence).toBe(1);
+  expect(result.pendingResolution).toHaveLength(1);
+  expect(db.batches()).toBe(1);
+
+  await expect(executeWebMcpMutationTool(db as never, {
+    userId: "user_1",
+    hosted: false,
+    tool: "add_skill",
+    baseRevisionId: null,
+    idempotencyKey: "",
+    arguments: { source: "https://github.com/example/skills.git", skill: "review" },
+  })).rejects.toThrow("idempotency key is required");
+  expect(db.batches()).toBe(1);
+});
+
+test("WebMCP transport rejects missing authorization, base revision, and idempotency before a revision", async () => {
+  const db = mutationDatabase();
+  const unauthorized = await handleWebMcpTool(new Request("https://toolmirror.com/api/v1/webmcp", {
+    method: "POST",
+    body: JSON.stringify({ tool: "add_skill", baseRevisionId: null, idempotencyKey: "key", arguments: { source: "https://example.com/skills.git", skill: "review" } }),
+  }), db as never, null, false);
+  expect(unauthorized.status).toBe(401);
+  expect(db.batches()).toBe(0);
+
+  const missingConcurrency = await handleWebMcpTool(new Request("https://toolmirror.com/api/v1/webmcp", {
+    method: "POST",
+    body: JSON.stringify({ tool: "add_skill", arguments: { source: "https://example.com/skills.git", skill: "review" } }),
+  }), db as never, "user_1", false);
+  expect(missingConcurrency.status).toBe(400);
+  expect(db.batches()).toBe(0);
+});
+
 test("WebMCP makes unknown tools and hosted entitlement failures explicit", async () => {
   const db = readOnlyDatabase();
   await expect(
@@ -186,6 +262,16 @@ test("WebMCP makes unknown tools and hosted entitlement failures explicit", asyn
       userId: "user_1",
       hosted: true,
       tool: "list_skills",
+    }),
+  ).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
+  await expect(
+    executeWebMcpMutationTool(db as never, {
+      userId: "user_1",
+      hosted: true,
+      tool: "add_skill",
+      baseRevisionId: null,
+      idempotencyKey: "hosted-denied",
+      arguments: { source: "https://github.com/example/skills.git", skill: "review" },
     }),
   ).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
 });
