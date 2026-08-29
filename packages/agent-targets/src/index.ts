@@ -1,3 +1,5 @@
+export * from "./targets";
+
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 
