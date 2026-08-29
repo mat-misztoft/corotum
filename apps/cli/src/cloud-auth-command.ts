@@ -23,7 +23,11 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
     .description("pair this device with ToolMirror Cloud in a browser")
     .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
     .action(async (options: { origin: string }) => {
-      const { service, paths, origin } = context(program, io, options.origin);
+      const { service, paths, origin } = cloudAuthContext(
+        program,
+        io,
+        options.origin,
+      );
       const release = await new MutationLock(
         join(paths.stateDir, "process.lock"),
       ).acquire();
@@ -40,7 +44,7 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
     .description("revoke this device token and remove local Cloud credentials")
     .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
     .action(async (options: { origin: string }) => {
-      const { service, paths } = context(program, io, options.origin);
+      const { service, paths } = cloudAuthContext(program, io, options.origin);
       const release = await new MutationLock(
         join(paths.stateDir, "process.lock"),
       ).acquire();
@@ -52,7 +56,7 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
     });
 }
 
-function context(
+export function cloudAuthContext(
   program: Command,
   io: CliIo,
   originOption: string,
