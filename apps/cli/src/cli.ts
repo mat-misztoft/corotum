@@ -7,11 +7,13 @@ import {
   exitCodeFor,
   jsonEnvelope,
 } from "./cli-contracts";
+import { registerConfigCommand } from "./config-command";
 import { registerInitCommand } from "./init-command";
 import { registerRemoveCommands } from "./remove-command";
 import { registerRestoreCommand } from "./restore-command";
 import { registerSetRefCommand } from "./set-ref-command";
 import { registerSyncCommands } from "./sync-command";
+import type { CliTelemetry } from "./telemetry";
 import { registerUpdateCommand } from "./update-command";
 
 export const CLI_VERSION = "0.1.0";
@@ -67,6 +69,7 @@ export function createCli(
   registerUpdateCommand(program, io);
   registerSetRefCommand(program, io);
   registerSyncCommands(program, io);
+  registerConfigCommand(program, io);
 
   program.action(() => {
     const options = program.opts<CliOptions>();
@@ -89,6 +92,7 @@ export function createCli(
 export async function runCli(
   argv: readonly string[],
   io: CliIo = processIo(),
+  telemetry?: CliTelemetry,
 ): Promise<ExitCode> {
   const json = argv.includes("--json");
   if (json && isCommanderDisplayRequest(argv)) {
@@ -96,12 +100,20 @@ export async function runCli(
     return ExitCode.SUCCESS;
   }
 
+  const pending = await telemetry?.begin(
+    argv,
+    !json &&
+      !isNonInteractive(
+        { nonInteractive: argv.includes("--non-interactive") },
+        io.stdinIsTTY,
+      ),
+  );
   const program = createCli(io, json);
+  let outcome: CliOutcome = "SUCCESS";
   try {
     await program.parseAsync([...argv], { from: "user" });
-    return ExitCode.SUCCESS;
   } catch (error) {
-    const outcome = outcomeFor(error);
+    outcome = outcomeFor(error);
     if (json) {
       io.writeOutput(
         `${JSON.stringify(
@@ -111,8 +123,9 @@ export async function runCli(
     } else if (!(error instanceof CommanderError)) {
       io.writeError(`${errorMessage(error)}\n`);
     }
-    return exitCodeFor(outcome);
   }
+  await telemetry?.finish(pending ?? null, outcome);
+  return exitCodeFor(outcome);
 }
 
 function outcomeFor(error: unknown): CliOutcome {

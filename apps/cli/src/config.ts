@@ -15,6 +15,7 @@ const configSchema = z
     gitStoragePath: z.string().min(1).nullable(),
     gitRepository: z.string().min(1).nullable().default(null),
     telemetry: z.boolean().nullable(),
+    installationId: z.uuid().nullable(),
     agents: z.record(z.string(), z.object({ enabled: z.boolean() })),
   })
   .strict();
@@ -39,6 +40,7 @@ export const defaultConfig = (): ToolMirrorConfig => ({
   gitStoragePath: null,
   gitRepository: null,
   telemetry: null,
+  installationId: null,
   agents: {},
 });
 
