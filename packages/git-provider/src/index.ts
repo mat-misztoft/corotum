@@ -1,5 +1,13 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  cp,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 import {
   type DesiredState,
@@ -24,6 +32,164 @@ import {
 const manifestFile = "toolmirror.yaml";
 const lockfileFile = "toolmirror.lock";
 const transitionFile = "toolmirror.transition.json";
+
+export class GitStorageMigrationError extends Error {
+  readonly name = "GitStorageMigrationError";
+}
+
+/**
+ * Relocates the complete ToolMirror-owned Git cache only after proving the
+ * configured source clone and desired-state files survived the copy. Config
+ * persistence is deliberately last, so callers never point at partial state.
+ */
+export class GitStorageMigrator {
+  constructor(
+    private readonly runGit: GitCommandRunner = runSystemGit,
+    private readonly copyDirectory: (
+      source: string,
+      destination: string,
+    ) => Promise<void> = (source, destination) =>
+      cp(source, destination, { errorOnExist: true, recursive: true }),
+  ) {}
+
+  async migrate(input: {
+    from: string;
+    to: string;
+    source: string;
+    persist: () => Promise<void>;
+  }): Promise<void> {
+    const from = resolve(input.from);
+    const to = resolve(input.to);
+    if (from === to) return;
+    if (contains(from, to) || contains(to, from)) {
+      throw new GitStorageMigrationError(
+        "The new Git storage path cannot contain the current path or be contained by it.",
+      );
+    }
+    const source = normalizeGitSource(input.source);
+    const oldCache = join(from, sourceKey(source));
+    if (!(await exists(oldCache))) {
+      throw new GitStorageMigrationError(
+        "The ToolMirror-owned Git cache must exist before it can be moved.",
+      );
+    }
+    if (await exists(to)) {
+      throw new GitStorageMigrationError(
+        "The new Git storage path already exists.",
+      );
+    }
+
+    const staging = `${to}.${crypto.randomUUID()}.staging`;
+    const backup = `${from}.${crypto.randomUUID()}.backup`;
+    let oldMoved = false;
+    let newInstalled = false;
+    let persisted = false;
+    try {
+      await mkdir(dirname(staging), { recursive: true });
+      await this.copyDirectory(from, staging);
+      await this.verify(oldCache, join(staging, sourceKey(source)), source);
+
+      await rename(from, backup);
+      oldMoved = true;
+      await rename(staging, to);
+      newInstalled = true;
+      await input.persist();
+      persisted = true;
+      await rm(backup, { force: true, recursive: true });
+    } catch (error) {
+      if (!persisted) {
+        const rollbackErrors: unknown[] = [];
+        if (newInstalled) {
+          try {
+            await rm(to, { force: true, recursive: true });
+          } catch (rollbackError) {
+            rollbackErrors.push(rollbackError);
+          }
+        }
+        if (oldMoved) {
+          try {
+            await rename(backup, from);
+          } catch (rollbackError) {
+            rollbackErrors.push(rollbackError);
+          }
+        }
+        if (rollbackErrors.length > 0) {
+          throw new AggregateError(
+            [error, ...rollbackErrors],
+            "Git storage migration failed and could not fully roll back.",
+          );
+        }
+      }
+      throw error;
+    } finally {
+      await rm(staging, { force: true, recursive: true });
+    }
+  }
+
+  private async verify(
+    oldCache: string,
+    newCache: string,
+    source: string,
+  ): Promise<void> {
+    const [oldSnapshot, newSnapshot] = await Promise.all([
+      this.snapshot(oldCache),
+      this.snapshot(newCache),
+    ]);
+    if (
+      oldSnapshot.revision !== newSnapshot.revision ||
+      oldSnapshot.origin !== source ||
+      oldSnapshot.origin !== newSnapshot.origin ||
+      oldSnapshot.manifest !== newSnapshot.manifest ||
+      oldSnapshot.lockfile !== newSnapshot.lockfile ||
+      oldSnapshot.transition !== newSnapshot.transition
+    ) {
+      throw new GitStorageMigrationError(
+        "The copied Git cache does not match the current desired state.",
+      );
+    }
+  }
+
+  private async snapshot(cache: string): Promise<{
+    revision: string;
+    origin: string;
+    manifest: string;
+    lockfile: string;
+    transition: string;
+  }> {
+    await this.command(cache, ["fsck", "--no-dangling"]);
+    const [revision, origin, manifest, lockfile, transition] =
+      await Promise.all([
+        this.output(cache, ["rev-parse", "HEAD"]),
+        this.output(cache, ["remote", "get-url", "origin"]),
+        readFile(join(cache, manifestFile), "utf8"),
+        readFile(join(cache, lockfileFile), "utf8"),
+        readFile(join(cache, transitionFile), "utf8"),
+      ]);
+    return { revision, origin, manifest, lockfile, transition };
+  }
+
+  private async output(
+    cache: string,
+    args: readonly string[],
+  ): Promise<string> {
+    const result = await this.command(cache, args);
+    return new TextDecoder().decode(result.stdout).trim();
+  }
+
+  private async command(
+    cache: string,
+    args: readonly string[],
+  ): Promise<
+    Readonly<{ exitCode: number; stderr: string; stdout: Uint8Array }>
+  > {
+    const result = await this.runGit({ args, cwd: cache });
+    if (result.exitCode !== 0)
+      throw new GitStorageMigrationError(
+        result.stderr.trim() || "Git cache integrity verification failed.",
+      );
+    return result;
+  }
+}
 
 /** A ToolMirror-owned Git clone that stores desired-state snapshots. */
 export class GitStateProvider implements StateProvider {
@@ -196,6 +362,11 @@ export class GitStateProvider implements StateProvider {
 
 function sourceKey(source: string): string {
   return new Bun.CryptoHasher("sha256").update(source).digest("hex");
+}
+
+function contains(parent: string, child: string): boolean {
+  const path = relative(parent, child);
+  return path !== "" && !path.startsWith(`..${sep}`) && path !== "..";
 }
 
 async function exists(path: string): Promise<boolean> {

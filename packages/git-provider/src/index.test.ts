@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import {
+  cp,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,7 +18,7 @@ import {
   serializeManifest,
   skillId,
 } from "../../core/src/index";
-import { GitStateProvider } from "./index";
+import { GitStateProvider, GitStorageMigrator } from "./index";
 
 const temporaryDirectories: string[] = [];
 
@@ -176,6 +184,124 @@ describe("GitStateProvider", () => {
 
     expect(second).toEqual(expect.objectContaining({ kind: "success" }));
     expect(second.kind === "success" && second.value.state).toEqual(state());
+  });
+
+  test("migrates an owned cache only after preserving history and desired state", async () => {
+    const source = await fixture();
+    const oldStorage = join(source.worktree, "old-cache");
+    const newStorage = join(source.worktree, "new-cache");
+    const provider = new GitStateProvider(oldStorage, source.bare);
+    const base = revisionId(
+      (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(),
+    );
+    const pushed = await provider.push(
+      { state: state(), baseRevision: base },
+      { type: "ADD", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    if (pushed.kind !== "success") throw new Error("fixture mutation failed");
+    const oldCache = join(oldStorage, (await readdir(oldStorage))[0] as string);
+    const beforeHistory = await git(["-C", oldCache, "rev-list", "--all"]);
+    const beforeManifest = await readFile(
+      join(oldCache, "toolmirror.yaml"),
+      "utf8",
+    );
+    let configuredStorage = oldStorage;
+
+    await new GitStorageMigrator().migrate({
+      from: oldStorage,
+      to: newStorage,
+      source: source.bare,
+      persist: async () => {
+        configuredStorage = newStorage;
+      },
+    });
+
+    const newCache = join(newStorage, (await readdir(newStorage))[0] as string);
+    expect(configuredStorage).toBe(newStorage);
+    expect(await git(["-C", newCache, "rev-list", "--all"])).toBe(
+      beforeHistory,
+    );
+    expect(await readFile(join(newCache, "toolmirror.yaml"), "utf8")).toBe(
+      beforeManifest,
+    );
+    await expect(stat(oldStorage)).rejects.toThrow();
+    await new GitStorageMigrator().migrate({
+      from: newStorage,
+      to: newStorage,
+      source: source.bare,
+      persist: async () => {
+        throw new Error("same-path migration must not persist");
+      },
+    });
+    expect(await readdir(newStorage)).toHaveLength(1);
+  });
+
+  test("leaves the current cache and configuration active when copying fails", async () => {
+    const source = await fixture();
+    const oldStorage = join(source.worktree, "old-cache");
+    const newStorage = join(source.worktree, "new-cache");
+    const provider = new GitStateProvider(oldStorage, source.bare);
+    const base = revisionId(
+      (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(),
+    );
+    const pushed = await provider.push(
+      { state: state(), baseRevision: base },
+      { type: "ADD", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    if (pushed.kind !== "success") throw new Error("fixture mutation failed");
+    let configuredStorage = oldStorage;
+
+    await expect(
+      new GitStorageMigrator(undefined, async () => {
+        throw new Error("copy failed");
+      }).migrate({
+        from: oldStorage,
+        to: newStorage,
+        source: source.bare,
+        persist: async () => {
+          configuredStorage = newStorage;
+        },
+      }),
+    ).rejects.toThrow("copy failed");
+
+    expect(configuredStorage).toBe(oldStorage);
+    expect(await readdir(oldStorage)).toHaveLength(1);
+    await expect(stat(newStorage)).rejects.toThrow();
+  });
+
+  test("leaves the current cache and configuration active when verification fails", async () => {
+    const source = await fixture();
+    const oldStorage = join(source.worktree, "old-cache");
+    const newStorage = join(source.worktree, "new-cache");
+    const provider = new GitStateProvider(oldStorage, source.bare);
+    const base = revisionId(
+      (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(),
+    );
+    const pushed = await provider.push(
+      { state: state(), baseRevision: base },
+      { type: "ADD", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    if (pushed.kind !== "success") throw new Error("fixture mutation failed");
+    let configuredStorage = oldStorage;
+
+    await expect(
+      new GitStorageMigrator(undefined, async (from, to) => {
+        await cp(from, to, { errorOnExist: true, recursive: true });
+        const cache = (await readdir(to))[0] as string;
+        await writeFile(join(to, cache, "toolmirror.lock"), "corrupt");
+      }).migrate({
+        from: oldStorage,
+        to: newStorage,
+        source: source.bare,
+        persist: async () => {
+          configuredStorage = newStorage;
+        },
+      }),
+    ).rejects.toThrow("does not match");
+
+    expect(configuredStorage).toBe(oldStorage);
+    expect(await readdir(oldStorage)).toHaveLength(1);
+    await expect(stat(newStorage)).rejects.toThrow();
   });
 
   test("refuses incomplete Git state before committing", async () => {
