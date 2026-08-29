@@ -1,0 +1,73 @@
+name: Release pipeline proof
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+# Pipeline-proof only. Artifacts are unsigned and not a final release.
+# Signing and notarization are out of scope for v0.1.
+
+jobs:
+  build:
+    name: compile-${{ matrix.id }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: bun-darwin-arm64
+            id: darwin-arm64
+          - target: bun-darwin-x64
+            id: darwin-x64
+          - target: bun-linux-arm64
+            id: linux-arm64
+          - target: bun-linux-x64
+            id: linux-x64
+          - target: bun-windows-x64
+            id: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun ./tooling/release-build.ts --target ${{ matrix.target }}
+      - name: Run linux-x64 pipeline-proof binary
+        if: matrix.id == 'linux-x64'
+        run: bun run verify:cli dist/compile/toolmirror-linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compile-${{ matrix.id }}
+          path: dist/compile/
+          if-no-files-found: error
+
+  publish:
+    name: publish-pipeline-proof
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: compile-*
+          path: dist/compile
+          merge-multiple: true
+      - run: bun ./tooling/release-build.ts --assemble-only
+      - run: bun run release:verify
+      - run: bun run release:upload
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-proof-r2-layout
+          path: dist/r2/releases/
+          if-no-files-found: error

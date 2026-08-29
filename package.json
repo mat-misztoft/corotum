@@ -12,6 +12,9 @@
   "scripts": {
     "build:cli": "./scripts/build-cli.sh bun-darwin-arm64",
     "build:cli:linux": "./scripts/build-cli.sh bun-linux-x64",
+    "release:build": "bun ./tooling/release-build.ts",
+    "release:upload": "bun ./tooling/release-upload.ts",
+    "release:verify": "bun ./tooling/release-verify.ts",
     "db:migrate": "bun run --cwd apps/web db:migrate",
     "web:build": "bun run --cwd apps/web build",
     "web:smoke": "bun run --cwd apps/web smoke",
