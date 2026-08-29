@@ -16,6 +16,18 @@ bun run typecheck
 bun run lint
 ```
 
+## Compiled CLI spike
+
+Build and verify the macOS arm64 standalone binary:
+
+```bash
+bun run build:cli
+./scripts/verify-cli.sh dist/toolmirror-darwin-arm64
+```
+
+The verification runs the binary with a minimal `PATH` that does not contain
+Bun. Linux x64 is built and run in [the compile proof workflow](./.github/workflows/cli-compile.yml).
+
 ## License
 
 [GNU Affero General Public License v3.0 or later](./LICENSE).
