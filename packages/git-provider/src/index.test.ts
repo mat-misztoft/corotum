@@ -54,13 +54,17 @@ async function fixture(): Promise<
   return { bare, worktree };
 }
 
-function state(reverse = false): DesiredState {
+function state(
+  reverse = false,
+  alphaRef = "main",
+  betaRef = "v1",
+): DesiredState {
   const skills = [
     {
       id: skillId("sk_gitA"),
       source: "https://github.com/example/skills.git",
       skill: "alpha",
-      ref: "main",
+      ref: alphaRef,
       targets: "all" as const,
       resolutionStatus: "RESOLVED" as const,
     },
@@ -68,7 +72,7 @@ function state(reverse = false): DesiredState {
       id: skillId("sk_gitB"),
       source: "https://github.com/example/skills.git",
       skill: "beta",
-      ref: "v1",
+      ref: betaRef,
       targets: ["codex", "pi"] as const,
       resolutionStatus: "RESOLVED" as const,
     },
@@ -302,6 +306,142 @@ describe("GitStateProvider", () => {
     expect(configuredStorage).toBe(oldStorage);
     expect(await readdir(oldStorage)).toHaveLength(1);
     await expect(stat(newStorage)).rejects.toThrow();
+  });
+
+  test("persists PENDING_PUSH, blocks mutations, and retries it before sync", async () => {
+    const source = await fixture();
+    const storage = join(source.worktree, "cache");
+    const first = new GitStateProvider(storage, source.bare);
+    const base = revisionId(
+      (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(),
+    );
+    const initial = await first.push(
+      { state: state(), baseRevision: base },
+      { type: "ADD", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    if (initial.kind !== "success") throw new Error("fixture mutation failed");
+
+    const hook = join(source.bare, "hooks", "pre-receive");
+    await writeFile(hook, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    const pending = await first.push(
+      {
+        state: state(false, "pending"),
+        baseRevision: initial.value.revisionId,
+      },
+      { type: "SET_REF", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    expect(pending).toEqual(
+      expect.objectContaining({
+        kind: "failure",
+        error: expect.objectContaining({ code: "CONFLICT" }),
+      }),
+    );
+
+    const restarted = new GitStateProvider(storage, source.bare);
+    const blocked = await restarted.push(
+      { state: state(false, "later"), baseRevision: initial.value.revisionId },
+      { type: "SET_REF", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    expect(blocked).toEqual(
+      expect.objectContaining({
+        kind: "failure",
+        error: expect.objectContaining({ code: "CONFLICT" }),
+      }),
+    );
+
+    await rm(hook);
+    const recovered = await restarted.pull();
+    expect(recovered).toEqual(
+      expect.objectContaining({
+        kind: "success",
+        value: expect.objectContaining({
+          state: expect.objectContaining({
+            manifest: expect.objectContaining({
+              skills: expect.arrayContaining([
+                expect.objectContaining({ ref: "pending" }),
+              ]),
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  test("replays independent pending changes and exposes same-skill choices", async () => {
+    const source = await fixture();
+    const storage = join(source.worktree, "cache-a");
+    const base = revisionId(
+      (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(),
+    );
+    const local = new GitStateProvider(storage, source.bare);
+    const initial = await local.push(
+      { state: state(), baseRevision: base },
+      { type: "ADD", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    if (initial.kind !== "success") throw new Error("fixture mutation failed");
+    const hook = join(source.bare, "hooks", "pre-receive");
+    await writeFile(hook, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    await local.push(
+      { state: state(false, "local"), baseRevision: initial.value.revisionId },
+      { type: "SET_REF", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    await rm(hook);
+    const remote = new GitStateProvider(
+      join(source.worktree, "cache-b"),
+      source.bare,
+    );
+    const remoteChange = await remote.push(
+      {
+        state: state(false, "main", "remote"),
+        baseRevision: initial.value.revisionId,
+      },
+      { type: "SET_REF", skillId: skillId("sk_gitB"), metadata: {} },
+    );
+    if (remoteChange.kind !== "success")
+      throw new Error("remote mutation failed");
+
+    const replayed = await local.pull();
+    expect(replayed).toEqual(expect.objectContaining({ kind: "success" }));
+    expect(
+      replayed.kind === "success" && replayed.value.state.manifest.skills,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: skillId("sk_gitA"), ref: "local" }),
+        expect.objectContaining({ id: skillId("sk_gitB"), ref: "remote" }),
+      ]),
+    );
+
+    await writeFile(hook, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    await local.push(
+      {
+        state: state(false, "local-conflict", "remote"),
+        baseRevision:
+          replayed.kind === "success" ? replayed.value.revisionId : base,
+      },
+      { type: "SET_REF", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    await rm(hook);
+    const currentRemote = await remote.pull();
+    if (currentRemote.kind !== "success") throw new Error("remote pull failed");
+    const remoteConflict = await remote.push(
+      {
+        state: state(false, "remote-conflict", "remote"),
+        baseRevision: currentRemote.value.revisionId,
+      },
+      { type: "SET_REF", skillId: skillId("sk_gitA"), metadata: {} },
+    );
+    if (remoteConflict.kind !== "success")
+      throw new Error("remote conflict failed");
+
+    const conflict = await local.resolvePendingPush();
+    expect(conflict).toEqual(
+      expect.objectContaining({
+        kind: "conflict",
+        conflicts: [expect.objectContaining({ skillId: skillId("sk_gitA") })],
+      }),
+    );
+    const keptRemote = await local.resolvePendingPush("keep-remote");
+    expect(keptRemote).toEqual({ kind: "resolved" });
   });
 
   test("refuses incomplete Git state before committing", async () => {

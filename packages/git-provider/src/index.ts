@@ -12,8 +12,11 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import {
   type DesiredState,
   type DesiredStateEnvelope,
+  type DesiredStateMergeConflict,
+  mergeDesiredStates,
   type PushDesiredStateInput,
   parseManifest,
+  parseRevisionTransition,
   type Result,
   type RevisionTransition,
   revisionId,
@@ -32,6 +35,22 @@ import {
 const manifestFile = "toolmirror.yaml";
 const lockfileFile = "toolmirror.lock";
 const transitionFile = "toolmirror.transition.json";
+const pendingPushSuffix = ".pending-push.json";
+
+export type PendingPushResolution =
+  | "keep-remote"
+  | "apply-local"
+  | "resolve-later";
+
+export type PendingPushStatus =
+  | Readonly<{ kind: "none" | "resolved" }>
+  | Readonly<{ kind: "pending" }>
+  | Readonly<{
+      kind: "conflict";
+      conflicts: readonly DesiredStateMergeConflict[];
+    }>;
+
+type PendingPush = Readonly<{ baseRevision: string }>;
 
 export class GitStorageMigrationError extends Error {
   readonly name = "GitStorageMigrationError";
@@ -203,10 +222,35 @@ export class GitStateProvider implements StateProvider {
     try {
       await this.preflight();
       const cache = await this.cache();
+      const pending = await this.retryPendingPush(cache);
+      if (pending.kind === "pending" || pending.kind === "conflict") {
+        return {
+          kind: "failure",
+          error: {
+            code: "CONFLICT",
+            message: "A previous desired-state change is waiting to be pushed.",
+          },
+        };
+      }
       await this.sync(cache);
       return { kind: "success", value: await this.readState(cache) };
     } catch (error) {
       return { kind: "failure", error: gitError(error) };
+    }
+  }
+
+  /**
+   * Retries a persisted desired-state push. On a remote collision callers can
+   * explicitly keep remote state, reapply local state, or leave it pending.
+   */
+  async resolvePendingPush(
+    resolution: PendingPushResolution = "resolve-later",
+  ): Promise<PendingPushStatus> {
+    try {
+      await this.preflight();
+      return await this.retryPendingPush(await this.cache(), resolution);
+    } catch (error) {
+      throw new Error(gitError(error).message, { cause: error });
     }
   }
 
@@ -226,6 +270,17 @@ export class GitStateProvider implements StateProvider {
         throw new Error("A Git state mutation needs a transition.");
 
       const cache = await this.cache();
+      const pending = await this.retryPendingPush(cache);
+      if (pending.kind === "pending" || pending.kind === "conflict") {
+        return {
+          kind: "failure",
+          error: {
+            code: "CONFLICT",
+            message:
+              "Resolve the previous PENDING_PUSH before changing desired state.",
+          },
+        };
+      }
       await this.sync(cache);
       const current = await this.revision(cache);
       if (input.baseRevision !== current) {
@@ -253,7 +308,20 @@ export class GitStateProvider implements StateProvider {
         "-m",
         `toolmirror: ${transition.type.toLowerCase()} ${transition.skillId}`,
       ]);
-      await this.command(cache, ["push", "origin", "HEAD"]);
+      try {
+        await this.command(cache, ["push", "origin", "HEAD"]);
+      } catch {
+        await this.writePending({ baseRevision: current });
+        return {
+          kind: "failure",
+          error: {
+            code: "CONFLICT",
+            message:
+              "Desired state was committed locally and is waiting to be pushed.",
+          },
+        };
+      }
+      await this.clearPending();
       return { kind: "success", value: await this.readState(cache) };
     } catch (error) {
       return { kind: "failure", error: gitError(error) };
@@ -288,17 +356,181 @@ export class GitStateProvider implements StateProvider {
     await this.command(cache, ["merge", "--ff-only", "@{upstream}"]);
   }
 
-  private async readState(cache: string): Promise<DesiredStateEnvelope> {
-    const state = validateDesiredState(
-      {
-        manifest: parseManifest(
-          await readFile(join(cache, manifestFile), "utf8"),
-        ),
-        lockfile: JSON.parse(await readFile(join(cache, lockfileFile), "utf8")),
-      },
+  private pendingPath(): string {
+    return join(
+      this.storagePath,
+      `${sourceKey(normalizeGitSource(this.source))}${pendingPushSuffix}`,
+    );
+  }
+
+  private async retryPendingPush(
+    cache: string,
+    resolution?: PendingPushResolution,
+  ): Promise<PendingPushStatus> {
+    const pending = await this.readPending();
+    if (!pending) return { kind: "none" };
+
+    await this.command(cache, ["fetch", "--quiet", "origin"]);
+    const [head, upstream] = await Promise.all([
+      this.revision(cache),
+      this.output(cache, ["rev-parse", "@{upstream}"]),
+    ]);
+    const localContainsRemote = await this.isAncestor(cache, upstream, head);
+    if (localContainsRemote) {
+      try {
+        await this.command(cache, ["push", "origin", "HEAD"]);
+        await this.clearPending();
+        return { kind: "resolved" };
+      } catch {
+        return { kind: "pending" };
+      }
+    }
+
+    const base = await this.readStateAt(cache, pending.baseRevision);
+    const remote = await this.readStateAt(cache, upstream);
+    const local = await this.readStateAt(cache, head);
+    const merged = mergeDesiredStates(
+      base.state,
+      remote.state,
+      local.state,
       "git",
     );
-    return { revisionId: revisionId(await this.revision(cache)), state };
+    if (merged.kind === "conflict") {
+      if (!resolution || resolution === "resolve-later") {
+        return { kind: "conflict", conflicts: merged.conflicts };
+      }
+      await this.replacePendingCommit(
+        cache,
+        upstream,
+        resolution === "keep-remote" ? remote.state : local.state,
+        resolution === "keep-remote" ? undefined : "apply local pending state",
+      );
+    } else {
+      await this.replacePendingCommit(
+        cache,
+        upstream,
+        merged.state,
+        "replay pending state",
+      );
+    }
+
+    try {
+      await this.command(cache, ["push", "origin", "HEAD"]);
+      await this.clearPending();
+      return { kind: "resolved" };
+    } catch {
+      return { kind: "pending" };
+    }
+  }
+
+  private async replacePendingCommit(
+    cache: string,
+    upstream: string,
+    state: DesiredState,
+    message?: string,
+  ): Promise<void> {
+    const [branch, transition] = await Promise.all([
+      this.output(cache, ["symbolic-ref", "--short", "HEAD"]),
+      this.transitionAt(cache, "HEAD"),
+    ]);
+    await this.command(cache, ["checkout", "--quiet", "--detach", upstream]);
+    await this.command(cache, ["branch", "-f", branch, upstream]);
+    await this.command(cache, ["checkout", "--quiet", branch]);
+    if (!message) return;
+    await this.writeState(cache, state, transition);
+    await this.command(cache, [
+      "-c",
+      "user.name=ToolMirror",
+      "-c",
+      "user.email=toolmirror@users.noreply.github.com",
+      "commit",
+      "--no-gpg-sign",
+      "-m",
+      `toolmirror: ${message}`,
+    ]);
+  }
+
+  private async readState(cache: string): Promise<DesiredStateEnvelope> {
+    const revision = await this.revision(cache);
+    return {
+      revisionId: revisionId(revision),
+      state: (await this.readStateAt(cache, revision)).state,
+    };
+  }
+
+  private async readStateAt(
+    cache: string,
+    revision: string,
+  ): Promise<DesiredStateEnvelope> {
+    const [manifest, lockfile] = await Promise.all([
+      this.show(cache, revision, manifestFile),
+      this.show(cache, revision, lockfileFile),
+    ]);
+    return {
+      revisionId: revisionId(revision),
+      state: validateDesiredState(
+        { manifest: parseManifest(manifest), lockfile: JSON.parse(lockfile) },
+        "git",
+      ),
+    };
+  }
+
+  private async transitionAt(
+    cache: string,
+    revision: string,
+  ): Promise<RevisionTransition> {
+    return parseRevisionTransition(
+      await this.show(cache, revision, transitionFile),
+    );
+  }
+
+  private async show(
+    cache: string,
+    revision: string,
+    file: string,
+  ): Promise<string> {
+    return this.output(cache, ["show", `${revision}:${file}`]);
+  }
+
+  private async isAncestor(
+    cache: string,
+    ancestor: string,
+    descendant: string,
+  ): Promise<boolean> {
+    const result = await this.runGit({
+      args: ["merge-base", "--is-ancestor", ancestor, descendant],
+      cwd: cache,
+    });
+    if (result.exitCode === 0) return true;
+    if (result.exitCode === 1) return false;
+    throw new Error(result.stderr.trim() || "Git could not compare revisions.");
+  }
+
+  private async readPending(): Promise<PendingPush | null> {
+    try {
+      return JSON.parse(
+        await readFile(this.pendingPath(), "utf8"),
+      ) as PendingPush;
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "ENOENT"
+      )
+        return null;
+      throw new Error("ToolMirror PENDING_PUSH state is invalid.");
+    }
+  }
+
+  private async writePending(pending: PendingPush): Promise<void> {
+    await writeFile(this.pendingPath(), `${JSON.stringify(pending)}\n`, {
+      mode: 0o600,
+    });
+  }
+
+  private async clearPending(): Promise<void> {
+    await rm(this.pendingPath(), { force: true });
   }
 
   private async writeState(
