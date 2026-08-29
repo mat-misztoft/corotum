@@ -9,6 +9,7 @@ import {
 } from "./cli-contracts";
 import { registerInitCommand } from "./init-command";
 import { registerRemoveCommands } from "./remove-command";
+import { registerRestoreCommand } from "./restore-command";
 
 export const CLI_VERSION = "0.1.0";
 
@@ -59,6 +60,7 @@ export function createCli(
   registerAddCommand(program, io);
   registerAdoptCommand(program, io);
   registerRemoveCommands(program, io);
+  registerRestoreCommand(program, io);
 
   program.action(() => {
     const options = program.opts<CliOptions>();
