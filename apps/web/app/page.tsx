@@ -4,6 +4,32 @@ const deviceRows = [
   { skill: "playwright", device: "VPS", status: "BEHIND" },
 ];
 
+const deviceTargets = [
+  { device: "Mac Mini", agent: "Codex", status: "SYNCED" },
+  { device: "Mac Mini", agent: "Pi", status: "SYNCED" },
+  { device: "VPS", agent: "Codex", status: "DRIFTED" },
+  { device: "VPS", agent: "Pi", status: "AUTH_REQUIRED" },
+] as const;
+
+const matrixAgents = [
+  "Codex",
+  "Claude Code",
+  "Pi",
+  "Cursor",
+  "Gemini",
+] as const;
+
+const matrixSkills = ["frontend-design", "code-review", "playwright"] as const;
+
+const moreAgents =
+  "OpenCode · Windsurf · Cline · Roo Code · GitHub Copilot · Kiro CLI";
+
+function statusClass(status: string) {
+  if (status === "SYNCED") return "status-synced";
+  if (status === "DRIFTED") return "status-drifted";
+  return "status-attention";
+}
+
 export default function Home() {
   return (
     <main className="landing">
@@ -256,6 +282,89 @@ export default function Home() {
             <code>toolmirror migrate git &lt;repo&gt;</code>
           </div>
         </div>
+      </section>
+
+      <section className="devices" aria-labelledby="devices-heading">
+        <div className="device-dispatch">
+          <div className="device-dispatch-copy">
+            <p className="dispatch-label">05 / SEE EVERY DEVICE</p>
+            <h2 id="devices-heading">See every device at a glance.</h2>
+            <p>
+              Stop guessing what is out of sync. See which machine is behind,
+              which skill drifted and which agent needs attention.
+            </p>
+          </div>
+          <table className="status-board">
+            <caption>TARGET STATUS / AFTER CLI SYNC</caption>
+            <thead>
+              <tr>
+                <th scope="col">DEVICE</th>
+                <th scope="col">AGENT</th>
+                <th scope="col">STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deviceTargets.map((row) => (
+                <tr key={`${row.device}-${row.agent}`}>
+                  <td>{row.device}</td>
+                  <td>{row.agent}</td>
+                  <td>
+                    <strong className={statusClass(row.status)}>
+                      {row.status}
+                    </strong>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="device-dispatch-note">
+            Status is current per device and agent after that machine runs
+            ToolMirror. No remote force-sync.
+          </p>
+        </div>
+      </section>
+
+      <section className="agents" id="agents" aria-labelledby="agents-heading">
+        <div className="agents-intro">
+          <p className="dispatch-label">06 / BUILT FOR AGENTS</p>
+          <h2 id="agents-heading">One skill. Many agents.</h2>
+          <p>
+            Sync the same managed skills across Codex, Claude Code, Pi, Cursor,
+            Gemini and more.
+          </p>
+          <p>
+            With ToolMirror Cloud, agents can also manage your desired state
+            through WebMCP.
+          </p>
+        </div>
+        <table className="agent-matrix">
+          <caption>SKILL EXPOSURE / SUPPORTED AGENTS</caption>
+          <thead>
+            <tr>
+              <th scope="col">SKILL</th>
+              {matrixAgents.map((agent) => (
+                <th key={agent} scope="col">
+                  {agent}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {matrixSkills.map((skill) => (
+              <tr key={skill}>
+                <th scope="row">
+                  <code>{skill}</code>
+                </th>
+                {matrixAgents.map((agent) => (
+                  <td key={agent} data-agent={agent}>
+                    <span className="exposure">exposed</span>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="agent-roster">Also supported: {moreAgents}</p>
       </section>
     </main>
   );

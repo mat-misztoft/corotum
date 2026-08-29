@@ -618,6 +618,167 @@ a {
   overflow-wrap: anywhere;
 }
 
+.devices {
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: 0 42px clamp(48px, 7vw, 96px);
+}
+.device-dispatch {
+  background: var(--ink);
+  color: var(--paper);
+  display: grid;
+  gap: clamp(36px, 6vw, 88px);
+  grid-template-columns: minmax(260px, 0.9fr) minmax(340px, 1.1fr);
+  padding: clamp(42px, 6vw, 88px);
+  position: relative;
+}
+.device-dispatch-copy {
+  max-width: 430px;
+}
+.device-dispatch .dispatch-label {
+  color: #f1c1b8;
+}
+.device-dispatch h2,
+.agents-intro h2 {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(3.2rem, 6.4vw, 5.8rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.88;
+  margin: 0;
+  text-transform: uppercase;
+}
+.device-dispatch-copy > p:last-of-type {
+  color: #c9c1b5;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  margin: 24px 0 0;
+}
+.status-board {
+  align-self: center;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(12px, 1.2vw, 15px);
+  width: 100%;
+}
+.status-board caption,
+.agent-matrix caption {
+  caption-side: top;
+  font:
+    700 11px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.1em;
+  margin: 0 0 22px;
+  text-align: left;
+}
+.status-board caption {
+  color: #f1c1b8;
+}
+.status-board th {
+  color: #c9c1b5;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 0 16px 14px 0;
+  text-align: left;
+}
+.status-board td {
+  border-top: 1px solid #55514b;
+  overflow-wrap: anywhere;
+  padding: 16px 16px 16px 0;
+}
+.status-board tbody tr:last-child td {
+  border-bottom: 1px solid #55514b;
+}
+.status-board strong {
+  font-size: 0.88em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.status-synced {
+  color: #7ecb91;
+}
+.status-drifted {
+  color: #d778ca;
+}
+.status-attention {
+  color: #efba58;
+}
+.device-dispatch-note {
+  color: #c9c1b5;
+  font:
+    11px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  grid-column: 1 / -1;
+  margin: 0;
+  max-width: 52ch;
+}
+.agents {
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: clamp(100px, 14vw, 210px) 42px;
+}
+.agents-intro {
+  max-width: 720px;
+}
+.agents-intro > p:nth-of-type(2),
+.agents-intro > p:nth-of-type(3) {
+  color: #504b44;
+  font-size: clamp(1.05rem, 1.4vw, 1.25rem);
+  line-height: 1.5;
+  margin: 22px 0 0;
+  max-width: 540px;
+}
+.agent-matrix {
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin-top: clamp(48px, 8vw, 96px);
+  width: 100%;
+}
+.agent-matrix caption {
+  color: #5c5750;
+}
+.agent-matrix th,
+.agent-matrix td {
+  border-top: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  font-size: clamp(11px, 1.05vw, 13px);
+  padding: 16px 12px 16px 0;
+  text-align: left;
+  vertical-align: middle;
+}
+.agent-matrix thead th {
+  color: #5c5750;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.agent-matrix tbody tr:last-child th,
+.agent-matrix tbody tr:last-child td {
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+}
+.agent-matrix code {
+  font-size: inherit;
+}
+.exposure {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.agent-roster {
+  color: #5c5750;
+  font:
+    12px / 1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  margin: 28px 0 0;
+  max-width: 62ch;
+}
+
 @media (max-width: 850px) {
   .landing-header {
     padding: 0 20px;
@@ -654,6 +815,55 @@ a {
   }
   .git-cloud {
     padding: 96px 20px;
+  }
+  .devices {
+    padding: 0 20px 48px;
+  }
+  .device-dispatch {
+    display: block;
+    padding: 36px 28px;
+  }
+  .status-board {
+    margin-top: 36px;
+  }
+  .device-dispatch-note {
+    margin-top: 24px;
+  }
+  .agents {
+    padding: 96px 20px;
+  }
+  .agent-matrix thead {
+    display: none;
+  }
+  .agent-matrix,
+  .agent-matrix tbody,
+  .agent-matrix tr,
+  .agent-matrix th,
+  .agent-matrix td {
+    display: block;
+    width: 100%;
+  }
+  .agent-matrix tr {
+    border-top: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+    padding: 16px 0 8px;
+  }
+  .agent-matrix tbody tr:last-child {
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  }
+  .agent-matrix th,
+  .agent-matrix td {
+    border: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+  .agent-matrix td::before {
+    color: #5c5750;
+    content: attr(data-agent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
   .control-plane {
     display: block;
@@ -724,6 +934,21 @@ a {
   }
   .git-cloud-heading h2 {
     font-size: clamp(3.4rem, 16vw, 5.3rem);
+  }
+  .devices {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .device-dispatch {
+    padding: 32px 20px;
+  }
+  .device-dispatch h2,
+  .agents-intro h2 {
+    font-size: clamp(3.1rem, 15vw, 4.6rem);
+  }
+  .status-board th,
+  .status-board td {
+    padding-right: 8px;
   }
   .git-band,
   .cloud-plane {

@@ -55,10 +55,22 @@ try {
     !landing.includes("toolmirror migrate git") ||
     !landing.includes("Your Git credentials stay local") ||
     !landing.includes("Hosted desired state") ||
-    !landing.includes("No daemon, remote force-sync, or stored Git")
+    !landing.includes("No daemon, remote force-sync, or stored Git") ||
+    !landing.includes("See every device at a glance.") ||
+    !landing.includes("Mac Mini") ||
+    !landing.includes("AUTH_REQUIRED") ||
+    !landing.includes("DRIFTED") ||
+    !landing.includes("One skill. Many agents.") ||
+    !landing.includes("Claude Code") ||
+    !landing.includes("desired state") ||
+    !landing.includes("WebMCP") ||
+    !landing.includes("Kiro CLI") ||
+    !landing.includes("No remote force-sync.") ||
+    landing.includes("sync_device") ||
+    landing.includes("sync_all_devices")
   ) {
     throw new Error(
-      "landing Git or Cloud section did not render through workerd",
+      "landing devices and agents sections did not render through workerd",
     );
   }
 } finally {
