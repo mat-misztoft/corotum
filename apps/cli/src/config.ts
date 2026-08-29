@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { z } from "zod";
 
 import type { ToolMirrorPaths } from "./platform";
+import { SkillsStorageMigrator } from "./skills-storage-migration";
 
 const configSchema = z
   .object({
@@ -49,9 +50,12 @@ export function effectiveStoragePaths(
   };
 }
 
-/** Local config service. Storage migrations deliberately belong to later tasks. */
+/** Local configuration, including transactional canonical-store relocation. */
 export class ConfigStore {
-  constructor(private readonly paths: ToolMirrorPaths) {}
+  constructor(
+    private readonly paths: ToolMirrorPaths,
+    private readonly skillsStorageMigrator = new SkillsStorageMigrator(),
+  ) {}
 
   async list(): Promise<ToolMirrorConfig> {
     return this.load();
@@ -64,6 +68,17 @@ export class ConfigStore {
   async set(key: ConfigKey, value: unknown): Promise<ToolMirrorConfig> {
     const current = await this.load();
     const candidate = configSchema.parse({ ...current, [key]: value });
+    if (
+      key === "skillsStoragePath" &&
+      candidate.skillsStoragePath !== current.skillsStoragePath
+    ) {
+      await this.skillsStorageMigrator.migrate({
+        from: current.skillsStoragePath ?? this.paths.skillsDir,
+        to: candidate.skillsStoragePath ?? this.paths.skillsDir,
+        persist: () => writeJson(this.paths.configFile, candidate, false),
+      });
+      return candidate;
+    }
     await writeJson(this.paths.configFile, candidate, false);
     return candidate;
   }

@@ -87,8 +87,9 @@ describe("local configuration", () => {
   test("rejects invalid manual and programmatic configuration without replacing valid config", async () => {
     const paths = await temporaryPaths();
     const config = new ConfigStore(paths);
-    const written = await config.set("skillsStoragePath", "/managed-skills");
-    expect(written.skillsStoragePath).toBe("/managed-skills");
+    const managedSkills = join(paths.dataDir, "managed-skills");
+    const written = await config.set("skillsStoragePath", managedSkills);
+    expect(written.skillsStoragePath).toBe(managedSkills);
 
     await writeFile(paths.configFile, '{"schemaVersion":2}\n');
     await expect(config.list()).rejects.toThrow();
@@ -98,18 +99,20 @@ describe("local configuration", () => {
     expect(await config.list()).toEqual(written);
   });
 
-  test("uses platform defaults without moving data when a storage setting changes", async () => {
+  test("uses platform defaults and creates an empty relocated storage before changing config", async () => {
     const paths = await temporaryPaths();
     const config = new ConfigStore(paths);
+    const relocated = join(paths.dataDir, "another-store");
     expect(effectiveStoragePaths(await config.list(), paths)).toEqual({
       gitStoragePath: paths.gitDir,
       skillsStoragePath: paths.skillsDir,
     });
 
-    await config.set("skillsStoragePath", "/another-store");
+    await config.set("skillsStoragePath", relocated);
     expect(
       effectiveStoragePaths(await config.list(), paths).skillsStoragePath,
-    ).toBe("/another-store");
+    ).toBe(relocated);
+    await stat(relocated);
     await expect(stat(paths.skillsDir)).rejects.toThrow();
     expect(defaultConfig().gitStoragePath).toBeNull();
   });
