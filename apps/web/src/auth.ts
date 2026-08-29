@@ -1,11 +1,12 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { magicLink } from "better-auth/plugins/magic-link";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./db/schema";
-import type { CloudflareEmailBinding } from "./email";
+import type { EmailEnvironment, EmailService } from "./email";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
-export type AuthEnvironment = {
+export type AuthEnvironment = EmailEnvironment & {
   DB: D1Database;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
@@ -13,8 +14,6 @@ export type AuthEnvironment = {
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
-  AUTH_EMAIL_FROM?: string;
-  EMAIL?: CloudflareEmailBinding;
   TOOLMIRROR_HOSTED?: string;
   TOOLMIRROR_ENVIRONMENT?: "development" | "production";
 };
@@ -70,8 +69,23 @@ export function validateAuthConfiguration(env: Omit<AuthEnvironment, "DB">) {
   return { secret, github, google };
 }
 
+/** Better Auth consumes tokens atomically and hashes them before persistence. */
+export function createMagicLinkPlugin(emailService: EmailService) {
+  return magicLink({
+    storeToken: "hashed",
+    rateLimit: { window: 60, max: 10 },
+    async sendMagicLink({ email, url }) {
+      await emailService.sendAuthenticationEmail({
+        to: email,
+        subject: "Sign in to ToolMirror",
+        link: url,
+      });
+    },
+  });
+}
+
 /** Creates request-runtime auth because D1 is supplied by the Cloudflare Worker binding. */
-export function createAuth(env: AuthEnvironment) {
+export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
   if (!env.DB) throw new Error("Cloudflare D1 binding DB is required");
   const { secret, github, google } = validateAuthConfiguration(env);
 
@@ -79,6 +93,7 @@ export function createAuth(env: AuthEnvironment) {
     appName: "ToolMirror",
     baseURL: env.BETTER_AUTH_URL,
     secret,
+    advanced: { disableOriginCheck: false },
     database: drizzleAdapter(drizzle(env.DB, { schema }), {
       provider: "sqlite",
       schema,
@@ -88,6 +103,13 @@ export function createAuth(env: AuthEnvironment) {
       ...(github ? { github } : {}),
       ...(google ? { google } : {}),
     },
+    account: {
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["github", "google"],
+      },
+    },
+    plugins: emailService ? [createMagicLinkPlugin(emailService)] : [],
     databaseHooks: {
       user: {
         create: {
