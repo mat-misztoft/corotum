@@ -5,6 +5,10 @@ import {
   validateDesiredState,
 } from "../../../packages/core/src/index";
 import { jsonError, readJson } from "./api";
+import {
+  HostedEntitlementRequiredError,
+  requireHostedCloudAccess,
+} from "./billing";
 import { protectCloudRequest } from "./cloud-protect";
 import {
   type CloudRevision,
@@ -37,6 +41,8 @@ function envelope(
 function stateError(error: unknown) {
   if (error instanceof DeviceUnauthorizedError)
     return jsonError(error.message, 401);
+  if (error instanceof HostedEntitlementRequiredError)
+    return jsonError(error.message, 402);
   if (error instanceof WorkspaceAccessError)
     return jsonError(error.message, 404);
   if (error instanceof RevisionConflictError)
@@ -53,6 +59,7 @@ async function authenticateStateRequest(
   db: TokenDatabase,
   workspaceId: string,
   kind: "normal" | "mutation",
+  hosted: boolean,
 ) {
   const blocked = await protectCloudRequest(request, db, {
     kind,
@@ -64,6 +71,7 @@ async function authenticateStateRequest(
   try {
     const device = await authenticateDeviceToken(db, token);
     await requireDeviceWorkspaceAccess(db, device.deviceId, workspaceId);
+    await requireHostedCloudAccess(db, device.userId, hosted);
     return { device };
   } catch (error) {
     return { error: stateError(error) };
@@ -83,12 +91,14 @@ export async function handleGetWorkspaceState(
   request: Request,
   db: TokenDatabase,
   workspaceId: string,
+  hosted = false,
 ) {
   const authenticated = await authenticateStateRequest(
     request,
     db,
     workspaceId,
     "normal",
+    hosted,
   );
   if ("error" in authenticated) return authenticated.error;
   try {
@@ -110,12 +120,14 @@ export async function handlePutWorkspaceState(
   request: Request,
   db: TokenDatabase,
   workspaceId: string,
+  hosted = false,
 ) {
   const authenticated = await authenticateStateRequest(
     request,
     db,
     workspaceId,
     "mutation",
+    hosted,
   );
   if ("error" in authenticated) return authenticated.error;
   const body = await readJson(request);

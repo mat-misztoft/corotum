@@ -1,11 +1,19 @@
 import { type AuthEnvironment, createAuth } from "./auth";
 
-export async function requireUserId(request: Request, env: AuthEnvironment) {
+export async function requireSession(request: Request, env: AuthEnvironment) {
   const session = await createAuth(env).api.getSession({
     headers: request.headers,
   });
   if (!session) return null;
-  return session.user.id;
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+  };
+}
+
+export async function requireUserId(request: Request, env: AuthEnvironment) {
+  return (await requireSession(request, env))?.id ?? null;
 }
 
 /** Reject cross-origin browser POSTs while allowing CLI requests without an Origin header. */

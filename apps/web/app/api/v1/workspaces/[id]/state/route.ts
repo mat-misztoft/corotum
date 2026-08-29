@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import type { AuthEnvironment } from "../../../../../../src/auth";
+import { isHostedCloud } from "../../../../../../src/billing";
 import {
   handleGetWorkspaceState,
   handlePutWorkspaceState,
@@ -18,6 +19,7 @@ export async function GET(
     request,
     workerEnv.DB as unknown as TokenDatabase,
     id,
+    isHostedCloud(workerEnv),
   );
 }
 
@@ -30,5 +32,6 @@ export async function PUT(
     request,
     workerEnv.DB as unknown as TokenDatabase,
     id,
+    isHostedCloud(workerEnv),
   );
 }

@@ -57,6 +57,13 @@
       "when": 1787990233580,
       "tag": "0007_friendly_terror",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787992146033,
+      "tag": "0008_stiff_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

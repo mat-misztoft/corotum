@@ -245,6 +245,55 @@ export const deviceTokens = sqliteTable("device_tokens", {
   revokedAt: integer("revoked_at", { mode: "timestamp" }),
 });
 
+export const subscriptions = sqliteTable(
+  "subscriptions",
+  {
+    id: text().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    provider: text().notNull(),
+    providerCustomerId: text("provider_customer_id").notNull(),
+    providerSubscriptionId: text("provider_subscription_id").notNull(),
+    billingInterval: text("billing_interval").notNull(),
+    status: text().notNull(),
+    currentPeriodStart: integer("current_period_start", {
+      mode: "timestamp",
+    }),
+    currentPeriodEnd: integer("current_period_end", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("subscriptions_provider_subscription_unique").on(
+      table.provider,
+      table.providerSubscriptionId,
+    ),
+    check(
+      "subscriptions_billing_interval_check",
+      sql`${table.billingInterval} IN ('month', 'year')`,
+    ),
+  ],
+);
+
+export const billingEvents = sqliteTable(
+  "billing_events",
+  {
+    id: text().primaryKey(),
+    provider: text().notNull(),
+    providerEventId: text("provider_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    processedAt: integer("processed_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("billing_events_provider_event_unique").on(
+      table.provider,
+      table.providerEventId,
+    ),
+  ],
+);
+
 export const idempotencyRecords = sqliteTable("idempotency_records", {
   key: text().primaryKey(),
   actorType: text("actor_type").notNull(),
