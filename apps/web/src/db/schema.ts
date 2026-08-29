@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   integer,
   sqliteTable,
   text,
@@ -131,6 +133,76 @@ export const workspaceSkills = sqliteTable(
       table.workspaceId,
       table.source,
       table.skillName,
+    ),
+  ],
+);
+
+export const devices = sqliteTable("devices", {
+  id: text().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text().notNull(),
+  platform: text().notNull(),
+  architecture: text().notNull(),
+  cliVersion: text("cli_version").notNull(),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  revokedAt: integer("revoked_at", { mode: "timestamp" }),
+});
+
+/** Future-ready memberships; v0.1 permits one active workspace per device. */
+export const deviceWorkspaces = sqliteTable(
+  "device_workspaces",
+  {
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => devices.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    appliedRevisionSequence: integer("applied_revision_sequence")
+      .notNull()
+      .default(0),
+    syncStatus: text("sync_status").notNull().default("NEVER_SYNCED"),
+    lastSyncAt: integer("last_sync_at", { mode: "timestamp" }),
+    lastErrorCode: text("last_error_code"),
+    lastErrorMessage: text("last_error_message"),
+  },
+  (table) => [
+    uniqueIndex("device_workspaces_device_workspace_unique").on(
+      table.deviceId,
+      table.workspaceId,
+    ),
+    uniqueIndex("device_workspaces_one_active_workspace_unique")
+      .on(table.deviceId)
+      .where(sql`${table.isActive} = 1`),
+  ],
+);
+
+export const deviceAgents = sqliteTable(
+  "device_agents",
+  {
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => devices.id, { onDelete: "cascade" }),
+    agentId: text("agent_id").notNull(),
+    status: text().notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("device_agents_device_agent_unique").on(
+      table.deviceId,
+      table.agentId,
+    ),
+    check(
+      "device_agents_agent_id_check",
+      sql`${table.agentId} IN ('codex', 'claude-code', 'pi', 'gemini-cli', 'opencode', 'cursor', 'windsurf', 'cline', 'roo-code', 'github-copilot', 'kiro-cli')`,
+    ),
+    check(
+      "device_agents_status_check",
+      sql`${table.status} IN ('DETECTED', 'ENABLED', 'DISABLED')`,
     ),
   ],
 );
