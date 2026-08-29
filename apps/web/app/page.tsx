@@ -1,3 +1,5 @@
+import { FlowStory } from "./landing-flow-story";
+
 const deviceRows = [
   { skill: "frontend-design", device: "Mac Mini", status: "SYNCED" },
   { skill: "code-review", device: "MacBook", status: "BEHIND" },
@@ -25,9 +27,32 @@ const moreAgents =
   "OpenCode · Windsurf · Cline · Roo Code · GitHub Copilot · Kiro CLI";
 
 function statusClass(status: string) {
-  if (status === "SYNCED") return "status-synced";
+  if (status === "SYNCED" || status === "LOCKED") return "status-synced";
   if (status === "DRIFTED") return "status-drifted";
   return "status-attention";
+}
+
+function lineKind(status: string) {
+  if (status === "SYNCED" || status === "LOCKED") return "synced";
+  if (status === "DRIFTED") return "drifted";
+  return "pending";
+}
+
+function statusMark(status: string) {
+  if (status === "SYNCED" || status === "LOCKED") return "✓";
+  if (status === "DRIFTED") return "≠";
+  return "!";
+}
+
+function StatusLabel({ status }: { status: string }) {
+  return (
+    <strong className={statusClass(status)}>
+      <span className="status-mark" aria-hidden="true">
+        {statusMark(status)}
+      </span>
+      {status}
+    </strong>
+  );
 }
 
 export default function Home() {
@@ -81,9 +106,13 @@ export default function Home() {
             {deviceRows.map(({ skill, device, status }) => (
               <li key={skill}>
                 <code>{skill}</code>
-                <span className="state-line" aria-hidden="true" />
+                <span
+                  className="state-line"
+                  data-line={lineKind(status)}
+                  aria-hidden="true"
+                />
                 <span>
-                  {device} <strong>{status}</strong>
+                  {device} <StatusLabel status={status} />
                 </span>
               </li>
             ))}
@@ -117,20 +146,20 @@ export default function Home() {
           </div>
           <div className="machine-room-routes" aria-hidden="true" />
           <ol className="machine-room-list">
-            <li>
+            <li data-line="synced">
               <span>Mac Mini</span>
               <code>frontend-design@a19c</code>
-              <strong>LOCKED</strong>
+              <StatusLabel status="LOCKED" />
             </li>
-            <li>
+            <li data-line="pending">
               <span>MacBook</span>
               <code>frontend-design@18f2</code>
-              <strong>BEHIND</strong>
+              <StatusLabel status="BEHIND" />
             </li>
-            <li>
+            <li data-line="drifted">
               <span>VPS</span>
               <code>frontend-design@local</code>
-              <strong>DRIFTED</strong>
+              <StatusLabel status="DRIFTED" />
             </li>
           </ol>
           <p className="machine-room-result">
@@ -149,7 +178,7 @@ export default function Home() {
             exists, and applies only what needs to change.
           </p>
         </div>
-        <div className="flow-story">
+        <FlowStory>
           <div className="flow-panel">
             <p className="flow-panel-label">LOCKED OPERATION</p>
             <ol className="flow-sequence">
@@ -225,7 +254,7 @@ export default function Home() {
               </p>
             </li>
           </ol>
-        </div>
+        </FlowStory>
       </section>
 
       <section
@@ -309,9 +338,7 @@ export default function Home() {
                   <td>{row.device}</td>
                   <td>{row.agent}</td>
                   <td>
-                    <strong className={statusClass(row.status)}>
-                      {row.status}
-                    </strong>
+                    <StatusLabel status={row.status} />
                   </td>
                 </tr>
               ))}

@@ -174,9 +174,22 @@ a {
   background: var(--vermillion);
   bottom: 76px;
   left: 50%;
+  overflow: hidden;
   position: absolute;
   top: 68px;
   width: 3px;
+}
+.board-axis::after,
+.machine-room-routes::after {
+  animation: axis-flow 3.2s linear infinite;
+  background: var(--paper);
+  content: "";
+  height: 18%;
+  left: 0;
+  opacity: 0.7;
+  position: absolute;
+  top: 0;
+  width: 100%;
 }
 .reconcile-label {
   background: var(--machine);
@@ -212,15 +225,34 @@ a {
 }
 .state-line {
   border-top: 1px solid #c9c1b5;
+  position: relative;
+}
+.state-line[data-line="synced"] {
+  border-top-color: #7ecb91;
+  border-top-style: solid;
+}
+.state-line[data-line="pending"] {
+  border-top-color: #efba58;
+  border-top-style: dashed;
+}
+.state-line[data-line="drifted"] {
+  border-top-color: #d778ca;
+  border-top-style: dotted;
+}
+.state-line[data-line="pending"]::after {
+  animation: reconcile-travel 2.4s linear infinite;
+  background: var(--vermillion);
+  content: "";
+  height: 5px;
+  left: 0;
+  position: absolute;
+  top: -3px;
+  width: 18%;
 }
 .device-list strong {
-  color: #efba58;
   font-size: 0.88em;
   font-weight: 700;
   margin-left: 8px;
-}
-.device-list li:first-child strong {
-  color: #7ecb91;
 }
 .board-note {
   bottom: 28px;
@@ -286,6 +318,7 @@ a {
   background: var(--vermillion);
   bottom: 100px;
   left: 54%;
+  overflow: hidden;
   position: absolute;
   top: 70px;
   width: 3px;
@@ -310,14 +343,13 @@ a {
   border-bottom: 1px solid #55514b;
 }
 .machine-room-list strong {
-  color: #d778ca;
   font-size: 0.85em;
 }
-.machine-room-list li:first-child strong {
-  color: #7ecb91;
+.machine-room-list li[data-line="pending"] {
+  border-top-style: dashed;
 }
-.machine-room-list li:nth-child(2) strong {
-  color: #efba58;
+.machine-room-list li[data-line="drifted"] {
+  border-top-style: dotted;
 }
 .machine-room-result {
   bottom: 30px;
@@ -403,6 +435,19 @@ a {
 .flow-sequence li:last-child {
   border-bottom: 1px solid #55514b;
   color: #7ecb91;
+}
+.flow-story[data-motion="full"] .flow-sequence li {
+  opacity: 0.42;
+}
+.flow-story[data-motion="full"] .flow-sequence li[aria-current="step"] {
+  color: var(--paper);
+  opacity: 1;
+}
+.flow-story[data-motion="full"] .flow-sequence li[aria-current="step"] strong {
+  color: var(--vermillion);
+}
+.flow-story[data-motion="full"] .flow-detail-list li[data-active] {
+  border-top-color: var(--ink);
 }
 .flow-sequence strong {
   color: #f1c1b8;
@@ -710,6 +755,10 @@ a {
 }
 .status-attention {
   color: #efba58;
+}
+.status-mark {
+  font-weight: 700;
+  margin-right: 0.35em;
 }
 .device-dispatch-note {
   color: #c9c1b5;
@@ -1058,12 +1107,37 @@ a {
   }
 }
 
+@keyframes reconcile-travel {
+  from {
+    left: 0;
+  }
+  to {
+    left: 82%;
+  }
+}
+@keyframes axis-flow {
+  from {
+    top: -18%;
+  }
+  to {
+    top: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto;
-    transition-duration: 0.01ms;
+  .board-axis::after,
+  .machine-room-routes::after,
+  .state-line[data-line="pending"]::after {
+    animation: none;
+  }
+  .button {
+    transition: none;
+  }
+  .button:active {
+    transform: none;
+  }
+  .flow-story[data-motion="full"] .flow-sequence li {
+    opacity: 1;
   }
 }
 

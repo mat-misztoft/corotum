@@ -44,3 +44,28 @@ test("landing keeps keyboard focus and overflow-safe diagrams", () => {
     "<caption>SKILL EXPOSURE / SUPPORTED AGENTS</caption>",
   );
 });
+
+test("landing motion stays semantic and readable without color or animation", async () => {
+  const motion = await Bun.file(
+    `${import.meta.dir}/landing-flow-story.tsx`,
+  ).text();
+  expect(page).toContain("data-line={lineKind(status)}");
+  expect(page).toContain("statusMark");
+  expect(page).toContain("ADD");
+  expect(page).toContain("LOCK");
+  expect(page).toContain("DIFF");
+  expect(page).toContain("RECONCILE");
+  expect(page).toContain("SYNCED");
+  expect(page).toContain(
+    "The complete sequence remains visible without animation.",
+  );
+  expect(motion).toContain("prefers-reduced-motion: reduce");
+  expect(motion).toContain("IntersectionObserver");
+  expect(styles).toContain("@keyframes reconcile-travel");
+  expect(styles).toContain('[data-line="synced"]');
+  expect(styles).toContain('[data-line="pending"]');
+  expect(styles).toContain('[data-line="drifted"]');
+  expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+  expect(styles).toContain("animation: none");
+  expect(styles).toContain(".status-mark");
+});
