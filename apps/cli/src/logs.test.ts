@@ -46,6 +46,17 @@ describe("sanitized logs", () => {
     expect(output).toContain("[REDACTED]");
   });
 
+  test("rejects control characters in event names to block log injection", async () => {
+    const directory = await logDirectory();
+    const logger = new SanitizedLogger(directory);
+    await logger.write('sync.failed\n{"token":"line-inject"}', {
+      message: "ok",
+    });
+    const output = await readFile(join(directory, "toolmirror.log"), "utf8");
+    expect(output).not.toContain("line-inject");
+    expect(output).toContain("invalid.event");
+  });
+
   test("keeps at most five rotated files at the configured size", async () => {
     const directory = await logDirectory();
     const maxBytes = 256;

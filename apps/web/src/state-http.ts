@@ -280,6 +280,16 @@ export async function handlePutWorkspaceState(
 
   try {
     const state = validateDesiredState(payload.state as never, "cloud");
+    const sources = [
+      ...state.manifest.skills.map((skill) => skill.source),
+      ...state.lockfile.skills.flatMap((skill) => [
+        skill.source,
+        skill.repository,
+      ]),
+    ];
+    if (sources.some((value) => containsEmbeddedCredentials(value))) {
+      return jsonError("Repository must not include credentials", 400);
+    }
     const revision = await mutateDesiredState(db as never, {
       workspaceId,
       userId: authenticated.device.userId,

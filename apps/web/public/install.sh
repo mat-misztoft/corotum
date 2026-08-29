@@ -147,6 +147,8 @@ curl -fsSL "$RELEASE_BASE/releases/latest.json" -o "$TMP/latest.json" ||
 
 version=$(json_string "$TMP/latest.json" version)
 [ -n "$version" ] || die "latest.json is missing version."
+printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+  die "latest.json version is invalid."
 grep -F "\"$target\"" "$TMP/latest.json" >/dev/null 2>&1 ||
   die "latest.json is missing $target."
 

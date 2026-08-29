@@ -80,6 +80,9 @@ try {
   if (-not $latest.version) {
     throw "latest.json is missing version."
   }
+  if ($latest.version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "latest.json version is invalid."
+  }
   $artifact = $latest.artifacts.$target
   if (-not $artifact) {
     throw "latest.json is missing $target."

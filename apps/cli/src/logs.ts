@@ -28,7 +28,7 @@ export class SanitizedLogger {
   ): Promise<void> {
     const entry = JSON.stringify({
       timestamp: new Date().toISOString(),
-      event,
+      event: sanitizeEventName(event),
       details: sanitizeLogValue(details),
     });
     const maxBytes = this.options.maxBytes ?? LOG_FILE_MAX_BYTES;
@@ -50,6 +50,11 @@ export class SanitizedLogger {
     }
     await renameIfPresent(file, `${file}.1`);
   }
+}
+
+function sanitizeEventName(event: string): string {
+  if (/^[A-Za-z0-9._-]{1,64}$/.test(event)) return event;
+  return "invalid.event";
 }
 
 /** Removes secrets and content that local logs must never retain. */

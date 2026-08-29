@@ -284,6 +284,8 @@ describe("official installers", () => {
     expect(ps1).toContain("--version");
     expect(ps1).toContain("Existing install was not replaced");
     expect(ps1).toContain("Windows arm64 is not supported");
+    expect(sh).toContain("latest.json version is invalid");
+    expect(ps1).toContain("latest.json version is invalid");
   });
 
   test("selects the matching artifact and installs per-user on every supported OS/arch fixture", async () => {
@@ -453,5 +455,38 @@ describe("official installers", () => {
     expect(second.code).toBe(0);
     expect(second.pathEntries).toEqual([join(windowsDir, "ToolMirror", "bin")]);
     expect(second.pathEntries).toEqual(first.pathEntries);
+  });
+
+  test("rejects a path-escaping latest.json version before downloading an archive", async () => {
+    const files = await releaseLayout(
+      "0.1.0",
+      join(work, "archives-evil-version"),
+    );
+    const latest = JSON.parse(
+      new TextDecoder().decode(files.get("releases/latest.json")),
+    ) as ReturnType<typeof buildLatestJson>;
+    files.set(
+      "releases/latest.json",
+      new TextEncoder().encode(
+        `${JSON.stringify({ ...latest, version: "0.1.0/../../secret" }, null, 2)}\n`,
+      ),
+    );
+    const home = join(work, "evil-version-home");
+    await mkdir(join(home, ".local/bin"), { recursive: true });
+    const dest = join(home, ".local/bin/toolmirror");
+    await writeFile(dest, "old-binary", { encoding: "utf8" });
+    const server = startReleaseServer(files);
+    try {
+      const result = await runInstallSh(home, server.origin, "darwin", "arm64");
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toContain("version is invalid");
+      expect(await readFile(dest, "utf8")).toBe("old-binary");
+      expect(server.requested.some((path) => path.includes(".."))).toBe(false);
+      expect(server.requested.some((path) => path.endsWith(".tar.gz"))).toBe(
+        false,
+      );
+    } finally {
+      server.stop();
+    }
   });
 });
