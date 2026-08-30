@@ -348,6 +348,127 @@ export function DashboardSurface({ view }: { view: View }) {
       </DashboardShell>
     );
 
+  if (view === "skills" || view === "devices")
+    return (
+      <DashboardShell view={view}>
+        <header className="dashboard-page-header">
+          <p className="dashboard-eyebrow">{data.workspace.name}</p>
+          <h1>{titles[view]}</h1>
+          <p className="dashboard-revision">
+            Revision {data.revision.sequence}
+          </p>
+          <p className="dashboard-revision">
+            {data.revision.id
+              ? data.revision.id.slice(0, 12)
+              : "not yet created"}
+          </p>
+        </header>
+        {view === "skills" && (
+          <section className="dashboard-panel" aria-labelledby="desired-skills">
+            <h2 id="desired-skills">Desired skills</h2>
+            {pending.length > 0 && (
+              <p className="dashboard-pending">
+                <StatusLabel status="PENDING_RESOLUTION" />
+                {pending.map((skill) => skill.skill).join(", ")} must be
+                resolved by a device with repository access. No remote sync is
+                requested.
+              </p>
+            )}
+            {data.skills.length === 0 ? (
+              <p className="dashboard-empty">
+                No managed skills yet.
+                <br />
+                <span>
+                  Add skills from the CLI with <code>toolmirror add</code>.
+                </span>
+              </p>
+            ) : (
+              <div className="dashboard-table-wrap">
+                <table className="dashboard-skills">
+                  <caption>Desired skills in this workspace</caption>
+                  <thead>
+                    <tr>
+                      <th>Skill</th>
+                      <th>Ref</th>
+                      <th>Resolution</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.skills.map((skill) => (
+                      <tr key={skill.id}>
+                        <td data-label="Skill">{skill.skill}</td>
+                        <td data-label="Ref">
+                          <code>{skill.ref}</code>
+                        </td>
+                        <td data-label="Resolution">
+                          <StatusLabel status={skill.resolutionStatus} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+        {view === "devices" && (
+          <section className="dashboard-panel" aria-labelledby="device-reports">
+            <h2 id="device-reports">Device reports</h2>
+            {data.devices.length === 0 ? (
+              <p className="dashboard-empty">
+                No paired devices have reported yet.
+                <br />
+                <span>
+                  Pair a device from the CLI with <code>toolmirror login</code>.
+                </span>
+              </p>
+            ) : (
+              data.devices.map((device) => (
+                <article className="dashboard-device" key={device.id}>
+                  <header>
+                    <h3>{device.name}</h3>
+                    <StatusLabel status={device.syncStatus} />
+                  </header>
+                  <p className="dashboard-device-meta">
+                    {device.platform}/{device.architecture}
+                    <span>
+                      applied revision {device.appliedRevisionSequence}
+                    </span>
+                  </p>
+                  {device.targets.length === 0 ? (
+                    <p className="dashboard-target-empty">No target report.</p>
+                  ) : (
+                    <ul className="dashboard-targets">
+                      {device.targets.map((target) => (
+                        <li key={`${target.skillId}-${target.agentId}`}>
+                          <code>{target.skillId}</code>
+                          <code>{target.agentId}</code>
+                          <StatusLabel status={target.status} />
+                          {target.errorCode && (
+                            <code className="dashboard-error-code">
+                              ({target.errorCode})
+                            </code>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <button
+                    className="dashboard-secondary-button"
+                    type="button"
+                    disabled={action === device.id}
+                    onClick={() => revokeDevice(device.id)}
+                  >
+                    {action === device.id ? "Revoking…" : "Revoke device"}
+                  </button>
+                </article>
+              ))
+            )}
+          </section>
+        )}
+      </DashboardShell>
+    );
+
   return (
     <DashboardShell view={view}>
       <div className="dashboard-legacy">
@@ -361,77 +482,6 @@ export function DashboardSurface({ view }: { view: View }) {
               : " · not yet created"}
           </p>
         </header>
-        {view === "skills" && (
-          <section>
-            <h2>Desired skills</h2>
-            {data.skills.length === 0 ? (
-              <p>No managed skills yet.</p>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Skill</th>
-                    <th>Ref</th>
-                    <th>Resolution</th>
-                    <th>Lock</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.skills.map((skill) => (
-                    <tr key={skill.id}>
-                      <td>{skill.skill}</td>
-                      <td>
-                        <code>{skill.ref}</code>
-                      </td>
-                      <td>{skill.resolutionStatus}</td>
-                      <td>{skill.locked ? "LOCKED" : "PENDING_RESOLUTION"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-        )}
-        {view === "devices" && (
-          <section>
-            <h2>Device reports</h2>
-            {data.devices.length === 0 ? (
-              <p>No paired devices have reported yet.</p>
-            ) : (
-              data.devices.map((device) => (
-                <article className="device" key={device.id}>
-                  <h3>
-                    {device.name} <span>{device.syncStatus}</span>
-                  </h3>
-                  <p>
-                    {device.platform}/{device.architecture} · applied revision{" "}
-                    {device.appliedRevisionSequence}
-                  </p>
-                  {device.targets.length === 0 ? (
-                    <p>No target report.</p>
-                  ) : (
-                    <ul>
-                      {device.targets.map((target) => (
-                        <li key={`${target.skillId}-${target.agentId}`}>
-                          {target.skillId} · {target.agentId} ·{" "}
-                          <strong>{target.status}</strong>
-                          {target.errorCode ? ` (${target.errorCode})` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <button
-                    type="button"
-                    disabled={action === device.id}
-                    onClick={() => revokeDevice(device.id)}
-                  >
-                    {action === device.id ? "Revoking…" : "Revoke device"}
-                  </button>
-                </article>
-              ))
-            )}
-          </section>
-        )}
         {view === "billing" && settings && (
           <section>
             <h2>ToolMirror Cloud</h2>
