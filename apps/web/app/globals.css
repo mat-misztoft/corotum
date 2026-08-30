@@ -1231,7 +1231,7 @@ a {
 .dashboard-brand-rule { background: var(--vermillion); height: 4px; }
 .dashboard-nav { align-items: center; background: var(--paper); border-bottom: 1px solid color-mix(in srgb, var(--ink) 26%, transparent); display: flex; gap: 28px; margin: 0 auto; min-height: 68px; padding: 0 42px; position: sticky; top: 0; z-index: 2; }
 .dashboard-nav .wordmark { color: var(--ink); flex: 0 0 auto; }
-.dashboard-nav-links { display: flex; gap: clamp(20px, 2vw, 28px); margin-left: auto; white-space: nowrap; }
+.dashboard-nav-links { display: flex; flex: 1 1 auto; gap: clamp(20px, 2vw, 28px); justify-content: flex-end; margin-left: auto; min-width: 0; white-space: nowrap; }
 .dashboard-nav a { color: var(--graphite); font-size: 14px; font-weight: 700; text-decoration: none; }
 .dashboard-nav a:hover { color: var(--ink); }
 .dashboard-nav a[aria-current="page"] { border-bottom: 2px solid var(--vermillion); color: var(--ink); font-weight: 800; padding: 24px 0 22px; }
@@ -1300,7 +1300,7 @@ a {
 
 @media (max-width: 850px) {
   .dashboard-nav { gap: 20px; padding: 0 20px; }
-  .dashboard-nav-links { margin-left: 0; overflow-x: auto; }
+  .dashboard-nav-links { justify-content: flex-start; margin-left: 0; overflow-x: auto; }
   .dashboard-content { padding-left: 20px; padding-right: 20px; }
   .dashboard-panel { padding: 16px; }
   .dashboard-skills { min-width: 0; }
