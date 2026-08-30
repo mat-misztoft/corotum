@@ -60,8 +60,10 @@ a {
 }
 .landing-header nav {
   display: flex;
-  gap: clamp(14px, 2vw, 30px);
+  flex: 1 1 auto;
   font-size: 13px;
+  gap: clamp(14px, 2vw, 30px);
+  min-width: 0;
 }
 .landing-header nav a {
   text-underline-offset: 4px;

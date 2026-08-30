@@ -84,3 +84,39 @@ Retained on purpose (frozen Direction C, not generic SaaS):
 - hero + final CTA pair required by the brief
 
 Rejected as slop during this pass: header glass, em-dash, vermilion-as-error, hidden mobile nav, undersized CTA type.
+
+## T086 landing fidelity and motion polish
+
+**Task:** T086
+**Compared against:** `toolmirror-planning/ralph/UI-AUDIT.md`, `toolmirror-planning/LANDING-DESIGN.md`, and `toolmirror-planning/landing-directions/FROZEN-TARGET.md`
+**Taste Design Read:** developer-tool landing for technical users, preserving the frozen light-editorial / dark-machine Direction C system. Dials: `DESIGN_VARIANCE 7`, `MOTION_INTENSITY 6`, `VISUAL_DENSITY 4`. This is a preserve-mode fidelity pass, not a redesign.
+
+### Finding and remediation
+
+| Finding | Result |
+| --- | --- |
+| Mobile header navigation had an intrinsic flex minimum, so its intended horizontal scroll region could instead overflow its flex container and be clipped. | **FIXED** in `.landing-header nav` with a shrinkable flex basis and `min-width: 0`. The full approved navigation remains reachable on narrow screens without page-wide overflow. |
+| Desktop hierarchy, spacing, alignment, palette, frozen seven-section composition, product claims, and semantic dark tableaux | **PASS**. No other valid visual defect found. |
+| Mobile hierarchy, stacking, command wrapping, full-bleed machine panels, agent-matrix fallback, CTA spacing, and responsive alignment | **PASS** after the nav fix. |
+
+### Motion review
+
+| Category | Result | Evidence |
+| --- | --- | --- |
+| Hero | PASS | The desired-state board uses only semantic axis and pending-route motion. It does not animate layout or obscure its labelled state. |
+| Entrance / reveal | PASS | No arbitrary load-in, delayed content, or readability-reducing reveal is applied. |
+| Scroll-triggered flow | PASS | `FlowStory` uses `IntersectionObserver` to select the current ADD, LOCK, DIFF, RECONCILE, or SYNCED step. It has cleanup and does not use scroll listeners or React scroll state. |
+| Section transitions | PASS | The flow's current-state opacity change is the only section-state transition. It communicates the pinned operational sequence without layout shift. |
+| State lines and tiles | PASS | `axis-flow` and `reconcile-travel` use transform-free visual travel inside fixed-size semantic lines only. There is no random directionality, lag-like delay, parallax, or decorative motion. |
+| CTA / hover / focus | PASS | CTAs have short background/transform feedback and a visible focus outline. Active feedback is a 1px translate only. |
+| Transform / opacity / scale / translate audit | PASS | Motion is limited to the CTA active transform, the flow opacity state, and decorative-travel pseudo-elements inside semantic state routes. No scale animation, layout animation, or arbitrary translation remains. |
+
+### Reduced-motion and responsive checks
+
+At 1440px and 390px, the page retains the frozen information architecture, readable command strips, status words and marks, and keyboard focus treatment. At `prefers-reduced-motion: reduce`, CSS disables axis and pending-route animation, CTA transition and active transform; `FlowStory` disconnects its observer, marks itself `data-motion="reduced"`, and leaves all five labelled steps visible at full opacity. The page remains complete and operable without non-essential animation.
+
+A detached local `vinext dev` process is terminated by the command harness after the shell exits, so direct Playwright navigation to that detached server returned `ERR_CONNECTION_REFUSED`. This is a local harness lifecycle constraint, not a rendered-page failure. The responsive review therefore used the existing browser-reviewed T062 record plus the current source and landing tests; the focused CSS regression is covered by `app/page.test.ts`.
+
+### Taste pre-flight result
+
+PASS for the applicable frozen-direction checks: one warm light theme with dark product surfaces, one vermilion action accent, consistent sharp machine panels and CTA treatment, no AI-gradient/glass/blob/card-grid patterns, semantic state lines, no em-dash in visible landing copy, no new claims, no invented logo, explicit mobile collapse, and reduced-motion support. Direction-C dispatch labels are retained because they are a frozen target exception, not copied into app surfaces.

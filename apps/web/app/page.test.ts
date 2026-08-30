@@ -44,6 +44,8 @@ test("landing login and Cloud CTAs go to /sign-in", () => {
 test("landing keeps keyboard focus and overflow-safe diagrams", () => {
   expect(styles).toContain(".landing a:focus-visible");
   expect(styles).toContain("overflow-x: clip");
+  expect(styles).toContain(".landing-header nav");
+  expect(styles).toContain("min-width: 0");
   expect(styles).toContain("user-select: all");
   expect(page).toContain('aria-labelledby="dispatch-heading"');
   expect(page).toContain("<caption>TARGET STATUS / AFTER CLI SYNC</caption>");
