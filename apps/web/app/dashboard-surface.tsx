@@ -52,14 +52,15 @@ const navItems: { view: View; href: string; label: string }[] = [
 ];
 
 function statusClass(status: string) {
-  if (status === "SYNCED" || status === "LOCKED") return "status-synced";
+  if (status === "SYNCED" || status === "LOCKED" || status === "ACTIVE")
+    return "status-synced";
   if (status === "DRIFTED") return "status-drifted";
   if (status === "ERROR" || status === "AUTH_REQUIRED") return "status-error";
   return "status-attention";
 }
 
 function statusMark(status: string) {
-  return status === "SYNCED" || status === "LOCKED"
+  return status === "SYNCED" || status === "LOCKED" || status === "ACTIVE"
     ? "✓"
     : status === "DRIFTED"
       ? "≠"
@@ -150,7 +151,7 @@ export function DashboardSurface({ view }: { view: View }) {
         else setError(body.error ?? "Unable to load dashboard");
       })
       .catch(() => setError("Unable to load dashboard"));
-    if (view === "billing" || view === "settings")
+    if (view === "billing")
       fetch("/api/v1/dashboard/settings")
         .then(async (response) => {
           if (response.status === 401) {
@@ -199,7 +200,7 @@ export function DashboardSurface({ view }: { view: View }) {
     path: "checkout" | "portal",
     interval?: "month" | "year",
   ) {
-    setAction(path);
+    setAction(interval ? `${path}-${interval}` : path);
     try {
       const response = await fetch(`/api/v1/billing/${path}`, {
         method: "POST",
@@ -469,86 +470,147 @@ export function DashboardSurface({ view }: { view: View }) {
       </DashboardShell>
     );
 
-  return (
-    <DashboardShell view={view}>
-      <div className="dashboard-legacy">
-        <header>
-          <p className="eyebrow">{data.workspace.name}</p>
-          <h1>{titles[view]}</h1>
-          <p>
+  if (view === "billing")
+    return (
+      <DashboardShell view={view}>
+        <header className="dashboard-page-header">
+          <p className="dashboard-eyebrow">{data.workspace.name}</p>
+          <h1>Billing</h1>
+          <p className="dashboard-revision">
             Revision {data.revision.sequence}
+          </p>
+          <p className="dashboard-revision">
             {data.revision.id
-              ? ` · ${data.revision.id.slice(0, 12)}`
-              : " · not yet created"}
+              ? data.revision.id.slice(0, 12)
+              : "not yet created"}
           </p>
         </header>
-        {view === "billing" && settings && (
-          <section>
-            <h2>ToolMirror Cloud</h2>
+        {!settings ? (
+          <Loading />
+        ) : (
+          <section
+            className="dashboard-panel dashboard-billing-panel"
+            aria-labelledby="billing-title"
+          >
+            <h2 id="billing-title">ToolMirror Cloud</h2>
             {settings.hosted ? (
               <>
-                {settings.subscription ? (
-                  <p>
-                    Current subscription:{" "}
-                    <strong>{settings.subscription.status}</strong> ·{" "}
-                    {settings.subscription.interval === "month"
-                      ? "$5.99/month"
-                      : "$59.90/year"}
-                    {settings.subscription.currentPeriodEnd
-                      ? ` · renews ${new Date(settings.subscription.currentPeriodEnd).toLocaleDateString()}`
-                      : ""}
-                  </p>
-                ) : (
-                  <p>No active Cloud subscription.</p>
-                )}
-                <button
-                  type="button"
-                  disabled={action === "checkout"}
-                  onClick={() => billingAction("checkout", "month")}
+                <div className="dashboard-billing-summary">
+                  {settings.subscription ? (
+                    <>
+                      <p className="dashboard-billing-label">
+                        Current subscription
+                      </p>
+                      <p className="dashboard-billing-status">
+                        <StatusLabel
+                          status={settings.subscription.status.toUpperCase()}
+                        />
+                        <span>
+                          {settings.subscription.interval === "month"
+                            ? "$5.99/month"
+                            : "$59.90/year"}
+                        </span>
+                      </p>
+                      {settings.subscription.currentPeriodEnd && (
+                        <p className="dashboard-billing-note">
+                          Renews{" "}
+                          {new Date(
+                            settings.subscription.currentPeriodEnd,
+                          ).toLocaleDateString()}
+                          .
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="dashboard-billing-label">Subscription</p>
+                      <p className="dashboard-billing-empty">
+                        No active Cloud subscription.
+                      </p>
+                    </>
+                  )}
+                </div>
+                <fieldset
+                  className="dashboard-billing-actions"
+                  aria-label="Billing actions"
                 >
-                  Start monthly · $5.99
-                </button>
-                <button
-                  type="button"
-                  disabled={action === "checkout"}
-                  onClick={() => billingAction("checkout", "year")}
-                >
-                  Start annual · $59.90
-                </button>
-                {settings.subscription && (
                   <button
+                    className="dashboard-primary-button"
                     type="button"
-                    disabled={action === "portal"}
-                    onClick={() => billingAction("portal")}
+                    disabled={action !== null}
+                    onClick={() => billingAction("checkout", "month")}
                   >
-                    {action === "portal" ? "Opening…" : "Manage subscription"}
+                    {action === "checkout-month"
+                      ? "Opening monthly checkout…"
+                      : "Start monthly - $5.99"}
                   </button>
-                )}
+                  <button
+                    className="dashboard-secondary-button"
+                    type="button"
+                    disabled={action !== null}
+                    onClick={() => billingAction("checkout", "year")}
+                  >
+                    {action === "checkout-year"
+                      ? "Opening annual checkout…"
+                      : "Start annual - $59.90"}
+                  </button>
+                  {settings.subscription && (
+                    <button
+                      className="dashboard-secondary-button"
+                      type="button"
+                      disabled={action !== null}
+                      onClick={() => billingAction("portal")}
+                    >
+                      {action === "portal"
+                        ? "Opening portal…"
+                        : "Manage subscription"}
+                    </button>
+                  )}
+                </fieldset>
               </>
             ) : (
-              <p>
-                This is a self-hosted ToolMirror Cloud instance. Cloud
-                functionality is free and has no billing portal.
-              </p>
+              <div className="dashboard-self-hosted">
+                <p className="dashboard-billing-label">Self-hosted Cloud</p>
+                <p>
+                  This ToolMirror Cloud instance is self-hosted. Cloud
+                  functionality is free and has no billing portal.
+                </p>
+              </div>
             )}
           </section>
         )}
-        {view === "settings" && (
-          <section>
-            <h2>Local CLI preferences</h2>
-            <p>
-              Telemetry is an anonymous, opt-in preference stored locally by the
-              ToolMirror CLI. It is not a dashboard setting and is never tied to
-              your account or devices.
-            </p>
-            <p>
-              Use <code>toolmirror config set telemetry true</code> or{" "}
-              <code>toolmirror config set telemetry false</code> on each machine
-              to change it.
-            </p>
-          </section>
-        )}
-      </div>
+      </DashboardShell>
+    );
+
+  return (
+    <DashboardShell view={view}>
+      <header className="dashboard-page-header">
+        <p className="dashboard-eyebrow">{data.workspace.name}</p>
+        <h1>Settings</h1>
+        <p className="dashboard-revision">Revision {data.revision.sequence}</p>
+        <p className="dashboard-revision">
+          {data.revision.id ? data.revision.id.slice(0, 12) : "not yet created"}
+        </p>
+      </header>
+      <section
+        className="dashboard-panel dashboard-settings-panel"
+        aria-labelledby="cli-preferences"
+      >
+        <h2 id="cli-preferences">Local CLI preferences</h2>
+        <p>
+          Telemetry is an anonymous, opt-in preference stored locally by the
+          ToolMirror CLI. It is not a dashboard setting and is never tied to
+          your account or devices.
+        </p>
+        <p className="dashboard-settings-instruction">
+          Change the preference separately on each machine:
+        </p>
+        <code className="dashboard-command">
+          toolmirror config set telemetry true
+          <br />
+          toolmirror config set telemetry false
+        </code>
+      </section>
     </DashboardShell>
   );
 }

@@ -1216,17 +1216,21 @@ a {
 .dashboard-error h1 { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: clamp(2.4rem, 5.5vw, 3.6rem); font-weight: 500; letter-spacing: -.05em; line-height: .95; margin: 0 0 16px; text-transform: uppercase; }
 .dashboard-error p { color: #504b44; margin: 0; }
 
-/* Keep non-overview view bodies isolated from overview styles. */
-.dashboard-legacy header { margin: 72px 0 40px; }
-.dashboard-legacy h1 { font-size: clamp(2.5rem, 7vw, 5rem); letter-spacing: -.06em; margin: 8px 0; }
-.dashboard-legacy section { border-top: 2px solid #171717; margin-top: 32px; padding: 18px 0 30px; }
-.dashboard-legacy table { border-collapse: collapse; text-align: left; width: 100%; }
-.dashboard-legacy th, .dashboard-legacy td { border-bottom: 1px solid #d6d2c8; padding: 12px 6px; }
-.dashboard-legacy .device { border-bottom: 1px solid #d6d2c8; padding: 8px 0 16px; }
-.dashboard-legacy .device h3 { margin-bottom: 0; }
-.dashboard-legacy .device span { color: #ad301d; font: 12px monospace; }
-.dashboard-legacy code, .dashboard-legacy .eyebrow { font-family: ui-monospace, monospace; }
-.dashboard-legacy .eyebrow { font-size: 12px; text-transform: uppercase; }
+.dashboard-billing-summary, .dashboard-self-hosted { background: #2c2c29; padding: 16px; }
+.dashboard-billing-label { color: #c9c1b5; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; margin: 0 0 8px; text-transform: uppercase; }
+.dashboard-billing-status { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; }
+.dashboard-billing-status > span { color: #f4eee4; font: 700 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dashboard-billing-note, .dashboard-billing-empty, .dashboard-self-hosted > p:last-child { color: #c9c1b5; line-height: 1.5; margin: 10px 0 0; }
+.dashboard-billing-actions { border: 0; display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0 0; min-inline-size: 0; padding: 0; }
+.dashboard-primary-button, .dashboard-secondary-button { font: 700 12px Arial, Helvetica, sans-serif; min-height: 40px; padding: 10px 12px; }
+.dashboard-primary-button { background: #df492f; border: 1px solid #df492f; color: #f4eee4; cursor: pointer; }
+.dashboard-primary-button:hover:not(:disabled) { background: #bd3723; border-color: #bd3723; }
+.dashboard-primary-button:active { transform: translateY(1px); }
+.dashboard-primary-button:disabled { cursor: wait; opacity: .65; }
+.dashboard-settings-panel { max-width: 720px; }
+.dashboard-settings-panel > p { color: #c9c1b5; line-height: 1.55; margin: 0; max-width: 62ch; }
+.dashboard-settings-panel .dashboard-settings-instruction { margin-top: 20px; }
+.dashboard-command { background: #171512; color: #f4eee4; display: block; font: 12px / 1.65 ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 10px; overflow-wrap: anywhere; padding: 16px; user-select: all; width: fit-content; }
 
 @media (max-width: 850px) {
   .dashboard-nav { gap: 20px; padding: 0 20px; }
@@ -1244,7 +1248,7 @@ a {
   .dashboard-targets li { grid-template-columns: minmax(0, 1fr) auto; }
   .dashboard-targets li > code:first-child { grid-column: 1 / -1; }
   .dashboard-targets li > .dashboard-error-code { grid-column: 1 / -1; }
-  .dashboard-secondary-button { width: 100%; }
+  .dashboard-secondary-button, .dashboard-billing-actions > button { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

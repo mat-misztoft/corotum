@@ -21,6 +21,14 @@ test("dashboard keeps chrome and renders accessible state panels", () => {
   expect(surface).toContain("No target report.");
 });
 
+test("billing and settings use the shared dashboard language without new controls", () => {
+  expect(surface).toContain("dashboard-billing-panel");
+  expect(surface).toContain("This ToolMirror Cloud instance is self-hosted.");
+  expect(surface).toContain('className="dashboard-command"');
+  expect(surface).toContain('if (view === "billing")');
+  expect(surface).not.toContain("dashboard-legacy");
+});
+
 test("skills and devices use semantic status panels without new mutations", () => {
   expect(surface).toContain('if (view === "skills" || view === "devices")');
   expect(surface).toContain('className="dashboard-page-header"');
