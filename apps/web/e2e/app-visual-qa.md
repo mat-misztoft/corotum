@@ -25,6 +25,11 @@
 
 - Fixed the narrow app-nav overflow path: `.dashboard-nav-links` now has a shrinkable flex basis (`flex: 1 1 auto; min-width: 0`) and explicit desktop/end versus mobile/start alignment. At mobile widths the five established destinations scroll inside their cluster rather than expanding the page or clipping off-screen.
 
+## Post-T086 landing re-check
+
+T086 changed only the landing header flex minimum to keep the approved navigation reachable on mobile. This final pass re-checked that change against the frozen Direction C record above: all seven sections, claims, semantic motion, focus treatment, and reduced-motion behavior remain intact. The shared app shell, sign-in form, and 404 do not consume `.landing-header` and have no regression from the landing-only fix.
+
+
 ## Anti-slop and accessibility check
 
 | Check | Result | Evidence |
