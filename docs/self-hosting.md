@@ -146,12 +146,12 @@ npx wrangler d1 migrations apply toolmirror --remote
 npx wrangler deploy
 ```
 
-Confirm `https://cloud.example.com` serves the site and `/dashboard` redirects through OAuth.
+Confirm `https://cloud.example.com` serves the site. Unauthenticated users go to `/sign-in` (GitHub, Google, or email magic link) and reach `/dashboard` after a session is created.
 
 ## Operational setup
 
 1. Install the official CLI on each device ([install.md](./install.md)).
-2. Sign in to the self-hosted site with GitHub or Google. A default workspace is created for the user.
+2. Sign in at `/sign-in` with GitHub, Google, or an email magic link. A default workspace is created for the user.
 3. Pair a device:
 
 ```bash

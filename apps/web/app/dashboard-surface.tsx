@@ -14,10 +14,12 @@ export function DashboardSurface({ view }: { view: View }) {
   const [action, setAction] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/v1/dashboard").then(async (response) => {
+      if (response.status === 401) { window.location.assign("/sign-in"); return; }
       const body = await response.json() as Dashboard & { error?: string };
       if (response.ok) setData(body); else setError(body.error ?? "Unable to load dashboard");
     }).catch(() => setError("Unable to load dashboard"));
     if (view === "billing" || view === "settings") fetch("/api/v1/dashboard/settings").then(async (response) => {
+      if (response.status === 401) { window.location.assign("/sign-in"); return; }
       const body = await response.json() as Settings & { error?: string };
       if (response.ok) setSettings(body); else setError(body.error ?? "Unable to load settings");
     }).catch(() => setError("Unable to load settings"));

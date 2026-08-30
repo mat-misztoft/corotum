@@ -68,7 +68,7 @@ export default function Home() {
           <a href="#git-cloud">Git / Cloud</a>
           <a href="#agents">Agents</a>
           <a href="https://github.com/toolmirror/toolmirror">GitHub</a>
-          <a href="/dashboard">Sign in</a>
+          <a href="/sign-in">Sign in</a>
         </nav>
       </header>
 
@@ -81,7 +81,7 @@ export default function Home() {
             machine on the same exact version.
           </p>
           <div className="hero-actions">
-            <a className="button button-primary" href="/dashboard">
+            <a className="button button-primary" href="/sign-in">
               Start with ToolMirror Cloud
             </a>
             <a
@@ -405,7 +405,7 @@ export default function Home() {
           Start with ToolMirror Cloud, or use your own Git repository for free.
         </p>
         <div className="hero-actions">
-          <a className="button button-primary" href="/dashboard">
+          <a className="button button-primary" href="/sign-in">
             Start with ToolMirror Cloud
           </a>
           <a

@@ -88,6 +88,12 @@ test("landing e2e: visual QA evidence records desktop and mobile PASS",
   },
 );
 
+test("landing e2e: login and Cloud CTAs go to /sign-in", () => {
+  expect(page).toContain('<a href="/sign-in">Sign in</a>');
+  expect(page.match(/href="\/sign-in"/g)?.length).toBe(3);
+  expect(page).not.toContain('href="/dashboard"');
+});
+
 test("landing e2e: claims, anti-slop, and accessibility checks pass", () => {
   expect(page).toContain("$5.99/month · $59.90/year");
   expect(page).toContain("Agents manage desired state");

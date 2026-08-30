@@ -34,6 +34,13 @@ test("final CTA copy, actions, and install command match planning", () => {
   expect(page).not.toContain("sync_all_devices");
 });
 
+test("landing login and Cloud CTAs go to /sign-in", () => {
+  expect(page).toContain('<a href="/sign-in">Sign in</a>');
+  expect(page).toContain('href="/sign-in">');
+  expect(page.match(/href="\/sign-in"/g)?.length).toBe(3);
+  expect(page).not.toContain('href="/dashboard"');
+});
+
 test("landing keeps keyboard focus and overflow-safe diagrams", () => {
   expect(styles).toContain(".landing a:focus-visible");
   expect(styles).toContain("overflow-x: clip");
