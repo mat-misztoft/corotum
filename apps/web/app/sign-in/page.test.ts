@@ -27,3 +27,14 @@ test("email validation and request states retain disclosure-safe messaging", () 
   expect(form).not.toContain("new account");
   expect(form).toContain("ref={confirmationRef}");
 });
+
+test("OAuth controls expose a generic pending and failure state", () => {
+  expect(form).toContain("const [oauthProvider, setOauthProvider]");
+  expect(form).toContain("disabled={busy}");
+  expect(form).toContain("Connecting to GitHub…");
+  expect(form).toContain("Connecting to Google…");
+  expect(form).toContain("Unable to continue. Try again.");
+  expect(form).toContain("const { error } = await authClient.signIn.social");
+  expect(form).toContain("if (error)");
+  expect(form).toContain("aria-busy={oauthProvider !== null}");
+});

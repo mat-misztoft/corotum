@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { authClient } from "../../src/auth-client";
 
 type EmailState = "form" | "submitting" | "confirmed" | "error";
@@ -12,6 +12,10 @@ export function validEmail(value: string) {
 export function SignInForm() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<EmailState>("form");
+  const [oauthProvider, setOauthProvider] = useState<
+    "github" | "google" | null
+  >(null);
+  const [oauthError, setOauthError] = useState(false);
   const confirmationRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -39,7 +43,21 @@ export function SignInForm() {
   }
 
   async function signInWith(provider: "github" | "google") {
-    await authClient.signIn.social({ provider, callbackURL: "/dashboard" });
+    setOauthError(false);
+    setOauthProvider(provider);
+    try {
+      const { error } = await authClient.signIn.social({
+        provider,
+        callbackURL: "/dashboard",
+      });
+      if (error) {
+        setOauthProvider(null);
+        setOauthError(true);
+      }
+    } catch {
+      setOauthProvider(null);
+      setOauthError(true);
+    }
   }
 
   if (state === "confirmed") {
@@ -49,7 +67,11 @@ export function SignInForm() {
           Check your inbox
         </h2>
         <p>We sent you a sign-in link.</p>
-        <button className="text-button" type="button" onClick={() => setState("form")}>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => setState("form")}
+        >
           Use another email
         </button>
       </section>
@@ -57,22 +79,42 @@ export function SignInForm() {
   }
 
   const submitting = state === "submitting";
+  const busy = submitting || oauthProvider !== null;
   return (
     <>
-      <div className="oauth-actions">
-        <button type="button" onClick={() => signInWith("github")}>
-          Continue with GitHub
+      {oauthError && (
+        <p className="sign-in-error" role="alert">
+          Unable to continue. Try again.
+        </p>
+      )}
+      <div className="oauth-actions" aria-busy={oauthProvider !== null}>
+        <button
+          disabled={busy}
+          type="button"
+          onClick={() => signInWith("github")}
+        >
+          {oauthProvider === "github"
+            ? "Connecting to GitHub…"
+            : "Continue with GitHub"}
         </button>
-        <button type="button" onClick={() => signInWith("google")}>
-          Continue with Google
+        <button
+          disabled={busy}
+          type="button"
+          onClick={() => signInWith("google")}
+        >
+          {oauthProvider === "google"
+            ? "Connecting to Google…"
+            : "Continue with Google"}
         </button>
       </div>
-      <div className="sign-in-separator" aria-hidden="true"><span>or</span></div>
-      <form noValidate onSubmit={submitEmail}>
+      <div className="sign-in-separator" aria-hidden="true">
+        <span>or</span>
+      </div>
+      <form aria-busy={submitting} noValidate onSubmit={submitEmail}>
         <label htmlFor="email">Email address</label>
         <input
           autoComplete="email"
-          disabled={submitting}
+          disabled={busy}
           id="email"
           inputMode="email"
           name="email"
@@ -87,11 +129,11 @@ export function SignInForm() {
           aria-invalid={state === "error"}
         />
         {state === "error" && (
-          <p id="email-error" role="alert">
+          <p id="email-error" className="sign-in-error" role="alert">
             Enter a valid email address or try again.
           </p>
         )}
-        <button type="submit" disabled={submitting}>
+        <button type="submit" disabled={busy}>
           {submitting ? "Sending sign-in link…" : "Continue with email"}
         </button>
       </form>
