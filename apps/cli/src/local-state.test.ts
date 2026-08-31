@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -21,6 +22,7 @@ import {
   managedTargetsFromState,
   recoverLocalOperationalState,
 } from "./local-state";
+import { discoverActualState } from "./sync";
 
 const directories: string[] = [];
 const id = skillId("sk_example");
@@ -88,13 +90,14 @@ describe("LocalOperationalStateStore", () => {
     const file = join(root, "state", "state.json");
     const store = new LocalOperationalStateStore(file);
     const state = {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       lastAppliedRevision: revisionId("42"),
       skills: {
         [id]: {
           name: "example",
           canonicalPath,
           contentHash,
+          ownership: "verified" as const,
           targets: {
             codex: {
               agentId: "codex" as const,
@@ -111,7 +114,7 @@ describe("LocalOperationalStateStore", () => {
     expect(await store.load()).toEqual(state);
     expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject({
       lastAppliedRevision: "42",
-      schemaVersion: 1,
+      schemaVersion: 2,
     });
     expect(managedTargetsFromState(state)).toEqual([
       {
@@ -132,6 +135,31 @@ describe("LocalOperationalStateStore", () => {
     expect(await store.load()).toBeNull();
     await writeFile(file, "not json");
     expect(await store.load()).toBeNull();
+  });
+
+  test("retains exactly one valid interrupted save as recovery evidence", async () => {
+    const { root, canonicalPath, contentHash } = await fixture();
+    const file = join(root, "state", "state.json");
+    const store = new LocalOperationalStateStore(file);
+    const saved = {
+      schemaVersion: 2 as const,
+      lastAppliedRevision: revisionId("7"),
+      skills: {
+        [id]: {
+          name: "example",
+          canonicalPath,
+          contentHash,
+          ownership: "verified" as const,
+          targets: {},
+        },
+      },
+    };
+    await mkdir(join(root, "state"), { recursive: true });
+    await writeFile(`${file}.interrupted.tmp`, `${JSON.stringify(saved)}\n`);
+    expect(await store.load()).toBeNull();
+    expect(await store.loadRetainedRecoveryEvidence()).toEqual(saved);
+    await writeFile(`${file}.another.tmp`, `${JSON.stringify(saved)}\n`);
+    expect(await store.loadRetainedRecoveryEvidence()).toBeNull();
   });
 });
 
@@ -155,8 +183,63 @@ describe("recoverLocalOperationalState", () => {
 
     expect(state.lastAppliedRevision).toBe("7");
     expect(state.skills[id]?.canonicalPath).toBe(canonicalPath);
+    expect(state.skills[id]?.ownership).toBe("recovered");
     expect(Object.values(state.skills[id]?.targets ?? {})).toEqual([
-      { agentId: "codex", mode: "symlink", path: target, expectedHash: state.skills[id]?.contentHash },
+      {
+        agentId: "codex",
+        mode: "symlink",
+        path: target,
+        expectedHash: state.skills[id]?.contentHash,
+      },
+    ]);
+  });
+
+  test("recovers a copy only with retained exact ownership evidence", async () => {
+    const { root, skillsStoragePath, canonicalPath, contentHash, desired } =
+      await fixture();
+    const target = join(root, "codex-skills", "example");
+    await mkdir(join(root, "codex-skills"), { recursive: true });
+    await cp(canonicalPath, target, { recursive: true });
+    const previous = {
+      schemaVersion: 2 as const,
+      lastAppliedRevision: revisionId("6"),
+      skills: {
+        [id]: {
+          name: "example",
+          canonicalPath,
+          contentHash,
+          ownership: "verified" as const,
+          targets: {
+            [`codex\0${target}`]: {
+              agentId: "codex" as const,
+              mode: "copy" as const,
+              path: target,
+              expectedHash: contentHash,
+            },
+          },
+        },
+      },
+    };
+
+    const state = await recoverLocalOperationalState(
+      {
+        desired,
+        lastAppliedRevision: revisionId("7"),
+        skillsStoragePath,
+        homeDir: root,
+        enabledAgentIds: ["codex"],
+        previousState: previous,
+      },
+      adapters,
+    );
+
+    expect(Object.values(state.skills[id]?.targets ?? {})).toEqual([
+      {
+        agentId: "codex",
+        mode: "copy",
+        path: target,
+        expectedHash: contentHash,
+      },
     ]);
   });
 
@@ -183,6 +266,72 @@ describe("recoverLocalOperationalState", () => {
     );
     expect(managedTargetsFromState(state)).toEqual([]);
     expect(canonicalPath).toBe(state.skills[id]?.canonicalPath);
+  });
+
+  test("marks modified canonical, copied, and wrongly linked targets as drifted", async () => {
+    const { root, canonicalPath, contentHash } = await fixture();
+    const target = join(root, "codex-skills", "example");
+    await mkdir(join(root, "codex-skills"), { recursive: true });
+    await cp(canonicalPath, target, { recursive: true });
+    const state = {
+      schemaVersion: 2 as const,
+      lastAppliedRevision: null,
+      skills: {
+        [id]: {
+          name: "example",
+          canonicalPath,
+          contentHash,
+          ownership: "verified" as const,
+          targets: {
+            [`codex\0${target}`]: {
+              agentId: "codex" as const,
+              mode: "copy" as const,
+              path: target,
+              expectedHash: contentHash,
+            },
+          },
+        },
+      },
+    };
+    expect(
+      (await discoverActualState(state)).skills[id]?.contentHash,
+    ).toStartWith("sha256:");
+    await writeFile(join(target, "SKILL.md"), "# Changed copy\n");
+    expect((await discoverActualState(state)).skills[id]?.contentHash).toBe(
+      "drifted:local-target-or-canonical",
+    );
+    await writeFile(join(target, "SKILL.md"), "# Example\n");
+    await writeFile(join(canonicalPath, "SKILL.md"), "# Changed canonical\n");
+    expect((await discoverActualState(state)).skills[id]?.contentHash).toBe(
+      "drifted:local-target-or-canonical",
+    );
+    await writeFile(join(canonicalPath, "SKILL.md"), "# Example\n");
+    const other = join(root, "other");
+    await mkdir(other);
+    await writeFile(join(other, "SKILL.md"), "# Example\n");
+    await rm(target, { recursive: true });
+    await symlink(other, target, "dir");
+    const original = state.skills[id];
+    if (!original) throw new Error("Fixture skill is missing.");
+    const symlinkState = {
+      ...state,
+      skills: {
+        [id]: {
+          ...original,
+          targets: {
+            [`codex\0${target}`]: {
+              agentId: "codex" as const,
+              mode: "symlink" as const,
+              path: target,
+              expectedHash: contentHash,
+            },
+          },
+        },
+      },
+    };
+    expect(
+      (await discoverActualState(symlinkState)).skills[id]?.contentHash,
+    ).toBe("drifted:local-target-or-canonical");
   });
 
   test("does not recover a canonical directory whose content drifted", async () => {

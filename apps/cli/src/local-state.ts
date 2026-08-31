@@ -1,12 +1,13 @@
 import {
   lstat,
   mkdir,
+  readdir,
   readFile,
   realpath,
   rename,
   writeFile,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import {
   type AgentAdapter,
@@ -40,12 +41,13 @@ const skillStateSchema = z
     name: z.string().min(1),
     canonicalPath: z.string().min(1),
     contentHash: z.string().min(1),
+    ownership: z.enum(["verified", "recovered"]).default("verified"),
     targets: z.record(z.string(), targetSchema),
   })
   .strict();
 const localStateSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     lastAppliedRevision: z.string().min(1).nullable(),
     skills: z.record(z.string(), skillStateSchema),
   })
@@ -55,6 +57,7 @@ export type LocalSkillState = Readonly<{
   name: string;
   canonicalPath: string;
   contentHash: string;
+  ownership?: "verified" | "recovered";
   targets: Readonly<Record<string, LocalTargetState>>;
 }>;
 
@@ -66,7 +69,7 @@ export type LocalTargetState = Readonly<{
 }>;
 
 export type LocalOperationalState = Readonly<{
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   lastAppliedRevision: RevisionId | null;
   skills: Readonly<Record<SkillId, LocalSkillState>>;
 }>;
@@ -97,6 +100,37 @@ export class LocalOperationalStateStore {
     );
     await rename(temporary, this.file);
   }
+
+  /**
+   * An interrupted atomic save can retain exactly one valid temporary state.
+   * It is ownership evidence only; ambiguity deliberately recovers nothing.
+   */
+  async loadRetainedRecoveryEvidence(): Promise<LocalOperationalState | null> {
+    try {
+      const prefix = `${basename(this.file)}.`;
+      const files = (await readdir(dirname(this.file))).filter(
+        (name) => name.startsWith(prefix) && name.endsWith(".tmp"),
+      );
+      const states = (
+        await Promise.all(
+          files.map(async (name) => {
+            try {
+              return toLocalOperationalState(
+                JSON.parse(
+                  await readFile(join(dirname(this.file), name), "utf8"),
+                ),
+              );
+            } catch {
+              return null;
+            }
+          }),
+        )
+      ).filter((state): state is LocalOperationalState => state !== null);
+      return states.length === 1 ? states[0] : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export type RecoverLocalOperationalStateInput = Readonly<{
@@ -105,12 +139,16 @@ export type RecoverLocalOperationalStateInput = Readonly<{
   skillsStoragePath: string;
   homeDir: string;
   enabledAgentIds: readonly AgentId[];
+  /** A last known valid state can prove ownership of copy-fallback paths. */
+  previousState?: LocalOperationalState | null;
 }>;
 
 /**
  * Recovers only assets whose Corotum ownership is provable: a locked,
- * hash-matching canonical copy and target symlinks resolving to that copy.
- * Equal-content regular directories are deliberately left unmanaged.
+ * hash-matching named canonical copy and target symlinks resolving to that
+ * copy. A copy target is recoverable only when a retained prior state records
+ * its path and expected hash. Equal-content regular directories are otherwise
+ * deliberately left unmanaged.
  */
 export async function recoverLocalOperationalState(
   input: RecoverLocalOperationalStateInput,
@@ -142,6 +180,24 @@ export async function recoverLocalOperationalState(
             path,
             expectedHash: locked.contentHash,
           };
+          continue;
+        }
+        const previous =
+          input.previousState?.skills[locked.id]?.targets[
+            targetKey(agentId, path)
+          ];
+        if (
+          previous?.mode === "copy" &&
+          previous.path === path &&
+          previous.expectedHash === locked.contentHash &&
+          (await matchesHash(path, locked.contentHash))
+        ) {
+          targets[targetKey(agentId, path)] = {
+            agentId,
+            mode: "copy",
+            path,
+            expectedHash: locked.contentHash,
+          };
         }
       }
     }
@@ -150,12 +206,13 @@ export async function recoverLocalOperationalState(
       name: locked.skill,
       canonicalPath,
       contentHash: locked.contentHash,
+      ownership: "recovered",
       targets,
     };
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     lastAppliedRevision: input.lastAppliedRevision,
     skills,
   };
@@ -198,11 +255,11 @@ function toLocalOperationalState(input: unknown): LocalOperationalState {
         throw new Error("Invalid stored agent ID.");
       targets[key] = { ...target, agentId: target.agentId };
     }
-    skills[parsedId] = { ...skill, targets };
+    skills[parsedId] = { ...skill, ownership: skill.ownership, targets };
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     lastAppliedRevision: parsed.lastAppliedRevision as RevisionId | null,
     skills,
   };

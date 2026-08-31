@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
 
 import type { AgentId } from "../../../packages/agent-targets/src/index";
 import {
@@ -25,6 +25,10 @@ export type SyncSnapshot = Readonly<{
   plan: ReconcilePlan;
 }>;
 
+export type RecoverOperationalState = (
+  desired: DesiredStateEnvelope,
+) => Promise<LocalOperationalState>;
+
 export type SyncResult =
   | Readonly<{
       kind: "synced" | "partial";
@@ -34,24 +38,34 @@ export type SyncResult =
   | Readonly<{ kind: "refused"; reason: string }>;
 
 /**
- * Reads the local canonical store without inferring ownership from names or
- * targets. A missing or altered canonical directory is therefore reconciled,
- * while unmanaged directories remain untouched.
+ * Reads only recorded ownership. Canonical directories and every recorded
+ * target are independently verified so copy fallback and bad symlink drift
+ * cannot be mistaken for a healthy skill.
  */
 export async function discoverActualState(
   state: LocalOperationalState,
 ): Promise<ActualState> {
   const entries = await Promise.all(
-    Object.entries(state.skills).map(
-      async ([id, skill]) =>
-        [
-          id,
-          {
-            contentHash: await localHash(skill.canonicalPath),
-            managed: true,
-          },
-        ] as const,
-    ),
+    Object.entries(state.skills).map(async ([id, skill]) => {
+      const canonicalHash = await localHash(skill.canonicalPath);
+      const targetsMatch = await Promise.all(
+        Object.values(skill.targets).map((target) =>
+          matchesTarget(target, skill.canonicalPath),
+        ),
+      );
+      return [
+        id,
+        {
+          // A sentinel deliberately differs from every sha256 lock hash,
+          // causing the portable planner to classify the recorded skill as drifted.
+          contentHash:
+            canonicalHash === skill.contentHash && targetsMatch.every(Boolean)
+              ? canonicalHash
+              : "drifted:local-target-or-canonical",
+          managed: true,
+        },
+      ] as const;
+    }),
   );
   return { skills: Object.fromEntries(entries) as ActualState["skills"] };
 }
@@ -64,10 +78,11 @@ export class SyncService {
     private readonly discover: (
       state: LocalOperationalState,
     ) => Promise<ActualState> = discoverActualState,
+    private readonly recover?: RecoverOperationalState,
   ) {}
 
   async inspect(
-    state: LocalOperationalState,
+    state: LocalOperationalState | null,
   ): Promise<
     | Readonly<{ kind: "ready"; snapshot: SyncSnapshot }>
     | Readonly<{ kind: "refused"; reason: string }>
@@ -76,7 +91,9 @@ export class SyncService {
       this.provider.pull());
     if (desired.kind !== "success")
       return { kind: "refused", reason: reasonFor(desired) };
-    const actual = await this.discover(state);
+    const actual = await this.discover(
+      await this.stateFor(state, desired.value),
+    );
     return {
       kind: "ready",
       snapshot: {
@@ -88,18 +105,23 @@ export class SyncService {
   }
 
   async sync(input: {
-    execution: Omit<ExecuteReconcileInput, "desired" | "plan" | "revision"> & {
-      state: LocalOperationalState;
+    execution: Omit<
+      ExecuteReconcileInput,
+      "desired" | "plan" | "revision" | "state"
+    > & {
+      state: LocalOperationalState | null;
     };
   }): Promise<SyncResult> {
     // pull() intentionally retries PENDING_PUSH before any local operation.
     const desired = await this.provider.pull();
     if (desired.kind !== "success")
       return { kind: "refused", reason: reasonFor(desired) };
-    const actual = await this.discover(input.execution.state);
+    const state = await this.stateFor(input.execution.state, desired.value);
+    const actual = await this.discover(state);
     const plan = planReconcile(desired.value.state, actual);
     const execution = await this.executor.execute({
       ...input.execution,
+      state,
       desired: desired.value.state,
       revision: desired.value.revisionId,
       plan,
@@ -119,6 +141,16 @@ export class SyncService {
       );
     return { kind: partial ? "partial" : "synced", snapshot, execution };
   }
+
+  private async stateFor(
+    state: LocalOperationalState | null,
+    desired: DesiredStateEnvelope,
+  ): Promise<LocalOperationalState> {
+    if (state) return state;
+    if (!this.recover)
+      return { schemaVersion: 2, lastAppliedRevision: null, skills: {} };
+    return this.recover(desired);
+  }
 }
 
 async function localHash(path: string): Promise<string | null> {
@@ -127,6 +159,22 @@ async function localHash(path: string): Promise<string | null> {
     return await hashSkillDirectory(path);
   } catch {
     return null;
+  }
+}
+
+async function matchesTarget(
+  target: LocalOperationalState["skills"][keyof LocalOperationalState["skills"]]["targets"][string],
+  canonicalPath: string,
+): Promise<boolean> {
+  try {
+    if (target.mode === "copy")
+      return (await localHash(target.path)) === target.expectedHash;
+    if (!(await lstat(target.path)).isSymbolicLink()) return false;
+    if ((await realpath(target.path)) !== (await realpath(canonicalPath)))
+      return false;
+    return (await localHash(target.path)) === target.expectedHash;
+  } catch {
+    return false;
   }
 }
 

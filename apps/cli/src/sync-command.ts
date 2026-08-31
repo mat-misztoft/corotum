@@ -15,7 +15,10 @@ import type { CliIo } from "./cli";
 import { isNonInteractive } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { ConfigStore, effectiveStoragePaths } from "./config";
-import { LocalOperationalStateStore } from "./local-state";
+import {
+  LocalOperationalStateStore,
+  recoverLocalOperationalState,
+} from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
 import { LocalReconcileExecutor } from "./reconcile-executor";
@@ -45,8 +48,9 @@ async function inspectCommand(
   const context = await createContext();
   const config = await context.configStore.load();
   assertGitConfig(config.mode, config.gitRepository);
-  const state = (await context.stateStore.load()) ?? emptyState();
-  const result = await context.service(config).inspect(state);
+  const result = await context
+    .service(config)
+    .inspect(await context.stateStore.load());
   if (result.kind === "refused") throw new Error(result.reason);
   if (kind === "STATUS") {
     const payload = {
@@ -100,16 +104,22 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
       });
       config = await context.configStore.load();
     }
-    const state = (await context.stateStore.load()) ?? emptyState();
-    const result = await context.service(config).sync({
-      execution: {
-        state,
-        enabledAgentIds: Object.entries(config.agents)
+    const result = await context
+      .service(
+        config,
+        Object.entries(config.agents)
           .filter(([, value]) => value.enabled)
           .map(([id]) => id) as AgentId[],
-        homeDir: context.homeDir,
-      },
-    });
+      )
+      .sync({
+        execution: {
+          state: await context.stateStore.load(),
+          enabledAgentIds: Object.entries(config.agents)
+            .filter(([, value]) => value.enabled)
+            .map(([id]) => id) as AgentId[],
+          homeDir: context.homeDir,
+        },
+      });
     if (result.kind === "refused") throw new Error(result.reason);
     write(
       io,
@@ -145,7 +155,12 @@ function createContext() {
     paths,
     configStore,
     stateStore,
-    service: (config: Awaited<ReturnType<ConfigStore["load"]>>) => {
+    service: (
+      config: Awaited<ReturnType<ConfigStore["load"]>>,
+      enabledAgentIds: readonly AgentId[] = Object.entries(config.agents)
+        .filter(([, value]) => value.enabled)
+        .map(([id]) => id) as AgentId[],
+    ) => {
       const storage = effectiveStoragePaths(config, paths);
       const materializer = new GitSkillMaterializer();
       return new SyncService(
@@ -158,6 +173,21 @@ function createContext() {
           new CanonicalSkillStore(storage.skillsStoragePath),
           materializer,
         ),
+        undefined,
+        async (desired) => {
+          const recovered = await recoverLocalOperationalState({
+            desired: desired.state,
+            lastAppliedRevision: desired.revisionId,
+            skillsStoragePath: storage.skillsStoragePath,
+            homeDir,
+            enabledAgentIds,
+            previousState: await stateStore.loadRetainedRecoveryEvidence(),
+          });
+          // Recovery hashes all retained canonical and target evidence before
+          // publishing this cache; anything ambiguous remains unmanaged.
+          await stateStore.save(recovered);
+          return recovered;
+        },
       );
     },
   };
@@ -205,9 +235,6 @@ async function confirm(io: CliIo, question: string): Promise<boolean> {
   }
 }
 
-function emptyState() {
-  return { schemaVersion: 1 as const, lastAppliedRevision: null, skills: {} };
-}
 function assertGitConfig(
   mode: string | null,
   repository: string | null,

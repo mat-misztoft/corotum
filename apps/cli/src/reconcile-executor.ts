@@ -107,7 +107,11 @@ export class LocalReconcileExecutor {
           } else {
             const skill = skills[skillId];
             if (!skill) throw new Error("Managed skill state is missing.");
-            await this.canonicalStore.remove(skillId, skill.name, skill.contentHash);
+            await this.canonicalStore.remove(
+              skillId,
+              skill.name,
+              skill.contentHash,
+            );
             delete skills[skillId];
             operations.push({
               kind: operation.kind,
@@ -135,7 +139,11 @@ export class LocalReconcileExecutor {
           } else {
             const skill = skills[skillId];
             if (!skill) throw new Error("Managed skill state is missing.");
-            await this.canonicalStore.remove(skillId, skill.name, skill.contentHash);
+            await this.canonicalStore.remove(
+              skillId,
+              skill.name,
+              skill.contentHash,
+            );
             delete skills[skillId];
             operations.push({
               kind: operation.kind,
@@ -160,7 +168,7 @@ export class LocalReconcileExecutor {
     }
 
     const state: LocalOperationalState = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       lastAppliedRevision:
         operations.every((operation) => operation.status === "SUCCESS") &&
         !input.plan.classifications.some(
@@ -187,16 +195,15 @@ export class LocalReconcileExecutor {
       outcomes: readonly TargetOutcome[];
     }>
   > {
-    const temporaryRoot = await mkdtemp(
-      join(tmpdir(), "corotum-reconcile-"),
-    );
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "corotum-reconcile-"));
     const temporarySkill = join(temporaryRoot, "skill");
     try {
       await this.materializer.materialize(lock, temporarySkill);
       const manifest = input.desired.manifest.skills.find(
         (skill) => skill.id === lock.id,
       );
-      if (!manifest) throw new Error("Locked skill is absent from desired state.");
+      if (!manifest)
+        throw new Error("Locked skill is absent from desired state.");
       await this.canonicalStore.replaceFromDirectory(
         lock.id,
         lock.skill,
@@ -233,6 +240,7 @@ export class LocalReconcileExecutor {
           name: lock.skill,
           canonicalPath,
           contentHash: lock.contentHash,
+          ownership: "verified",
           targets: Object.fromEntries(
             exposed.ownership
               .filter((target) => target.skillId === lock.id)
