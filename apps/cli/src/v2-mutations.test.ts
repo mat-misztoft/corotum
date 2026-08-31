@@ -52,6 +52,32 @@ describe("v2 mutation commands", () => {
     expect((await state.pull()).state.lockfile.skills[0]?.source?.revision).toBe(revision);
   });
 
+  test("continues an update after a durable but locally failed application", async () => {
+    let current = empty;
+    let revisionNumber = 0;
+    const state: V2MutationProvider = {
+      pull: async () => ({ revisionId: `revision-${revisionNumber}`, state: current, ledger }),
+      push: async (input) => {
+        if (input.baseRevision !== `revision-${revisionNumber}`) throw new Error("stale base revision");
+        current = input.state;
+        revisionNumber++;
+        return { revisionId: `revision-${revisionNumber}`, state: current, ledger };
+      },
+    };
+    let resolvedRevision = revision;
+    const service = new V2MutationService(state, {
+      resolve: async (source) => ({ ...source, revision: resolvedRevision, contentHash: hash }),
+    }, { apply: async () => { throw new Error("disk full"); } });
+    await service.add({ name: "alpha", source: { repository: "https://example.test/a.git", path: "alpha", ref: "main" } });
+    await service.add({ name: "beta", source: { repository: "https://example.test/b.git", path: "beta", ref: "main" } });
+    resolvedRevision = "b".repeat(40);
+
+    expect((await service.update()).map((result) => result.kind)).toEqual([
+      "persisted-not-applied",
+      "persisted-not-applied",
+    ]);
+  });
+
   test("does not persist when resolution fails", async () => {
     const state = provider(empty);
     const service = new V2MutationService(state, {

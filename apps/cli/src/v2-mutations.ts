@@ -114,7 +114,10 @@ export class V2MutationService {
         if (old?.materialization.kind === "source" && old.source?.revision === source.revision && old.source.contentHash === source.contentHash) { results.push({ kind: "success", skillId: skill!.id, revision: latest.revisionId }); continue; }
         const result = await this.replaceSourceLock(latest, skill!.id, skill!.source!, source);
         results.push(result);
-        if (result.kind === "success") latest = await this.provider.pull();
+        // A saved state may fail to apply locally; reload it before the next push.
+        if (result.kind === "success" || result.kind === "persisted-not-applied") {
+          latest = await this.provider.pull();
+        }
       } catch (error) { results.push(refused(error)); }
     }
     return results;
