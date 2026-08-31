@@ -84,14 +84,14 @@ export class LocalReconcileExecutor {
           operations.push({
             kind: operation.kind,
             skillId,
-            status: hasTargetErrors(result.outcomes) ? "ERROR" : "SUCCESS",
+            status: hasTargetFailures(result.outcomes) ? "ERROR" : "SUCCESS",
             targetOutcomes: result.outcomes,
             error: firstTargetError(result.outcomes),
           });
         } else if (operation.kind === "REMOVE") {
           const result = await this.targets.remove(skillId, ownership);
           ownership = result.ownership;
-          if (hasTargetErrors(result.outcomes)) {
+          if (hasTargetFailures(result.outcomes)) {
             skills[skillId] = this.withOwnership(
               skills[skillId],
               ownership,
@@ -123,7 +123,7 @@ export class LocalReconcileExecutor {
         } else {
           const result = await this.targets.unmanage(skillId, ownership);
           ownership = result.ownership;
-          if (hasTargetErrors(result.outcomes)) {
+          if (hasTargetFailures(result.outcomes)) {
             skills[skillId] = this.withOwnership(
               skills[skillId],
               ownership,
@@ -137,13 +137,10 @@ export class LocalReconcileExecutor {
               error: firstTargetError(result.outcomes),
             });
           } else {
-            const skill = skills[skillId];
-            if (!skill) throw new Error("Managed skill state is missing.");
-            await this.canonicalStore.remove(
-              skillId,
-              skill.name,
-              skill.contentHash,
-            );
+            // UNMANAGE converts exposures to ordinary copies. The named
+            // canonical directory is preserved as ordinary local content too.
+            // Removing it here would turn an offline UNMANAGE into REMOVE.
+            if (!skills[skillId]) throw new Error("Managed skill state is missing.");
             delete skills[skillId];
             operations.push({
               kind: operation.kind,
@@ -174,6 +171,7 @@ export class LocalReconcileExecutor {
         !input.plan.classifications.some(
           (classification) =>
             classification.classification === "DRIFTED" ||
+            classification.classification === "LOCAL_CONFLICT" ||
             classification.classification === "PENDING_RESOLUTION",
         )
           ? input.revision
@@ -286,12 +284,22 @@ export class LocalReconcileExecutor {
   }
 }
 
-function hasTargetErrors(outcomes: readonly TargetOutcome[]): boolean {
-  return outcomes.some((outcome) => outcome.status === "ERROR");
+function hasTargetFailures(outcomes: readonly TargetOutcome[]): boolean {
+  return outcomes.some(
+    (outcome) =>
+      outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT",
+  );
 }
 
 function firstTargetError(
   outcomes: readonly TargetOutcome[],
 ): string | undefined {
-  return outcomes.find((outcome) => outcome.status === "ERROR")?.error;
+  const failed = outcomes.find(
+    (outcome) =>
+      outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT",
+  );
+  return failed?.error ??
+    (failed?.status === "LOCAL_CONFLICT"
+      ? `Unmanaged target collision at ${failed.path}.`
+      : undefined);
 }

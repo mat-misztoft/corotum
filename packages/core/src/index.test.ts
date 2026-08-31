@@ -10,6 +10,7 @@ import {
   parseManifest,
   parseRevisionTransition,
   planReconcile,
+  planV2Reconcile,
   type Result,
   revisionId,
   type SkillId,
@@ -293,6 +294,76 @@ describe("deterministic manifest and lockfile schemas", () => {
         "cloud",
       ),
     ).toThrow("only Cloud PENDING_RESOLUTION");
+  });
+});
+
+describe("v2 local reconcile safety", () => {
+  const id = skillId("sk_v2local");
+  const hash = `sha256:${"a".repeat(64)}` as const;
+  const desired = {
+    manifest: { version: 2 as const, skills: [{ id, name: "review", targets: "all" as const, resolutionStatus: "RESOLVED" as const }] },
+    lockfile: { version: 2 as const, skills: [{ id, name: "review", materialization: { kind: "artifact" as const, artifact: { kind: "git-tree" as const, contentHash: hash, integrityHash: hash, locator: "review", sizeBytes: 1 } } }] },
+  };
+
+  test("uses a durable ledger and never deletes unknown local ownership", () => {
+    const removedDesired = { manifest: { version: 2 as const, skills: [] }, lockfile: { version: 2 as const, skills: [] } };
+    expect(planV2Reconcile(removedDesired, { skills: { [id]: { managed: true, contentHash: hash } } }, { version: 2, activeDispositions: {} })).toEqual({
+      classifications: [{ skillId: id, classification: "LOCAL_CONFLICT" }], operations: [],
+    });
+    expect(planV2Reconcile(removedDesired, { skills: { [id]: { managed: true, contentHash: hash } } }, {
+      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "UNMANAGE", effectiveSequence: 4 } },
+    }).operations).toEqual([{ kind: "UNMANAGE", skillId: id }]);
+    expect(planV2Reconcile(removedDesired, { skills: { [id]: { managed: true, contentHash: hash } } }, {
+      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "REMOVE", effectiveSequence: 1 } },
+    }).operations).toEqual([{ kind: "REMOVE", skillId: id }]);
+    const target = { agentId: "pi", path: "/home/test/.pi/agent/skills/review" };
+    expect(planV2Reconcile(removedDesired, {
+      skills: { [id]: { managed: true, contentHash: hash, targets: [{ ...target, managed: true, contentHash: `sha256:${"b".repeat(64)}` }] } },
+    }, {
+      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "REMOVE", effectiveSequence: 1 } },
+    })).toEqual({
+      classifications: [{ skillId: id, classification: "DRIFTED", target }], operations: [],
+    });
+    expect(planV2Reconcile(removedDesired, {
+      skills: { [id]: { managed: true, contentHash: `sha256:${"b".repeat(64)}`, expectedContentHash: hash } },
+    }, {
+      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "UNMANAGE", effectiveSequence: 1 } },
+    })).toEqual({
+      classifications: [{ skillId: id, classification: "DRIFTED" }], operations: [],
+    });
+  });
+
+  test("claims only an exact unmanaged re-add and blocks changed content", () => {
+    expect(planV2Reconcile({ ...desired, manifest: { ...desired.manifest, skills: [{ ...desired.manifest.skills[0], id }] } }, { skills: { [id]: { managed: false, contentHash: hash } } }, { version: 2, activeDispositions: {} }).operations).toEqual([
+      expect.objectContaining({ kind: "INSTALL", skill: expect.objectContaining({ id }) }),
+    ]);
+    expect(planV2Reconcile(desired, { skills: { [id]: { managed: false, contentHash: `sha256:${"b".repeat(64)}` } } }, { version: 2, activeDispositions: {} })).toEqual({
+      classifications: [{ skillId: id, classification: "LOCAL_CONFLICT" }], operations: [],
+    });
+    expect(planV2Reconcile(desired, { skills: { [id]: { managed: true, contentHash: `sha256:${"b".repeat(64)}` } } }, { version: 2, activeDispositions: {} })).toEqual({
+      classifications: [{ skillId: id, classification: "DRIFTED" }], operations: [],
+    });
+  });
+
+  test("repairs only a missing verified target and plans target drift or collisions as no-ops", () => {
+    const target = { agentId: "pi", path: "/home/test/.pi/agent/skills/review" };
+    expect(planV2Reconcile(desired, {
+      skills: { [id]: { managed: true, contentHash: hash, targets: [{ ...target, managed: true, contentHash: null }] } },
+    }, { version: 2, activeDispositions: {} }).operations).toEqual([
+      expect.objectContaining({ kind: "REPAIR_TARGET", skill: expect.objectContaining({ id }), target }),
+    ]);
+
+    const collision = planV2Reconcile(desired, {
+      skills: { [id]: { managed: false, contentHash: null, targets: [
+        { ...target, managed: false, contentHash: hash },
+        { agentId: "codex", path: "/home/test/.codex/skills/review", managed: true, contentHash: `sha256:${"b".repeat(64)}` },
+      ] } },
+    }, { version: 2, activeDispositions: {} });
+    expect(collision.operations).toEqual([]);
+    expect(collision.classifications).toEqual(expect.arrayContaining([
+      { skillId: id, classification: "LOCAL_CONFLICT", target },
+      expect.objectContaining({ skillId: id, classification: "DRIFTED", target: expect.objectContaining({ agentId: "codex" }) }),
+    ]));
   });
 });
 

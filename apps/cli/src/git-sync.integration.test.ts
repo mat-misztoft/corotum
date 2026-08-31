@@ -159,9 +159,10 @@ describe("Git Sync two-home safety", () => {
       homeDir: home,
     });
     expect(installed.operations[0]).toMatchObject({
-      status: "SUCCESS",
+      status: "ERROR",
       targetOutcomes: [expect.objectContaining({ status: "LOCAL_CONFLICT" })],
     });
+    expect(installed.state.lastAppliedRevision).toBeNull();
     expect(await readFile(join(home, ".codex", "skills", lock.skill, "SKILL.md"), "utf8")).toBe("unmanaged bytes\n");
 
     await store.replaceFromDirectory(lock.id, lock.skill, join(source, lock.path), lock.contentHash, {

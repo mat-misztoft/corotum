@@ -594,9 +594,27 @@ export type ActualState = Readonly<{
   skills: Readonly<Record<SkillId, ActualSkillState>>;
 }>;
 
+export type ActualTargetState = Readonly<{
+  agentId: string;
+  path: string;
+  /** Null means a recorded managed target is absent. */
+  contentHash: string | null;
+  /** The hash recorded when this owned target was last verified. */
+  expectedContentHash?: string;
+  /** True only when durable local state proves Corotum owns this path. */
+  managed: boolean;
+}>;
+
 export type ActualSkillState = Readonly<{
   contentHash: string | null;
+  /** The hash recorded when this owned canonical copy was last verified. */
+  expectedContentHash?: string;
   managed: boolean;
+  /**
+   * Optional to preserve the v1 ID/hash contract. v2 callers include every
+   * observed target whose recorded ownership or name collision matters.
+   */
+  targets?: readonly ActualTargetState[];
 }>;
 
 export type DesiredStateEnvelope = Readonly<{
@@ -823,6 +841,7 @@ export interface StateProvider {
 
 export type ActualStateClassification =
   | "MANAGED_SYNCED"
+  | "LOCAL_CONFLICT"
   | "UNMANAGED"
   | "MISSING"
   | "DRIFTED"
@@ -833,6 +852,8 @@ export type ActualStateClassification =
 export type ClassifiedSkill = Readonly<{
   skillId: SkillId;
   classification: ActualStateClassification;
+  /** Present when the classification applies to one agent exposure. */
+  target?: Readonly<{ agentId: string; path: string }>;
 }>;
 
 export type ReconcileOperation =
@@ -937,6 +958,159 @@ export function planReconcile(
     );
   });
 
+  return { classifications, operations };
+}
+
+/**
+ * v2-only safe reconcile planning. The durable ledger, rather than a bounded
+ * transition list, is authoritative for an absent locally-owned skill.
+ */
+export type V2ReconcileOperation =
+  | Readonly<{ kind: "INSTALL"; skill: V2LockedSkill }>
+  | Readonly<{ kind: "REMOVE" | "UNMANAGE"; skillId: SkillId }>
+  /** Recreate a missing path only when durable state proves prior ownership. */
+  | Readonly<{
+      kind: "REPAIR_TARGET";
+      skill: V2LockedSkill;
+      target: Readonly<{ agentId: string; path: string }>;
+    }>;
+
+export type V2ReconcilePlan = Readonly<{
+  classifications: readonly ClassifiedSkill[];
+  operations: readonly V2ReconcileOperation[];
+}>;
+
+/**
+ * Plans a v2 local apply without guessing ownership. An unowned exact copy is
+ * the sole re-add case that may be claimed; every collision or changed copy is
+ * a no-op conflict. Absent desired entries need an explicit ledger tombstone.
+ */
+export function planV2Reconcile(
+  desiredInput: V2DesiredState,
+  actual: ActualState,
+  ledgerInput: DispositionLedger,
+): V2ReconcilePlan {
+  const desired = validateV2DesiredState(desiredInput);
+  const ledger = normalizeDispositionLedger(ledgerInput);
+  const locks = new Map(desired.lockfile.skills.map((skill) => [skill.id, skill]));
+  const active = new Set(desired.manifest.skills.map((skill) => skill.id));
+  const classifications: ClassifiedSkill[] = [];
+  const operations: V2ReconcileOperation[] = [];
+
+  for (const skill of desired.manifest.skills) {
+    const local = actual.skills[skill.id];
+    if (skill.resolutionStatus === "PENDING_RESOLUTION") {
+      classifications.push({ skillId: skill.id, classification: "PENDING_RESOLUTION" });
+      continue;
+    }
+    const lock = locks.get(skill.id);
+    if (!lock) throw validationError(`Resolved skill ${skill.id} has no lock entry.`);
+    const expectedHash = lock.materialization.kind === "source"
+      ? lock.materialization.contentHash
+      : lock.materialization.artifact.contentHash;
+    let install = false;
+    if (!local || local.contentHash === null) {
+      classifications.push({ skillId: skill.id, classification: "MISSING" });
+      install = true;
+    } else if (local.managed && local.contentHash === expectedHash) {
+      classifications.push({ skillId: skill.id, classification: "MANAGED_SYNCED" });
+    } else if (!local.managed && local.contentHash === expectedHash) {
+      classifications.push({ skillId: skill.id, classification: "UNMANAGED" });
+      install = true;
+    } else {
+      classifications.push({ skillId: skill.id, classification: local.managed ? "DRIFTED" : "LOCAL_CONFLICT" });
+    }
+
+    // A target collision blocks even a canonical install: otherwise an executor
+    // would discover the conflict too late, after replacing local content.
+    let targetConflict = false;
+    const repairs: V2ReconcileOperation[] = [];
+    for (const target of [...(local?.targets ?? [])].sort((left, right) =>
+      `${left.agentId}\0${left.path}`.localeCompare(`${right.agentId}\0${right.path}`),
+    )) {
+      const targetRef = { agentId: target.agentId, path: target.path };
+      if (!target.managed) {
+        targetConflict = true;
+        classifications.push({ skillId: skill.id, classification: "LOCAL_CONFLICT", target: targetRef });
+      } else if (target.contentHash === null) {
+        classifications.push({ skillId: skill.id, classification: "MISSING", target: targetRef });
+        if (local?.managed && local.contentHash === expectedHash) {
+          repairs.push({ kind: "REPAIR_TARGET", skill: lock, target: targetRef });
+        }
+      } else if (target.contentHash !== expectedHash) {
+        targetConflict = true;
+        classifications.push({ skillId: skill.id, classification: "DRIFTED", target: targetRef });
+      }
+    }
+    if (!targetConflict) {
+      operations.push(...repairs);
+      if (install) operations.push({ kind: "INSTALL", skill: lock });
+    }
+  }
+
+  for (const [id, local] of Object.entries(actual.skills) as [SkillId, ActualSkillState][]) {
+    if (active.has(id)) continue;
+    if (!local.managed) {
+      classifications.push({ skillId: id, classification: "UNMANAGED" });
+      continue;
+    }
+    const disposition = ledger.activeDispositions[id]?.disposition;
+    if (!disposition) {
+      classifications.push({ skillId: id, classification: "LOCAL_CONFLICT" });
+      continue;
+    }
+    // A tombstone never grants permission to alter a name collision or drift.
+    // Missing targets are harmless: they are already absent.  Expected hashes
+    // come from durable state, so a changed canonical or copy cannot be acted
+    // on merely because an older revision recorded ownership.
+    const expectedCanonicalHash = local.expectedContentHash;
+    if (
+      local.contentHash !== null &&
+      expectedCanonicalHash !== undefined &&
+      local.contentHash !== expectedCanonicalHash
+    ) {
+      classifications.push({ skillId: id, classification: "DRIFTED" });
+      continue;
+    }
+    const unsafeTarget = (local.targets ?? []).find(
+      (target) =>
+        !target.managed ||
+        (target.contentHash !== null &&
+          target.expectedContentHash !== undefined &&
+          target.contentHash !== target.expectedContentHash) ||
+        (target.contentHash !== null &&
+          target.expectedContentHash === undefined &&
+          local.contentHash !== null &&
+          target.contentHash !== local.contentHash),
+    );
+    if (unsafeTarget) {
+      classifications.push({
+        skillId: id,
+        classification: unsafeTarget.managed ? "DRIFTED" : "LOCAL_CONFLICT",
+        target: { agentId: unsafeTarget.agentId, path: unsafeTarget.path },
+      });
+      continue;
+    }
+    classifications.push({ skillId: id, classification: disposition === "REMOVE" ? "REMOVE_CANDIDATE" : "UNMANAGE_CANDIDATE" });
+    operations.push({ kind: disposition, skillId: id });
+  }
+
+  const idOf = (operation: V2ReconcileOperation) =>
+    operation.kind === "INSTALL" || operation.kind === "REPAIR_TARGET"
+      ? operation.skill.id
+      : operation.skillId;
+  const targetKey = (target: { agentId: string; path: string } | undefined) =>
+    target ? `${target.agentId}\0${target.path}` : "";
+  classifications.sort((a, b) =>
+    a.skillId.localeCompare(b.skillId) || targetKey(a.target).localeCompare(targetKey(b.target)),
+  );
+  operations.sort((a, b) =>
+    idOf(a).localeCompare(idOf(b)) ||
+    a.kind.localeCompare(b.kind) ||
+    targetKey(a.kind === "REPAIR_TARGET" ? a.target : undefined).localeCompare(
+      targetKey(b.kind === "REPAIR_TARGET" ? b.target : undefined),
+    ),
+  );
   return { classifications, operations };
 }
 
