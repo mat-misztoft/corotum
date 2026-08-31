@@ -3,6 +3,7 @@ import {
   type ActualState,
   aggregateTargetOutcomes,
   type DesiredStateEnvelope,
+  type DomainErrorCode,
   mergeDesiredStates,
   offlineSkillDisposition,
   parseLockfile,
@@ -18,7 +19,74 @@ import {
   serializeRevisionTransition,
   skillId,
   validateDesiredState,
+  parseDispositionLedger,
+  parseV2Lockfile,
+  parseV2Manifest,
+  serializeDispositionLedger,
+  serializeV2Lockfile,
+  serializeV2Manifest,
+  validateV2DesiredState,
 } from "./index";
+
+describe("v2 desired-state contracts", () => {
+  const id = skillId("sk_01V2");
+  const manifest = {
+    version: 2 as const,
+    skills: [{ id, name: "review", targets: "all" as const, source: { repository: "https://example.test/skills.git", path: "review", ref: "main" }, resolutionStatus: "RESOLVED" as const }],
+  };
+  const lockfile = {
+    version: 2 as const,
+    skills: [{ id, name: "review", source: { ...manifest.skills[0].source, revision: "a".repeat(40), contentHash: `sha256:${"a".repeat(64)}` as const }, materialization: { kind: "source" as const, contentHash: `sha256:${"a".repeat(64)}` as const } }],
+  };
+
+  test("round-trips byte-stably and preserves source nullability for artifact locks", () => {
+    const artifactManifest = { ...manifest, skills: [{ ...manifest.skills[0], source: null }] };
+    const artifactLock = { version: 2 as const, skills: [{ id, name: "review", materialization: { kind: "artifact" as const, artifact: { kind: "git-tree" as const, contentHash: `sha256:${"b".repeat(64)}` as const, integrityHash: `sha256:${"c".repeat(64)}` as const, locator: "artifacts/review", sizeBytes: 1 } } }] };
+    expect(serializeV2Manifest(manifest)).toBe(serializeV2Manifest({ ...manifest, skills: [...manifest.skills].reverse() }));
+    expect(serializeV2Lockfile(lockfile)).toBe(serializeV2Lockfile(lockfile));
+    expect(validateV2DesiredState({ manifest: artifactManifest, lockfile: artifactLock }).lockfile.skills[0]?.materialization.kind).toBe("artifact");
+    expect(parseV2Lockfile(serializeV2Lockfile(lockfile), parseV2Manifest(serializeV2Manifest(manifest)))).toEqual(lockfile);
+  });
+
+  test("rejects duplicate normalized names and incompatible materialization", () => {
+    expect(() => parseV2Manifest(serializeV2Manifest({ ...manifest, skills: [...manifest.skills, { ...manifest.skills[0], id: skillId("sk_02V2"), name: "REVIEW" }] }))).toThrow("Invalid corotum.yaml manifest");
+    expect(() => parseV2Manifest(serializeV2Manifest({ ...manifest, skills: [...manifest.skills, { ...manifest.skills[0], name: "other" }] }))).toThrow("Invalid corotum.yaml manifest");
+    expect(() => validateV2DesiredState({ manifest, lockfile: { ...lockfile, skills: [{ ...lockfile.skills[0], materialization: { kind: "source", contentHash: `sha256:${"b".repeat(64)}` as const } }] } })).toThrow("must match its source hash");
+    expect(() => validateV2DesiredState({ manifest, lockfile: { ...lockfile, skills: [{ ...lockfile.skills[0], source: { ...lockfile.skills[0].source, path: "different" } }] } })).toThrow("must match its manifest source");
+    expect(() => validateV2DesiredState({ manifest, lockfile: { ...lockfile, skills: [{ ...lockfile.skills[0], materialization: { kind: "artifact", artifact: { kind: "git-tree", contentHash: `sha256:${"a".repeat(64)}` as const, integrityHash: `sha256:${"b".repeat(64)}` as const, locator: "artifacts/review", sizeBytes: 1 } } }] } })).toThrow("must not include a source lock");
+  });
+
+  test("rejects malformed IDs, hashes, and incomplete artifact descriptors", () => {
+    expect(() => parseV2Manifest("version: 2\nskills:\n  - id: invalid\n    name: review\n    targets: all\n")).toThrow("Invalid corotum.yaml manifest");
+    expect(() => parseV2Manifest("version: 2\nskills:\n  - id: sk_01V2\n    name: nested\\review\n    targets: all\n")).toThrow("Invalid corotum.yaml manifest");
+    expect(() => parseV2Lockfile(JSON.stringify({ ...lockfile, skills: [{ ...lockfile.skills[0], source: { ...lockfile.skills[0].source, contentHash: "sha256:bad" } }] }), manifest)).toThrow("Invalid corotum.lock lockfile");
+    expect(() => parseV2Lockfile(JSON.stringify({ ...lockfile, skills: [{ ...lockfile.skills[0], source: { ...lockfile.skills[0].source, revision: "HEAD" } }] }), manifest)).toThrow("Invalid corotum.lock lockfile");
+    expect(() => parseV2Lockfile(JSON.stringify({ version: 2, skills: [{ id, name: "review", materialization: { kind: "artifact", artifact: { kind: "git-tree", contentHash: `sha256:${"a".repeat(64)}`, integrityHash: `sha256:${"b".repeat(64)}`, locator: "artifact" } } }] }), manifest)).toThrow("Invalid corotum.lock lockfile");
+  });
+
+  test("serializes a durable disposition ledger after unrelated revisions and re-add", () => {
+    const ledger = { version: 2 as const, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "UNMANAGE" as const, effectiveSequence: 2 } } };
+    const serialized = serializeDispositionLedger(ledger);
+    const afterUnrelatedRevision = parseDispositionLedger(serialized);
+    expect(afterUnrelatedRevision).toEqual(ledger);
+    expect(serializeDispositionLedger(afterUnrelatedRevision)).toBe(serialized);
+    expect(validateV2DesiredState({ manifest, lockfile }).manifest.skills).toEqual([expect.objectContaining({ id, name: "review" })]);
+    expect(afterUnrelatedRevision.activeDispositions[id]).toEqual(ledger.activeDispositions[id]);
+  });
+
+  test("publishes every v2 materialization failure code", () => {
+    const codes: readonly DomainErrorCode[] = [
+      "AUTH_REQUIRED",
+      "SOURCE_UNAVAILABLE",
+      "ARTIFACT_UNAVAILABLE",
+      "CONTENT_HASH_MISMATCH",
+      "LOCAL_CONFLICT",
+      "DRIFTED",
+      "NETWORK_ERROR",
+    ];
+    expect(codes).toHaveLength(7);
+  });
+});
 
 describe("portable core domain primitives", () => {
   test("keeps opaque skill IDs stable through serialization independent of display names", () => {

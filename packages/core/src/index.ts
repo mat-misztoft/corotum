@@ -35,12 +35,17 @@ export function revisionId(value: string): RevisionId {
 }
 
 export type DomainErrorCode =
+  | "ARTIFACT_UNAVAILABLE"
   | "AUTH_REQUIRED"
   | "CONFLICT"
+  | "CONTENT_HASH_MISMATCH"
   | "DEVICE_ERROR"
+  | "DRIFTED"
   | "INVALID_REVISION_ID"
   | "INVALID_SKILL_ID"
+  | "LOCAL_CONFLICT"
   | "NETWORK_ERROR"
+  | "SOURCE_UNAVAILABLE"
   | "VALIDATION_ERROR";
 
 export class DomainValidationError extends Error {
@@ -333,6 +338,256 @@ export function validateDesiredState(
   }
 
   return { manifest, lockfile };
+}
+
+export type SourceMetadata = Readonly<{
+  repository: string;
+  path: string;
+  ref: string;
+}>;
+
+export type SourceLock = SourceMetadata &
+  Readonly<{ revision: string; contentHash: `sha256:${string}` }>;
+
+export type ArtifactMetadata = Readonly<{
+  kind: "git-tree" | "r2-tar-zst";
+  contentHash: `sha256:${string}`;
+  integrityHash: `sha256:${string}`;
+  locator: string;
+  sizeBytes: number;
+}>;
+
+export type V2ManifestSkill = Readonly<{
+  id: SkillId;
+  name: string;
+  targets: AgentTargets;
+  source?: SourceMetadata | null;
+  resolutionStatus: ResolutionStatus;
+}>;
+
+export type V2LockedSkill = Readonly<{
+  id: SkillId;
+  name: string;
+  source?: SourceLock;
+  materialization:
+    | Readonly<{ kind: "source"; contentHash: `sha256:${string}` }>
+    | Readonly<{ kind: "artifact"; artifact: ArtifactMetadata }>;
+}>;
+
+export type V2DesiredState = Readonly<{
+  manifest: Readonly<{ version: 2; skills: readonly V2ManifestSkill[] }>;
+  lockfile: Readonly<{ version: 2; skills: readonly V2LockedSkill[] }>;
+}>;
+
+export type TombstoneDisposition = Readonly<{
+  skillId: SkillId;
+  name: string;
+  disposition: "REMOVE" | "UNMANAGE";
+  effectiveSequence: number;
+}>;
+
+export type DispositionLedger = Readonly<{
+  version: 2;
+  activeDispositions: Readonly<Record<SkillId, TombstoneDisposition>>;
+}>;
+
+const sha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+const immutableGitRevisionSchema = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
+const segmentSchema = z.string().trim().min(1).refine(
+  (value) => !value.includes("/") && !value.includes("\\") && value !== "." && value !== "..",
+  "A skill name must be one path segment.",
+);
+const sourceMetadataSchema = z.object({ repository: nonEmptyString, path: nonEmptyString, ref: nonEmptyString }).strict();
+const artifactMetadataSchema = z.object({
+  kind: z.enum(["git-tree", "r2-tar-zst"]),
+  contentHash: sha256Schema,
+  integrityHash: sha256Schema,
+  locator: nonEmptyString,
+  sizeBytes: z.number().int().nonnegative(),
+}).strict();
+const v2ManifestSchema = z.object({
+  version: z.literal(2),
+  skills: z.array(z.object({ id: nonEmptyString, name: segmentSchema, targets: targetsSchema, source: sourceMetadataSchema.nullable().optional(), resolutionStatus: z.enum(["PENDING_RESOLUTION", "RESOLVED"]).default("RESOLVED") }).strict()),
+}).strict();
+const v2LockfileSchema = z.object({
+  version: z.literal(2),
+  skills: z.array(z.object({
+    id: nonEmptyString,
+    name: segmentSchema,
+    source: sourceMetadataSchema.extend({ revision: immutableGitRevisionSchema, contentHash: sha256Schema }).strict().optional(),
+    materialization: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("source"), contentHash: sha256Schema }).strict(),
+      z.object({ kind: z.literal("artifact"), artifact: artifactMetadataSchema }).strict(),
+    ]),
+  }).strict()),
+}).strict();
+
+function normalizedName(name: string): string {
+  return name.normalize("NFC").toLocaleLowerCase("en-US");
+}
+
+function v2ValidationError(message: string): never {
+  throw validationError(message);
+}
+
+/** Validates v2 source/artifact desired state without filesystem or provider access. */
+export function validateV2DesiredState(input: V2DesiredState): V2DesiredState {
+  const manifestResult = v2ManifestSchema.safeParse(input.manifest);
+  const lockResult = v2LockfileSchema.safeParse(input.lockfile);
+  if (!manifestResult.success || !lockResult.success) v2ValidationError("Invalid Corotum v2 desired state.");
+  const manifest = manifestResult.data;
+  const lockfile = lockResult.data;
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  const manifests = manifest.skills.map((skill) => {
+    const id = skillId(skill.id);
+    if (ids.has(id)) v2ValidationError(`manifest contains duplicate skill ID ${id}.`);
+    ids.add(id);
+    const name = normalizedName(skill.name);
+    if (names.has(name)) v2ValidationError(`manifest contains duplicate normalized name ${skill.name}.`);
+    names.add(name);
+    return { ...skill, id, targets: normalizeTargets(skill.targets) } as V2ManifestSkill;
+  });
+  const manifestById = new Map(manifests.map((skill) => [skill.id, skill]));
+  const lockIds = new Set<string>();
+  const locks = lockfile.skills.map((lock) => {
+    const id = skillId(lock.id);
+    if (lockIds.has(id)) v2ValidationError(`lockfile contains duplicate skill ID ${id}.`);
+    lockIds.add(id);
+    const skill = manifestById.get(id);
+    if (!skill) v2ValidationError(`Lock entry ${id} has no manifest skill.`);
+    if (skill.name !== lock.name) v2ValidationError(`Lock entry for ${id} does not match its manifest name.`);
+    if (lock.materialization.kind === "source") {
+      if (!lock.source || lock.source.contentHash !== lock.materialization.contentHash) {
+        v2ValidationError(`Source materialization for ${id} must match its source hash.`);
+      }
+      if (
+        !skill.source ||
+        skill.source.repository !== lock.source.repository ||
+        skill.source.path !== lock.source.path ||
+        skill.source.ref !== lock.source.ref
+      ) {
+        v2ValidationError(`Source materialization for ${id} must match its manifest source.`);
+      }
+    }
+    if (lock.materialization.kind === "artifact" && lock.source) {
+      v2ValidationError(`Artifact materialization for ${id} must not include a source lock.`);
+    }
+    return { ...lock, id } as V2LockedSkill;
+  });
+  for (const skill of manifests) {
+    if (!lockIds.has(skill.id) && skill.resolutionStatus !== "PENDING_RESOLUTION") v2ValidationError(`Resolved skill ${skill.id} has no lock entry.`);
+    if (lockIds.has(skill.id) && skill.resolutionStatus === "PENDING_RESOLUTION") v2ValidationError(`Pending skill ${skill.id} must not have a lock entry.`);
+  }
+  return {
+    manifest: { version: 2, skills: manifests.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) },
+    lockfile: { version: 2, skills: locks.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) },
+  };
+}
+
+/** Parses a Corotum v2 manifest. */
+export function parseV2Manifest(source: string): V2DesiredState["manifest"] {
+  try {
+    const manifest = v2ManifestSchema.parse(parse(source, { maxAliasCount: 0 }));
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    const skills = manifest.skills.map((skill) => {
+      const id = skillId(skill.id);
+      if (ids.has(id)) v2ValidationError(`manifest contains duplicate skill ID ${id}.`);
+      ids.add(id);
+      const name = normalizedName(skill.name);
+      if (names.has(name)) v2ValidationError(`manifest contains duplicate normalized name ${skill.name}.`);
+      names.add(name);
+      return { ...skill, id, targets: normalizeTargets(skill.targets) } as V2ManifestSkill;
+    });
+    return { version: 2, skills: skills.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) };
+  } catch { throw validationError("Invalid corotum.yaml manifest."); }
+}
+
+/** Produces deterministic v2 manifest YAML. */
+export function serializeV2Manifest(manifest: V2DesiredState["manifest"]): string {
+  const parsed = parseV2Manifest(stringify(manifest));
+  return stringify({ version: 2, skills: parsed.skills });
+}
+
+/** Parses and validates a v2 lockfile together with its manifest. */
+export function parseV2Lockfile(source: string, manifest: V2DesiredState["manifest"]): V2DesiredState["lockfile"] {
+  try {
+    const lockfile = v2LockfileSchema.parse(JSON.parse(source)) as unknown as V2DesiredState["lockfile"];
+    return validateV2DesiredState({ manifest, lockfile }).lockfile;
+  }
+  catch { throw validationError("Invalid corotum.lock lockfile."); }
+}
+
+/** Produces deterministic v2 lockfile JSON. */
+export function serializeV2Lockfile(lockfile: V2DesiredState["lockfile"]): string {
+  const parsed = v2LockfileSchema.parse(lockfile);
+  const ids = new Set<string>();
+  for (const skill of parsed.skills) {
+    const id = skillId(skill.id);
+    if (ids.has(id)) v2ValidationError(`lockfile contains duplicate skill ID ${id}.`);
+    ids.add(id);
+    if (
+      skill.materialization.kind === "source" &&
+      (!skill.source || skill.source.contentHash !== skill.materialization.contentHash)
+    ) {
+      v2ValidationError(`Source materialization for ${id} must match its source hash.`);
+    }
+    if (skill.materialization.kind === "artifact" && skill.source) {
+      v2ValidationError(`Artifact materialization for ${id} must not include a source lock.`);
+    }
+  }
+  return `${JSON.stringify({ version: 2, skills: [...parsed.skills].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) }, null, 2)}\n`;
+}
+
+const dispositionLedgerSchema = z
+  .object({
+    version: z.literal(2),
+    activeDispositions: z.record(
+      nonEmptyString,
+      z
+        .object({
+          skillId: nonEmptyString,
+          name: segmentSchema,
+          disposition: z.enum(["REMOVE", "UNMANAGE"]),
+          effectiveSequence: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+function normalizeDispositionLedger(input: unknown): DispositionLedger {
+  const parsed = dispositionLedgerSchema.safeParse(input);
+  if (!parsed.success) v2ValidationError("Invalid disposition ledger.");
+
+  const entries = Object.entries(parsed.data.activeDispositions)
+    .map(([id, disposition]) => {
+      const skillIdValue = skillId(id);
+      if (skillIdValue !== disposition.skillId) {
+        v2ValidationError("Invalid disposition ledger.");
+      }
+      return [skillIdValue, { ...disposition, skillId: skillIdValue }] as const;
+    })
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  return {
+    version: 2,
+    activeDispositions: Object.fromEntries(entries) as DispositionLedger["activeDispositions"],
+  };
+}
+
+export function serializeDispositionLedger(ledger: DispositionLedger): string {
+  const normalized = normalizeDispositionLedger(ledger);
+  return `${JSON.stringify(normalized, null, 2)}\n`;
+}
+
+export function parseDispositionLedger(source: string): DispositionLedger {
+  try {
+    return normalizeDispositionLedger(JSON.parse(source));
+  } catch {
+    throw validationError("Invalid disposition ledger.");
+  }
 }
 
 export type ActualState = Readonly<{
