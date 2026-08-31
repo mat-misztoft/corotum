@@ -88,6 +88,7 @@ describe("LocalReconcileExecutor", () => {
             path: join(root, "pi", "example"),
             canonicalPath: input.canonicalPath,
             mode: "symlink" as const,
+            expectedHash: lock.contentHash,
           },
         ],
         outcomes: [
@@ -126,7 +127,7 @@ describe("LocalReconcileExecutor", () => {
     });
     expect(result.state.skills[lock.id]?.contentHash).toBe(lock.contentHash);
     expect(result.state.lastAppliedRevision).toBe("1");
-    expect(await hashSkillDirectory(join(root, "canonical", lock.id))).toBe(
+    expect(await hashSkillDirectory(join(root, "canonical", lock.skill))).toBe(
       lock.contentHash,
     );
   });

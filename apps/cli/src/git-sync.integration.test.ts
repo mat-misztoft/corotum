@@ -132,8 +132,8 @@ describe("Git Sync two-home safety", () => {
 
     expect(synced).toMatchObject({ kind: "synced" });
     for (const lock of [adopted, added]) {
-      expect(await hashSkillDirectory(join(homeB, "skills", lock.id))).toBe(lock.contentHash);
-      expect(await readFile(join(homeB, "skills", lock.id, "SKILL.md"), "utf8")).toBe(
+      expect(await hashSkillDirectory(join(homeB, "skills", lock.skill))).toBe(lock.contentHash);
+      expect(await readFile(join(homeB, "skills", lock.skill, "SKILL.md"), "utf8")).toBe(
         await readFile(join(source, lock.path, "SKILL.md"), "utf8"),
       );
     }
@@ -160,21 +160,24 @@ describe("Git Sync two-home safety", () => {
     });
     expect(installed.operations[0]).toMatchObject({
       status: "SUCCESS",
-      targetOutcomes: [expect.objectContaining({ status: "PRESERVED_UNMANAGED" })],
+      targetOutcomes: [expect.objectContaining({ status: "LOCAL_CONFLICT" })],
     });
     expect(await readFile(join(home, ".codex", "skills", lock.skill, "SKILL.md"), "utf8")).toBe("unmanaged bytes\n");
 
-    await store.replaceFromDirectory(lock.id, join(source, lock.path), lock.contentHash);
-    await writeFile(join(home, "skills", lock.id, "SKILL.md"), "drifted bytes\n");
+    await store.replaceFromDirectory(lock.id, lock.skill, join(source, lock.path), lock.contentHash, {
+      skillId: lock.id,
+      contentHash: lock.contentHash,
+    });
+    await writeFile(join(home, "skills", lock.skill, "SKILL.md"), "drifted bytes\n");
     const driftedState: LocalOperationalState = {
       schemaVersion: 1,
       lastAppliedRevision: revisionId("one"),
       skills: {
-        [lock.id]: { canonicalPath: store.pathFor(lock.id), contentHash: lock.contentHash, targets: {} },
+        [lock.id]: { name: lock.skill, canonicalPath: store.pathFor(lock.skill), contentHash: lock.contentHash, targets: {} },
       },
     };
     expect(planReconcile(desired([lock]), {
-      skills: { [lock.id]: { contentHash: await hashSkillDirectory(store.pathFor(lock.id)), managed: true } },
+      skills: { [lock.id]: { contentHash: await hashSkillDirectory(store.pathFor(lock.skill)), managed: true } },
     }).classifications).toContainEqual({ skillId: lock.id, classification: "DRIFTED" });
 
     const restored = await new RestoreService(
@@ -182,7 +185,7 @@ describe("Git Sync two-home safety", () => {
       executor,
     ).restore({ all: true, execution: { state: driftedState, enabledAgentIds: [], homeDir: home } });
     expect(restored).toMatchObject({ kind: "restored" });
-    expect(await hashSkillDirectory(store.pathFor(lock.id))).toBe(lock.contentHash);
+    expect(await hashSkillDirectory(store.pathFor(lock.skill))).toBe(lock.contentHash);
   });
 
   test("preserves REMOVE, UNMANAGE, and re-add dispositions for offline homes", async () => {

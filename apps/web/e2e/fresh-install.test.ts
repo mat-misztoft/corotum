@@ -362,7 +362,7 @@ test("Git Sync completes without a Corotum Cloud subscription", async () => {
     ),
   ).toBe("keep me\n");
   for (const lock of [adopted, added]) {
-    expect(await hashSkillDirectory(join(homeB, "skills", lock.id))).toBe(
+    expect(await hashSkillDirectory(join(homeB, "skills", lock.skill))).toBe(
       lock.contentHash,
     );
   }
@@ -403,7 +403,7 @@ test("Git Sync completes without a Corotum Cloud subscription", async () => {
     homeDir: join(root, "drift"),
   });
   await writeFile(
-    join(store.pathFor(adopted.id), "SKILL.md"),
+    join(store.pathFor(adopted.skill), "SKILL.md"),
     "drifted bytes\n",
   );
   const restored = await new RestoreService(
@@ -422,7 +422,8 @@ test("Git Sync completes without a Corotum Cloud subscription", async () => {
         lastAppliedRevision: revisionId("one"),
         skills: {
           [adopted.id]: {
-            canonicalPath: store.pathFor(adopted.id),
+            name: adopted.skill,
+            canonicalPath: store.pathFor(adopted.skill),
             contentHash: adopted.contentHash,
             targets: {},
           },
@@ -433,7 +434,7 @@ test("Git Sync completes without a Corotum Cloud subscription", async () => {
     },
   });
   expect(restored).toMatchObject({ kind: "restored" });
-  expect(await hashSkillDirectory(store.pathFor(adopted.id))).toBe(
+  expect(await hashSkillDirectory(store.pathFor(adopted.skill))).toBe(
     adopted.contentHash,
   );
 });

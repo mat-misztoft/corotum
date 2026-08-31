@@ -85,6 +85,7 @@ export class RestoreService {
     const execution = await this.executor.execute({
       ...input.execution,
       state: input.execution.state,
+      restore: true,
       desired: current.value.state,
       revision: current.value.revisionId,
       plan: {

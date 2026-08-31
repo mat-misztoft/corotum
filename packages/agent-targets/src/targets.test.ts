@@ -4,7 +4,10 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
+  realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,6 +15,7 @@ import { join } from "node:path";
 
 import { skillId } from "../../core/src/index";
 import type { AgentAdapter } from "./index";
+import { hashSkillDirectory } from "../../skills-adapter/src/canonical-store";
 import {
   type AgentTargetFileSystem,
   AgentTargetManager,
@@ -67,6 +71,7 @@ function input(
     enabledAgentIds,
     homeDir: root,
     ownership,
+    expectedContentHash: "sha256:expected",
   } as const;
 }
 
@@ -74,12 +79,15 @@ describe("AgentTargetManager exposure", () => {
   test("targets all reaches an agent enabled after the skill was added", async () => {
     const { root, canonicalPath } = await fixture();
     const manager = new AgentTargetManager(localTargetFileSystem, adapters);
-    const initial = await manager.expose(
-      input(root, canonicalPath, "all", ["codex"]),
-    );
-    const later = await manager.expose(
-      input(root, canonicalPath, "all", ["codex", "pi"], initial.ownership),
-    );
+    const expectedContentHash = await hashSkillDirectory(canonicalPath);
+    const initial = await manager.expose({
+      ...input(root, canonicalPath, "all", ["codex"]),
+      expectedContentHash,
+    });
+    const later = await manager.expose({
+      ...input(root, canonicalPath, "all", ["codex", "pi"], initial.ownership),
+      expectedContentHash,
+    });
 
     expect(later.ownership.map((target) => target.agentId)).toEqual([
       "codex",
@@ -120,10 +128,90 @@ describe("AgentTargetManager exposure", () => {
     const path = join(root, "codex-skills", "example");
 
     expect(result.ownership[0]?.mode).toBe("copy");
+    expect(result.ownership[0]?.expectedHash).toBe(await hashSkillDirectory(path));
     expect((await lstat(path)).isSymbolicLink()).toBe(false);
     expect(await readFile(join(path, "SKILL.md"), "utf8")).toBe(
       "# Managed skill\n",
     );
+  });
+
+  test("recreates a missing recorded target", async () => {
+    const { root, canonicalPath } = await fixture();
+    const hash = await hashSkillDirectory(canonicalPath);
+    const manager = new AgentTargetManager(localTargetFileSystem, adapters);
+    const initial = await manager.expose({
+      ...input(root, canonicalPath, ["codex"], ["codex"]),
+      expectedContentHash: hash,
+    });
+    const path = join(root, "codex-skills", "example");
+    await rm(path, { force: true, recursive: true });
+
+    const repaired = await manager.expose({
+      ...input(root, canonicalPath, ["codex"], ["codex"], initial.ownership),
+      expectedContentHash: hash,
+    });
+
+    expect(repaired.outcomes).toEqual([
+      { agentId: "codex", path, status: "EXPOSED", mode: "symlink" },
+    ]);
+    expect(await realpath(path)).toBe(await realpath(canonicalPath));
+  });
+
+  test("repoints a verified owned symlink to the named canonical directory", async () => {
+    const { root, canonicalPath: oldCanonicalPath } = await fixture();
+    const namedCanonicalPath = join(root, "agents", "skills", "example");
+    await mkdir(join(root, "agents", "skills"), { recursive: true });
+    await writeFile(join(oldCanonicalPath, "SKILL.md"), "# Previous skill\n");
+    await mkdir(namedCanonicalPath);
+    await writeFile(join(namedCanonicalPath, "SKILL.md"), "# Managed skill\n");
+    const path = join(root, "codex-skills", "example");
+    await mkdir(join(root, "codex-skills"), { recursive: true });
+    await symlink(oldCanonicalPath, path, "dir");
+    const oldHash = await hashSkillDirectory(oldCanonicalPath);
+    const newHash = await hashSkillDirectory(namedCanonicalPath);
+    const manager = new AgentTargetManager(localTargetFileSystem, adapters);
+
+    const result = await manager.expose({
+      ...input(root, namedCanonicalPath, ["codex"], ["codex"]),
+      expectedContentHash: newHash,
+      ownership: [{
+        skillId: id,
+        agentId: "codex",
+        path,
+        canonicalPath: oldCanonicalPath,
+        mode: "symlink",
+        expectedHash: oldHash,
+      }],
+    });
+
+    expect(result.outcomes).toEqual([{ agentId: "codex", path, status: "EXPOSED", mode: "symlink" }]);
+    expect(await realpath(path)).toBe(await realpath(namedCanonicalPath));
+  });
+
+  test("restores a verified target when exposure replacement fails", async () => {
+    const { root, canonicalPath } = await fixture();
+    const path = join(root, "codex-skills", "example");
+    const hash = await hashSkillDirectory(canonicalPath);
+    const initial = await new AgentTargetManager(localTargetFileSystem, adapters).expose({
+      ...input(root, canonicalPath, ["codex"], ["codex"]),
+      expectedContentHash: hash,
+    });
+    const failingMove: AgentTargetFileSystem = {
+      ...localTargetFileSystem,
+      move: async (from, to) => {
+        if (from.includes(".staging") && to === path) throw new Error("replacement failed");
+        await localTargetFileSystem.move(from, to);
+      },
+    };
+
+    const result = await new AgentTargetManager(failingMove, adapters).expose({
+      ...input(root, canonicalPath, ["codex"], ["codex"], initial.ownership),
+      expectedContentHash: hash,
+    });
+
+    expect(result.outcomes[0]?.status).toBe("ERROR");
+    expect(await realpath(path)).toBe(await realpath(canonicalPath));
+    expect((await readdir(join(root, "codex-skills"))).some((name) => name.includes(".staging") || name.includes(".backup"))).toBe(false);
   });
 
   test("never changes an unowned target during enable, disable, remove, unmanage, or restore", async () => {
@@ -137,7 +225,7 @@ describe("AgentTargetManager exposure", () => {
       input(root, canonicalPath, ["codex"], ["codex"]),
     );
     expect(enabled.outcomes).toEqual([
-      { agentId: "codex", path, status: "PRESERVED_UNMANAGED" },
+      { agentId: "codex", path, status: "LOCAL_CONFLICT" },
     ]);
     const disabled = await manager.disable(id, "codex", enabled.ownership);
     const removed = await manager.remove(id, disabled.ownership);

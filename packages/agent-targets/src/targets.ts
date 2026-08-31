@@ -1,4 +1,4 @@
-import { cp, lstat, mkdir, rename, rm, symlink } from "node:fs/promises";
+import { cp, lstat, mkdir, realpath, rename, rm, symlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 import type { AgentTargets, SkillId } from "../../core/src/index";
@@ -14,6 +14,7 @@ export type ManagedTarget = Readonly<{
   path: string;
   canonicalPath: string;
   mode: TargetMode;
+  expectedHash: string;
 }>;
 
 export type TargetOwnership = readonly ManagedTarget[];
@@ -21,7 +22,7 @@ export type TargetOwnership = readonly ManagedTarget[];
 export type TargetOutcome = Readonly<{
   agentId: AgentId;
   path: string;
-  status: "EXPOSED" | "PRESERVED_UNMANAGED" | "ERROR";
+  status: "EXPOSED" | "PRESERVED_UNMANAGED" | "LOCAL_CONFLICT" | "ERROR";
   mode?: TargetMode;
   error?: string;
 }>;
@@ -65,6 +66,7 @@ export type ExposeInput = Readonly<{
   enabledAgentIds: readonly AgentId[];
   homeDir: string;
   ownership: TargetOwnership;
+  expectedContentHash: string;
 }>;
 
 export type TargetOperationResult = Readonly<{
@@ -115,21 +117,35 @@ export class AgentTargetManager {
         const existing = owned.get(
           ownershipKey({ skillId: input.skillId, agentId, path }),
         );
-        if ((await this.fileSystem.pathExists(path)) && !existing) {
-          outcomes.push({ agentId, path, status: "PRESERVED_UNMANAGED" });
+        const pathExists = await this.fileSystem.pathExists(path);
+        if (pathExists && !existing) {
+          outcomes.push({ agentId, path, status: "LOCAL_CONFLICT" });
+          continue;
+        }
+        if (
+          pathExists &&
+          existing &&
+          !(await this.isVerifiedOwnership(existing, input.canonicalPath))
+        ) {
+          outcomes.push({ agentId, path, status: "LOCAL_CONFLICT" });
           continue;
         }
 
         try {
-          if (existing) await this.fileSystem.remove(path);
           await this.fileSystem.makeDirectory(parent);
-          const mode = await this.exposePath(input.canonicalPath, path);
+          const mode = await this.replaceExposure(input.canonicalPath, path, pathExists);
+          // Copy fallback must record the bytes it actually wrote, rather than
+          // trusting an input hash that may have become stale before exposure.
+          const expectedHash = mode === "copy"
+            ? await hashSkillDirectory(path)
+            : input.expectedContentHash;
           owned.set(ownershipKey({ skillId: input.skillId, agentId, path }), {
             skillId: input.skillId,
             agentId,
             path,
             canonicalPath: input.canonicalPath,
             mode,
+            expectedHash,
           });
           outcomes.push({ agentId, path, status: "EXPOSED", mode });
         } catch (error) {
@@ -249,7 +265,7 @@ export class AgentTargetManager {
         await this.fileSystem.remove(target.path);
         await this.fileSystem.makeDirectory(dirname(target.path));
         const mode = await this.exposePath(canonicalPath, target.path);
-        restored.push({ ...target, mode });
+        restored.push({ ...target, canonicalPath, mode });
         outcomes.push({
           agentId: target.agentId,
           path: target.path,
@@ -270,6 +286,50 @@ export class AgentTargetManager {
       }
     }
     return { ownership: sortOwnership([...retained, ...restored]), outcomes };
+  }
+
+  private async replaceExposure(
+    canonicalPath: string,
+    path: string,
+    replace: boolean,
+  ): Promise<TargetMode> {
+    if (!replace) return this.exposePath(canonicalPath, path);
+    const temporary = `${path}.${crypto.randomUUID()}.staging`;
+    const backup = `${path}.${crypto.randomUUID()}.backup`;
+    let replaced = false;
+    try {
+      const mode = await this.exposePath(canonicalPath, temporary);
+      await this.fileSystem.move(path, backup);
+      try {
+        await this.fileSystem.move(temporary, path);
+      } catch (error) {
+        await this.fileSystem.move(backup, path);
+        throw error;
+      }
+      replaced = true;
+      return mode;
+    } finally {
+      await this.fileSystem.remove(temporary);
+      if (replaced) await this.fileSystem.remove(backup);
+    }
+  }
+
+  private async isVerifiedOwnership(
+    target: ManagedTarget,
+    canonicalPath: string,
+  ): Promise<boolean> {
+    if (!(await this.fileSystem.pathExists(target.path))) return false;
+    if (target.mode === "copy") {
+      return (await hashSkillDirectory(target.path)) === target.expectedHash;
+    }
+    try {
+      return (
+        (await realpath(target.path)) === (await realpath(target.canonicalPath)) &&
+        (await hashSkillDirectory(target.canonicalPath)) === target.expectedHash
+      );
+    } catch {
+      return false;
+    }
   }
 
   private async exposePath(

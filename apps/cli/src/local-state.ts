@@ -32,10 +32,12 @@ const targetSchema = z
     agentId: z.string().min(1),
     mode: targetModeSchema,
     path: z.string().min(1),
+    expectedHash: z.string().min(1),
   })
   .strict();
 const skillStateSchema = z
   .object({
+    name: z.string().min(1),
     canonicalPath: z.string().min(1),
     contentHash: z.string().min(1),
     targets: z.record(z.string(), targetSchema),
@@ -50,6 +52,7 @@ const localStateSchema = z
   .strict();
 
 export type LocalSkillState = Readonly<{
+  name: string;
   canonicalPath: string;
   contentHash: string;
   targets: Readonly<Record<string, LocalTargetState>>;
@@ -59,6 +62,7 @@ export type LocalTargetState = Readonly<{
   agentId: AgentId;
   mode: TargetMode;
   path: string;
+  expectedHash: string;
 }>;
 
 export type LocalOperationalState = Readonly<{
@@ -118,7 +122,7 @@ export async function recoverLocalOperationalState(
   >;
 
   for (const locked of input.desired.lockfile.skills) {
-    const canonicalPath = join(input.skillsStoragePath, locked.id);
+    const canonicalPath = join(input.skillsStoragePath, locked.skill);
     if (!(await matchesHash(canonicalPath, locked.contentHash))) continue;
 
     const targets: Record<string, LocalTargetState> = {};
@@ -136,12 +140,14 @@ export async function recoverLocalOperationalState(
             agentId,
             mode: "symlink",
             path,
+            expectedHash: locked.contentHash,
           };
         }
       }
     }
 
     skills[locked.id] = {
+      name: locked.skill,
       canonicalPath,
       contentHash: locked.contentHash,
       targets,
@@ -167,6 +173,7 @@ export function managedTargetsFromState(
         path: target.path,
         canonicalPath: skill.canonicalPath,
         mode: target.mode,
+        expectedHash: target.expectedHash,
       })),
     )
     .sort((left, right) =>

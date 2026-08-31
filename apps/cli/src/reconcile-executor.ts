@@ -45,6 +45,8 @@ export type ExecuteReconcileInput = Readonly<{
   state: LocalOperationalState;
   enabledAgentIds: readonly AgentId[];
   homeDir: string;
+  /** Explicit restore may replace a recorded canonical copy that has drifted. */
+  restore?: boolean;
 }>;
 
 /**
@@ -103,7 +105,9 @@ export class LocalReconcileExecutor {
               error: firstTargetError(result.outcomes),
             });
           } else {
-            await this.canonicalStore.remove(skillId);
+            const skill = skills[skillId];
+            if (!skill) throw new Error("Managed skill state is missing.");
+            await this.canonicalStore.remove(skillId, skill.name, skill.contentHash);
             delete skills[skillId];
             operations.push({
               kind: operation.kind,
@@ -129,7 +133,9 @@ export class LocalReconcileExecutor {
               error: firstTargetError(result.outcomes),
             });
           } else {
-            await this.canonicalStore.remove(skillId);
+            const skill = skills[skillId];
+            if (!skill) throw new Error("Managed skill state is missing.");
+            await this.canonicalStore.remove(skillId, skill.name, skill.contentHash);
             delete skills[skillId];
             operations.push({
               kind: operation.kind,
@@ -187,22 +193,29 @@ export class LocalReconcileExecutor {
     const temporarySkill = join(temporaryRoot, "skill");
     try {
       await this.materializer.materialize(lock, temporarySkill);
+      const manifest = input.desired.manifest.skills.find(
+        (skill) => skill.id === lock.id,
+      );
+      if (!manifest) throw new Error("Locked skill is absent from desired state.");
       await this.canonicalStore.replaceFromDirectory(
         lock.id,
+        lock.skill,
         temporarySkill,
         lock.contentHash,
+        input.state.skills[lock.id]
+          ? {
+              skillId: lock.id,
+              contentHash: input.state.skills[lock.id].contentHash,
+              allowDrift: input.restore,
+            }
+          : undefined,
       );
-      const canonicalPath = this.canonicalStore.pathFor(lock.id);
+      const canonicalPath = this.canonicalStore.pathFor(lock.skill);
       if ((await hashSkillDirectory(canonicalPath)) !== lock.contentHash) {
         throw new Error(
           "Canonical skill content did not match the lock after installation.",
         );
       }
-      const manifest = input.desired.manifest.skills.find(
-        (skill) => skill.id === lock.id,
-      );
-      if (!manifest)
-        throw new Error("Locked skill is absent from desired state.");
       const exposed = await this.targets.expose({
         skillId: lock.id,
         skillName: lock.skill,
@@ -211,11 +224,13 @@ export class LocalReconcileExecutor {
         enabledAgentIds: input.enabledAgentIds,
         homeDir: input.homeDir,
         ownership,
+        expectedContentHash: lock.contentHash,
       });
       return {
         ownership: exposed.ownership,
         outcomes: exposed.outcomes,
         skill: {
+          name: lock.skill,
           canonicalPath,
           contentHash: lock.contentHash,
           targets: Object.fromEntries(
@@ -227,6 +242,7 @@ export class LocalReconcileExecutor {
                   agentId: target.agentId,
                   mode: target.mode,
                   path: target.path,
+                  expectedHash: target.expectedHash,
                 },
               ]),
           ),
@@ -250,7 +266,12 @@ export class LocalReconcileExecutor {
           .filter((target) => target.skillId === skillId)
           .map((target) => [
             `${target.agentId}\0${target.path}`,
-            { agentId: target.agentId, mode: target.mode, path: target.path },
+            {
+              agentId: target.agentId,
+              mode: target.mode,
+              path: target.path,
+              expectedHash: target.expectedHash,
+            },
           ]),
       ),
     };

@@ -45,7 +45,7 @@ async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "corotum-local-state-"));
   directories.push(root);
   const skillsStoragePath = join(root, "skills");
-  const canonicalPath = join(skillsStoragePath, id);
+  const canonicalPath = join(skillsStoragePath, "example");
   await mkdir(canonicalPath, { recursive: true });
   await writeFile(join(canonicalPath, "SKILL.md"), "# Example\n");
   const contentHash = await hashSkillDirectory(canonicalPath);
@@ -92,6 +92,7 @@ describe("LocalOperationalStateStore", () => {
       lastAppliedRevision: revisionId("42"),
       skills: {
         [id]: {
+          name: "example",
           canonicalPath,
           contentHash,
           targets: {
@@ -99,6 +100,7 @@ describe("LocalOperationalStateStore", () => {
               agentId: "codex" as const,
               mode: "symlink" as const,
               path: join(root, "codex-skills", "example"),
+              expectedHash: contentHash,
             },
           },
         },
@@ -118,6 +120,7 @@ describe("LocalOperationalStateStore", () => {
         canonicalPath,
         mode: "symlink",
         path: join(root, "codex-skills", "example"),
+        expectedHash: contentHash,
       },
     ]);
   });
@@ -153,7 +156,7 @@ describe("recoverLocalOperationalState", () => {
     expect(state.lastAppliedRevision).toBe("7");
     expect(state.skills[id]?.canonicalPath).toBe(canonicalPath);
     expect(Object.values(state.skills[id]?.targets ?? {})).toEqual([
-      { agentId: "codex", mode: "symlink", path: target },
+      { agentId: "codex", mode: "symlink", path: target, expectedHash: state.skills[id]?.contentHash },
     ]);
   });
 

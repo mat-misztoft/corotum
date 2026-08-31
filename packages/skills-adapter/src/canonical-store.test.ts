@@ -1,98 +1,68 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { skillId } from "../../core/src/index";
 import { CanonicalSkillStore, hashSkillDirectory } from "./canonical-store";
 
-const temporaryDirectories: string[] = [];
+const directories: string[] = [];
+afterEach(async () =>
+  Promise.all(directories.splice(0).map((path) => rm(path, { force: true, recursive: true }))),
+);
 
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { force: true, recursive: true })),
-  );
-});
-
-async function fixture(name: string, content: string): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "corotum-canonical-"));
-  temporaryDirectories.push(directory);
-  await mkdir(join(directory, name), { recursive: true });
-  await writeFile(join(directory, name, "SKILL.md"), content);
-  return join(directory, name);
+async function fixture(root: string, name: string, content: string): Promise<string> {
+  const path = join(root, `${name}-${crypto.randomUUID()}`);
+  await mkdir(path, { recursive: true });
+  await writeFile(join(path, "SKILL.md"), content);
+  return path;
 }
 
 describe("CanonicalSkillStore", () => {
-  test("keeps skills with the same display name separate by stable ID", async () => {
+  test("installs named content atomically while stable ID remains metadata", async () => {
     const root = await mkdtemp(join(tmpdir(), "corotum-store-"));
-    temporaryDirectories.push(root);
-    const source = await fixture("frontend-design", "# Frontend design\n");
+    directories.push(root);
+    const source = await fixture(root, "source", "# Example\n");
+    const store = new CanonicalSkillStore(join(root, "skills"));
+    const id = skillId("sk_stablemetadata");
     const hash = await hashSkillDirectory(source);
-    const store = new CanonicalSkillStore(root);
-    const first = skillId("sk_first");
-    const second = skillId("sk_second");
 
-    await store.replaceFromDirectory(first, source, hash);
-    await store.replaceFromDirectory(second, source, hash);
+    await store.replaceFromDirectory(id, "example", source, hash);
 
-    expect(store.pathFor(first)).not.toBe(store.pathFor(second));
-    expect(await readFile(join(store.pathFor(first), "SKILL.md"), "utf8")).toBe(
-      "# Frontend design\n",
-    );
-    expect(
-      await readFile(join(store.pathFor(second), "SKILL.md"), "utf8"),
-    ).toBe("# Frontend design\n");
+    expect(store.pathFor("example")).toBe(join(root, "skills", "example"));
+    expect(await readFile(join(store.pathFor("example"), "SKILL.md"), "utf8")).toBe("# Example\n");
+    expect(await readdir(join(root, "skills"))).toEqual(["example"]);
   });
 
-  test("replaces only verified content", async () => {
+  test("preserves verified prior content and cleans staging when replacement verification fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "corotum-store-"));
-    temporaryDirectories.push(root);
-    const oldSource = await fixture("example", "# Old\n");
-    const newSource = await fixture("example", "# New\n");
-    const store = new CanonicalSkillStore(root);
+    directories.push(root);
+    const oldSource = await fixture(root, "old", "# Old\n");
+    const newSource = await fixture(root, "new", "# New\n");
+    const store = new CanonicalSkillStore(join(root, "skills"));
     const id = skillId("sk_example");
+    const oldHash = await hashSkillDirectory(oldSource);
+    await store.replaceFromDirectory(id, "example", oldSource, oldHash);
 
-    await store.replaceFromDirectory(
-      id,
-      oldSource,
-      await hashSkillDirectory(oldSource),
-    );
-    await expect(
-      store.replaceFromDirectory(id, newSource, "sha256:not-the-new-content"),
-    ).rejects.toThrow("expected hash");
-    expect(await readFile(join(store.pathFor(id), "SKILL.md"), "utf8")).toBe(
-      "# Old\n",
-    );
+    await expect(store.replaceFromDirectory(id, "example", newSource, "sha256:wrong", {
+      skillId: id,
+      contentHash: oldHash,
+    })).rejects.toThrow("expected hash");
 
-    const actualHash = await store.replaceFromDirectory(
-      id,
-      newSource,
-      await hashSkillDirectory(newSource),
-    );
-    expect(actualHash).toBe(await hashSkillDirectory(store.pathFor(id)));
-    expect(await readFile(join(store.pathFor(id), "SKILL.md"), "utf8")).toBe(
-      "# New\n",
-    );
+    expect(await readFile(join(store.pathFor("example"), "SKILL.md"), "utf8")).toBe("# Old\n");
+    expect(await readdir(join(root, "skills"))).toEqual(["example"]);
   });
 
-  test("rejects symlinks rather than hashing them as managed content", async () => {
+  test("rejects unmanaged and case-colliding named directories without mutation", async () => {
     const root = await mkdtemp(join(tmpdir(), "corotum-store-"));
-    temporaryDirectories.push(root);
-    const source = await fixture("example", "# Example\n");
-    await symlink("SKILL.md", join(source, "linked.md"));
-    const store = new CanonicalSkillStore(root);
+    directories.push(root);
+    const source = await fixture(root, "source", "# Managed\n");
+    const store = new CanonicalSkillStore(join(root, "skills"));
+    await mkdir(store.pathFor("Example"), { recursive: true });
+    await writeFile(join(store.pathFor("Example"), "SKILL.md"), "# Unmanaged\n");
 
-    await expect(
-      store.replaceFromDirectory(skillId("sk_example"), source, "sha256:wrong"),
-    ).rejects.toThrow("only files and directories");
+    await expect(store.replaceFromDirectory(skillId("sk_example"), "Example", source, await hashSkillDirectory(source)))
+      .rejects.toMatchObject({ code: "LOCAL_CONFLICT" });
+    expect(await readFile(join(store.pathFor("Example"), "SKILL.md"), "utf8")).toBe("# Unmanaged\n");
   });
 });

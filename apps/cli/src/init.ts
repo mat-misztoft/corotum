@@ -144,11 +144,17 @@ export class InitService {
     const stagedState: LocalOperationalState = {
       ...input.execution.state,
       skills: Object.fromEntries(locks.map((lock, index) => [lock.id, {
+        name: lock.skill,
         canonicalPath: "pending-init",
         contentHash: lock.contentHash,
         targets: Object.fromEntries(input.candidates
           .filter((candidate) => isSelectedCandidate(candidate, input.selected[index]))
-          .map((candidate) => [`${candidate.agentId}\0${candidate.path}`, { agentId: candidate.agentId, mode: "copy" as const, path: candidate.path }])),
+          .map((candidate) => [`${candidate.agentId}\0${candidate.path}`, {
+            agentId: candidate.agentId,
+            mode: "copy" as const,
+            path: candidate.path,
+            expectedHash: candidate.contentHash,
+          }])),
       }])),
     };
     const actual = { skills: {} } as const;
