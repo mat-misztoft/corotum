@@ -167,6 +167,7 @@ test("an authenticated device can pull empty Cloud state and push an idempotent 
       manifest: { version: 1, skills: [] },
       lockfile: { version: 1, skills: [] },
     },
+    dispositionLedger: { version: 2, activeDispositions: {} },
   });
 
   const created = await handlePutWorkspaceState(

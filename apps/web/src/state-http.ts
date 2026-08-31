@@ -38,6 +38,7 @@ function envelope(
     revisionId: revision.id,
     revisionSequence: revision.sequence,
     state: revision.state,
+    dispositionLedger: revision.dispositionLedger,
   };
 }
 

@@ -16,10 +16,25 @@ import {
 } from "./headers";
 
 export {
+  ARTIFACT_DESCRIPTOR_HEADER,
   CLI_VERSION_HEADER,
   DEVICE_TOKEN_HEADER,
   IDEMPOTENCY_KEY_HEADER,
 } from "./headers";
+export {
+  V2CloudProviderError,
+  V2SaaSProvider,
+  type V2CloudPushInput,
+  type V2CloudStateEnvelope,
+  type V2SaaSProviderOptions,
+} from "./v2-provider";
+export {
+  V2CloudNormalSync,
+  type ApplicableTarget,
+  type LastVerifiedLocalState,
+  type V2CloudSkillResult,
+  type V2CloudSyncResult,
+} from "./v2-sync";
 export {
   DEVICE_SYNC_STATUSES,
   DEVICE_TARGET_STATUSES,
