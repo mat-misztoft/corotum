@@ -1,11 +1,5 @@
 import { FlowStory } from "./landing-flow-story";
 
-const deviceRows = [
-  { skill: "frontend-design", device: "Mac Mini", status: "SYNCED" },
-  { skill: "code-review", device: "MacBook", status: "BEHIND" },
-  { skill: "playwright", device: "VPS", status: "BEHIND" },
-];
-
 const deviceTargets = [
   { device: "Mac Mini", agent: "Codex", status: "SYNCED" },
   { device: "Mac Mini", agent: "Pi", status: "SYNCED" },
@@ -31,12 +25,6 @@ function statusClass(status: string) {
   if (status === "DRIFTED") return "status-drifted";
   if (status === "AUTH_REQUIRED" || status === "ERROR") return "status-error";
   return "status-attention";
-}
-
-function lineKind(status: string) {
-  if (status === "SYNCED" || status === "LOCKED") return "synced";
-  if (status === "DRIFTED") return "drifted";
-  return "pending";
 }
 
 function statusMark(status: string) {
@@ -99,32 +87,14 @@ export default function Home() {
           </code>
         </div>
 
-        <section className="dispatch-board" aria-labelledby="dispatch-heading">
-          <div className="board-heading">
-            <p id="dispatch-heading">DESIRED STATE</p>
-            <p>ACTUAL DEVICES</p>
-          </div>
-          <div className="board-axis" aria-hidden="true" />
-          <p className="reconcile-label">DIFF / RECONCILE</p>
-          <ol className="device-list">
-            {deviceRows.map(({ skill, device, status }) => (
-              <li key={skill}>
-                <code>{skill}</code>
-                <span
-                  className="state-line"
-                  data-line={lineKind(status)}
-                  aria-hidden="true"
-                />
-                <span>
-                  {device} <StatusLabel status={status} />
-                </span>
-              </li>
-            ))}
-          </ol>
-          <p className="board-note">
-            Desired state is reconciled when each device runs ToolMirror sync.
-          </p>
-        </section>
+        {/* biome-ignore lint/performance/noImgElement: Static landing artwork must retain its supplied dimensions. */}
+        <img
+          className="landing-visual"
+          src="/images/landing/01-one-desired-state.jpg"
+          alt="One desired state across your agent skills and devices."
+          width={1000}
+          height={1000}
+        />
       </section>
 
       <section
@@ -140,37 +110,14 @@ export default function Home() {
             the same skill setup. ToolMirror keeps them aligned automatically.
           </p>
         </div>
-        <section
-          className="machine-room"
-          aria-label="Divergent devices become one locked state"
-        >
-          <div className="machine-room-heading">
-            <p>LOCAL SETUPS</p>
-            <p>ONE LOCKED STATE</p>
-          </div>
-          <div className="machine-room-routes" aria-hidden="true" />
-          <ol className="machine-room-list">
-            <li data-line="synced">
-              <span>Mac Mini</span>
-              <code>frontend-design@a19c</code>
-              <StatusLabel status="LOCKED" />
-            </li>
-            <li data-line="pending">
-              <span>MacBook</span>
-              <code>frontend-design@18f2</code>
-              <StatusLabel status="BEHIND" />
-            </li>
-            <li data-line="drifted">
-              <span>VPS</span>
-              <code>frontend-design@local</code>
-              <StatusLabel status="DRIFTED" />
-            </li>
-          </ol>
-          <p className="machine-room-result">
-            Each device reaches <code>frontend-design@a19c</code> when its CLI
-            reconciles the exact lock.
-          </p>
-        </section>
+        {/* biome-ignore lint/performance/noImgElement: Static landing artwork must retain its supplied dimensions. */}
+        <img
+          className="landing-visual"
+          src="/images/landing/02-reconciliation.jpg"
+          alt="ToolMirror reconciliation across device states."
+          width={1000}
+          height={1000}
+        />
       </section>
 
       <section className="product-flow" aria-labelledby="product-flow-heading">
@@ -274,47 +221,14 @@ export default function Home() {
             for hosted sync, devices, dashboard and WebMCP.
           </p>
         </div>
-        <div className="control-plane">
-          <p className="control-plane-axis">
-            TOOLMIRROR CLI <span aria-hidden="true">→</span> DESIRED STATE
-          </p>
-          <div className="backend-route" aria-hidden="true" />
-          <article className="git-band" aria-labelledby="git-sync-heading">
-            <h3 id="git-sync-heading" className="backend-label">
-              GIT SYNC / FREE
-            </h3>
-            <ul>
-              <li>Free</li>
-              <li>Your repository</li>
-              <li>No account</li>
-              <li>Your Git credentials stay local</li>
-              <li>Deterministic manifest + lockfile</li>
-            </ul>
-          </article>
-          <article className="cloud-plane" aria-labelledby="cloud-heading">
-            <h3 id="cloud-heading" className="backend-label">
-              TOOLMIRROR CLOUD
-            </h3>
-            <p className="cloud-price">$5.99/month · $59.90/year</p>
-            <ul>
-              <li>Hosted desired state</li>
-              <li>Dashboard</li>
-              <li>Devices</li>
-              <li>WebMCP</li>
-              <li>No Git state repo to maintain</li>
-            </ul>
-            <p className="cloud-note">
-              Agents manage desired state. Devices become current only when
-              their CLI runs. No daemon, remote force-sync, or stored Git
-              credentials.
-            </p>
-          </article>
-          <div className="migration-route">
-            <p>MIGRATE</p>
-            <code>toolmirror migrate cloud</code>
-            <code>toolmirror migrate git &lt;repo&gt;</code>
-          </div>
-        </div>
+        {/* biome-ignore lint/performance/noImgElement: Static landing artwork must retain its supplied dimensions. */}
+        <img
+          className="landing-visual"
+          src="/images/landing/04-two-ways-to-sync.jpg"
+          alt="ToolMirror syncs through Git or ToolMirror Cloud."
+          width={1000}
+          height={1000}
+        />
       </section>
 
       <section className="devices" aria-labelledby="devices-heading">

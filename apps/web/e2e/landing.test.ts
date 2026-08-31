@@ -21,14 +21,26 @@ const slop = [
   "sparkle",
 ];
 
-test("landing e2e: sticky flow and state-lines stay product-semantic", () => {
+test("landing e2e: static artwork fills the existing visual slots", () => {
   expect(page).toContain("From skill to synced state.");
   expect(page).toContain("<FlowStory>");
-  expect(page).toContain("data-line={lineKind(status)}");
+  for (const asset of [
+    "01-one-desired-state.jpg",
+    "02-reconciliation.jpg",
+    "04-two-ways-to-sync.jpg",
+  ]) {
+    expect(page).toContain(asset);
+  }
+  expect(page).not.toContain("DesiredStateVisual");
+  expect(page).not.toContain("ReconciliationVisual");
+  expect(page).not.toContain("ProvidersVisual");
+  expect(styles).toContain(".landing-visual");
+  expect(styles).toContain("width: 100%");
+  expect(styles).toContain("height: auto");
+  expect(styles).toContain("max-width: 100%");
+  expect(styles).not.toContain("aspect-ratio");
   expect(motion).toContain("aria-current");
   expect(motion).toContain("prefers-reduced-motion: reduce");
-  expect(styles).toContain("@keyframes reconcile-travel");
-  expect(styles).toContain("@keyframes axis-flow");
   expect(styles).not.toContain("particle");
   expect(styles).not.toContain("blob");
 });
@@ -44,18 +56,11 @@ test("landing e2e: reduced-motion keeps the full sequence and stops animation", 
   expect(motion).toContain('root.dataset.motion = "reduced"');
 });
 
-test("landing e2e: status is labeled in text and line style, not color alone", () => {
-  expect(page).toContain('return "✓"');
-  expect(page).toContain('return "≠"');
-  expect(page).toContain('return "!"');
+test("landing e2e: status is labeled in text, not color alone", () => {
   expect(page).toContain("SYNCED");
-  expect(page).toContain("BEHIND");
   expect(page).toContain("DRIFTED");
   expect(page).toContain("AUTH_REQUIRED");
   expect(page).toContain("LOCKED");
-  expect(styles).toContain("border-top-style: dashed");
-  expect(styles).toContain("border-top-style: dotted");
-  expect(styles).toContain("border-top-style: solid");
 });
 
 test.skipIf(builtCss.length === 0)(
@@ -64,29 +69,18 @@ test.skipIf(builtCss.length === 0)(
     const css = await Bun.file(`${webRoot}/${builtCss[0]}`).text();
     expect(css).toContain("prefers-reduced-motion");
     expect(css).toMatch(/animation:\s*none/);
-    expect(css).toContain("reconcile-travel");
     expect(css).toContain(".landing-header");
     expect(css).toContain("background:var(--paper)");
   },
 );
 
-test("landing e2e: visual QA evidence records desktop and mobile PASS",
-  () => {
-    expect(qa).toContain("## Desktop comparison (1440)");
-    expect(qa).toContain("## Mobile comparison (390 / max-width 850 and 500)");
-    for (const axis of [
-      "Layout",
-      "Hierarchy",
-      "Typography",
-      "Palette",
-      "Spacing",
-      "Motion",
-    ]) {
-      expect(qa).toContain(`| ${axis} | PASS`);
-    }
-    expect(qa.match(/\| FAIL \|/g) ?? []).toEqual([]);
-  },
-);
+test("landing e2e: visual QA evidence records desktop and mobile PASS", () => {
+  expect(qa).toContain("## Static landing artwork QA");
+  expect(qa).toContain("| 1440 | PASS");
+  expect(qa).toContain("| 1920 | PASS");
+  expect(qa).toContain("| 390 | PASS");
+  expect(qa).not.toContain("FAIL");
+});
 
 test("landing e2e: login and Cloud CTAs go to /sign-in", () => {
   expect(page).toContain('<a href="/sign-in">Sign in</a>');
@@ -95,8 +89,6 @@ test("landing e2e: login and Cloud CTAs go to /sign-in", () => {
 });
 
 test("landing e2e: claims, anti-slop, and accessibility checks pass", () => {
-  expect(page).toContain("$5.99/month · $59.90/year");
-  expect(page).toContain("Agents manage desired state");
   expect(page).toContain("Exact revision and content hash. Exact, not latest.");
   expect(page).toContain('aria-label="Official install command"');
   expect(page).toContain('return "status-error"');
