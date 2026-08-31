@@ -44,7 +44,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-targets-"));
+  const root = await mkdtemp(join(tmpdir(), "corotum-targets-"));
   directories.push(root);
   const canonicalPath = join(root, "canonical");
   await mkdir(canonicalPath);

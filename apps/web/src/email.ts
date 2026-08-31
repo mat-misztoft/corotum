@@ -66,7 +66,7 @@ export function createCloudflareEmailService(
 function senderFrom(env: EmailEnvironment) {
   const from = env.AUTH_EMAIL_FROM?.trim();
   if (!from || !isEmail(from)) throw new EmailDeliveryError();
-  if (isHosted(env) && !isToolMirrorSender(from))
+  if (isHosted(env) && !isCorotumSender(from))
     throw new EmailDeliveryError();
   return from;
 }
@@ -75,9 +75,9 @@ function isHosted(env: Pick<EmailEnvironment, "TOOLMIRROR_HOSTED">) {
   return env.TOOLMIRROR_HOSTED === "true" || env.TOOLMIRROR_HOSTED === "1";
 }
 
-function isToolMirrorSender(address: string) {
+function isCorotumSender(address: string) {
   const domain = address.slice(address.lastIndexOf("@") + 1).toLowerCase();
-  return domain === "toolmirror.com" || domain.endsWith(".toolmirror.com");
+  return domain === "corotum.com" || domain.endsWith(".corotum.com");
 }
 
 function isEmail(value: string) {

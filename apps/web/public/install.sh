@@ -1,5 +1,5 @@
 #!/bin/sh
-# Official ToolMirror installer.
+# Official Corotum installer.
 # This is the only officially supported installation method.
 # Manual binary download is not an officially supported installation method.
 # v0.1 binaries are unsigned.
@@ -12,7 +12,7 @@ die() {
 }
 
 print_banner() {
-  printf '%s\n' "Official ToolMirror installer"
+  printf '%s\n' "Official Corotum installer"
   printf '%s\n' "This is the only officially supported installation method."
   printf '%s\n' "Manual binary download is not an officially supported installation method."
   printf '%s\n' "v0.1 binaries are unsigned."
@@ -40,14 +40,14 @@ sha256_file() {
   elif command -v shasum >/dev/null 2>&1; then
     shasum -a 256 "$1" | awk '{print $1}'
   else
-    die "Need sha256sum or shasum to verify the official ToolMirror release."
+    die "Need sha256sum or shasum to verify the official Corotum release."
   fi
 }
 
 append_path_file() {
   file=$1
   bin_dir=$2
-  marker="# Added by the official ToolMirror installer"
+  marker="# Added by the official Corotum installer"
   if [ -f "$file" ] && grep -F "$marker" "$file" >/dev/null 2>&1; then
     return 0
   fi
@@ -92,8 +92,8 @@ ensure_path() {
 
 print_banner
 
-command -v curl >/dev/null 2>&1 || die "Need curl to download the official ToolMirror release."
-command -v tar >/dev/null 2>&1 || die "Need tar to unpack the official ToolMirror release."
+command -v curl >/dev/null 2>&1 || die "Need curl to download the official Corotum release."
+command -v tar >/dev/null 2>&1 || die "Need tar to unpack the official Corotum release."
 
 os=${TOOLMIRROR_OS:-}
 arch=${TOOLMIRROR_ARCH:-}
@@ -104,7 +104,7 @@ if [ -z "$os" ]; then
     Darwin) os=darwin ;;
     Linux) os=linux ;;
     MINGW* | MSYS* | CYGWIN*)
-      die "Use the official Windows installer: irm https://toolmirror.com/install.ps1 | iex"
+      die "Use the official Windows installer: irm https://corotum.com/install.ps1 | iex"
       ;;
     *) die "Unsupported OS: $sys" ;;
   esac
@@ -122,19 +122,19 @@ fi
 case "$os-$arch" in
   darwin-arm64 | darwin-x64 | linux-arm64 | linux-x64) target="$os-$arch" ;;
   windows-*)
-    die "Use the official Windows installer: irm https://toolmirror.com/install.ps1 | iex"
+    die "Use the official Windows installer: irm https://corotum.com/install.ps1 | iex"
     ;;
   *) die "Unsupported OS/arch: $os-$arch" ;;
 esac
 
-RELEASE_BASE=${TOOLMIRROR_RELEASE_BASE:-https://releases.toolmirror.com}
+RELEASE_BASE=${TOOLMIRROR_RELEASE_BASE:-https://releases.corotum.com}
 RELEASE_BASE=${RELEASE_BASE%/}
 BIN_DIR="${TOOLMIRROR_BIN_DIR:-$HOME/.local/bin}"
-DEST="$BIN_DIR/toolmirror"
-filename="toolmirror-$target.tar.gz"
+DEST="$BIN_DIR/corotum"
+filename="corotum-$target.tar.gz"
 
 TMP=${TMPDIR:-/tmp}
-TMP=$(mktemp -d "$TMP/toolmirror-install.XXXXXX")
+TMP=$(mktemp -d "$TMP/corotum-install.XXXXXX")
 cleanup() {
   rm -rf "$TMP"
 }
@@ -161,9 +161,9 @@ expected=$(awk -v file="binaries/$filename" '
 [ -n "$expected" ] || die "checksums.txt is missing binaries/$filename."
 expected=$(printf '%s' "$expected" | tr 'A-F' 'a-f')
 
-printf '%s\n' "Downloading ToolMirror $version ($target)"
+printf '%s\n' "Downloading Corotum $version ($target)"
 curl -fsSL "$RELEASE_BASE/releases/v$version/binaries/$filename" -o "$TMP/$filename" ||
-  die "Failed to download the official ToolMirror archive."
+  die "Failed to download the official Corotum archive."
 
 actual=$(sha256_file "$TMP/$filename" | tr 'A-F' 'a-f')
 if [ "$actual" != "$expected" ]; then
@@ -172,8 +172,8 @@ fi
 
 mkdir -p "$TMP/extract"
 tar -xzf "$TMP/$filename" -C "$TMP/extract"
-staged="$TMP/extract/toolmirror"
-[ -f "$staged" ] || die "Official archive did not contain toolmirror."
+staged="$TMP/extract/corotum"
+[ -f "$staged" ] || die "Official archive did not contain corotum."
 chmod 755 "$staged"
 
 set +e
@@ -193,4 +193,4 @@ ensure_path "$BIN_DIR"
 
 printf '%s\n' "Installed $DEST"
 printf '%s\n' "$version_out"
-printf '%s\n' "ToolMirror was installed with the official installer."
+printf '%s\n' "Corotum was installed with the official installer."

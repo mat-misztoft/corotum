@@ -36,7 +36,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
   program
     .command("init <repository|cloud>")
     .description(
-      "initialize Git Sync or ToolMirror Cloud and safely adopt selected local skills",
+      "initialize Git Sync or Corotum Cloud and safely adopt selected local skills",
     )
     .requiredOption(
       "--source <repository>",
@@ -64,7 +64,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           const cloud = repository === "cloud";
           if (config.mode && config.mode !== (cloud ? "cloud" : "git")) {
             throw new Error(
-              `ToolMirror is already configured for ${cloud ? "Git" : "Cloud"} Sync.`,
+              `Corotum is already configured for ${cloud ? "Git" : "Cloud"} Sync.`,
             );
           }
 
@@ -167,7 +167,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           if (cloud) {
             await configStore.set("mode", "cloud");
             io.writeOutput(
-              `Initialized ToolMirror Cloud at revision ${result.revision}.\n`,
+              `Initialized Corotum Cloud at revision ${result.revision}.\n`,
             );
           } else {
             await configStore.set("gitRepository", repository);

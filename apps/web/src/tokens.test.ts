@@ -111,7 +111,7 @@ function apiRequest(
   path: string,
   init?: ConstructorParameters<typeof Request>[1],
 ) {
-  return new Request(`https://toolmirror.com${path}`, init);
+  return new Request(`https://corotum.com${path}`, init);
 }
 
 test("device token migration stores token_hash and never a plaintext token column", async () => {
@@ -384,7 +384,7 @@ test("token HTTP issuance, logout, and revoke never leak the plaintext secret af
   const unauthenticated = await handleRevokeDevice(
     apiRequest(`/api/v1/devices/${second.approved.deviceId}/revoke`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
     }),
     db,
     second.approved.deviceId,
@@ -406,7 +406,7 @@ test("token HTTP issuance, logout, and revoke never leak the plaintext secret af
   const revoked = await handleRevokeDevice(
     apiRequest(`/api/v1/devices/${second.approved.deviceId}/revoke`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
     }),
     db,
     second.approved.deviceId,

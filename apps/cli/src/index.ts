@@ -22,7 +22,7 @@ const telemetry = new CliTelemetry(
       });
       try {
         const response = await prompt.question(
-          "Help improve ToolMirror by sending anonymous usage telemetry?\n● Yes\n○ No\n[Enter] ",
+          "Help improve Corotum by sending anonymous usage telemetry?\n● Yes\n○ No\n[Enter] ",
         );
         return !/^(n|no)$/i.test(response.trim());
       } finally {

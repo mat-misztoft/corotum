@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ConfigStore } from "./config";
-import type { ToolMirrorPaths } from "./platform";
+import type { CorotumPaths } from "./platform";
 import { SkillsStorageMigrator } from "./skills-storage-migration";
 
 const temporaryDirectories: string[] = [];
@@ -25,8 +25,8 @@ afterEach(async () => {
   );
 });
 
-async function fixture(): Promise<ToolMirrorPaths> {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-skills-migration-"));
+async function fixture(): Promise<CorotumPaths> {
+  const root = await mkdtemp(join(tmpdir(), "corotum-skills-migration-"));
   temporaryDirectories.push(root);
   return {
     configDir: join(root, "config"),

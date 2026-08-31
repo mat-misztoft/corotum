@@ -1,4 +1,4 @@
-import type { CredentialsStore, ToolMirrorConfig } from "./config";
+import type { CredentialsStore, CorotumConfig } from "./config";
 import {
   type InitCandidate,
   type InitResolver,
@@ -26,7 +26,7 @@ export type CloudInitAuth = Readonly<{
 }>;
 
 export type CloudInitDependencies = Readonly<{
-  config: { load: () => Promise<ToolMirrorConfig> };
+  config: { load: () => Promise<CorotumConfig> };
   credentials: Pick<CredentialsStore, "load">;
   auth: CloudInitAuth;
   provider: (input: {
@@ -53,7 +53,7 @@ export class CloudInitService {
     const config = await this.deps.config.load();
     if (config.mode && config.mode !== "cloud") {
       throw new CloudInitError(
-        "ToolMirror is already configured for Git Sync.",
+        "Corotum is already configured for Git Sync.",
       );
     }
 
@@ -67,7 +67,7 @@ export class CloudInitService {
     }
     if (!token || !workspaceId) {
       throw new CloudInitError(
-        "Cloud pairing did not provide a device workspace. Run toolmirror login and try again.",
+        "Cloud pairing did not provide a device workspace. Run corotum login and try again.",
       );
     }
 

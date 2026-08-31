@@ -67,7 +67,7 @@ export type LocalOperationalState = Readonly<{
   skills: Readonly<Record<SkillId, LocalSkillState>>;
 }>;
 
-/** Durable, local-only record of the assets ToolMirror owns. */
+/** Durable, local-only record of the assets Corotum owns. */
 export class LocalOperationalStateStore {
   constructor(private readonly file: string) {}
 
@@ -104,7 +104,7 @@ export type RecoverLocalOperationalStateInput = Readonly<{
 }>;
 
 /**
- * Recovers only assets whose ToolMirror ownership is provable: a locked,
+ * Recovers only assets whose Corotum ownership is provable: a locked,
  * hash-matching canonical copy and target symlinks resolving to that copy.
  * Equal-content regular directories are deliberately left unmanaged.
  */

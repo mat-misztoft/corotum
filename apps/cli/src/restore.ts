@@ -121,7 +121,7 @@ function selectedLocks(
 }
 
 /**
- * A path absent from ToolMirror's recorded ownership is never claimed during a
+ * A path absent from Corotum's recorded ownership is never claimed during a
  * restore, even if it happens to share a skill name. Recorded copies are
  * explicitly repairable; a replaced symlink is an ownership conflict.
  */

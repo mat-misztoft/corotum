@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "toolmirror",
+      "name": "corotum",
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
         "@types/bun": "^1.4.0",
@@ -13,7 +13,7 @@
       },
     },
     "apps/cli": {
-      "name": "@toolmirror/cli",
+      "name": "@corotum/cli",
       "version": "0.1.0",
       "dependencies": {
         "commander": "^15.0.0",
@@ -21,7 +21,7 @@
       },
     },
     "apps/web": {
-      "name": "@toolmirror/web",
+      "name": "@corotum/web",
       "version": "0.1.0",
       "dependencies": {
         "@cloudflare/vite-plugin": "1.54.2",
@@ -49,11 +49,11 @@
       },
     },
     "packages/agent-targets": {
-      "name": "@toolmirror/agent-targets",
+      "name": "@corotum/agent-targets",
       "version": "0.1.0",
     },
     "packages/core": {
-      "name": "@toolmirror/core",
+      "name": "@corotum/core",
       "version": "0.1.0",
       "dependencies": {
         "yaml": "^2.9.0",
@@ -61,19 +61,19 @@
       },
     },
     "packages/git-provider": {
-      "name": "@toolmirror/git-provider",
+      "name": "@corotum/git-provider",
       "version": "0.1.0",
     },
     "packages/saas-provider": {
-      "name": "@toolmirror/saas-provider",
+      "name": "@corotum/saas-provider",
       "version": "0.1.0",
     },
     "packages/shared": {
-      "name": "@toolmirror/shared",
+      "name": "@corotum/shared",
       "version": "0.1.0",
     },
     "packages/skills-adapter": {
-      "name": "@toolmirror/skills-adapter",
+      "name": "@corotum/skills-adapter",
       "version": "0.1.0",
     },
   },
@@ -372,21 +372,21 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.3", "", { "dependencies": { "@tailwindcss/node": "4.3.3", "@tailwindcss/oxide": "4.3.3", "tailwindcss": "4.3.3" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw=="],
 
-    "@toolmirror/agent-targets": ["@toolmirror/agent-targets@workspace:packages/agent-targets"],
+    "@corotum/agent-targets": ["@corotum/agent-targets@workspace:packages/agent-targets"],
 
-    "@toolmirror/cli": ["@toolmirror/cli@workspace:apps/cli"],
+    "@corotum/cli": ["@corotum/cli@workspace:apps/cli"],
 
-    "@toolmirror/core": ["@toolmirror/core@workspace:packages/core"],
+    "@corotum/core": ["@corotum/core@workspace:packages/core"],
 
-    "@toolmirror/git-provider": ["@toolmirror/git-provider@workspace:packages/git-provider"],
+    "@corotum/git-provider": ["@corotum/git-provider@workspace:packages/git-provider"],
 
-    "@toolmirror/saas-provider": ["@toolmirror/saas-provider@workspace:packages/saas-provider"],
+    "@corotum/saas-provider": ["@corotum/saas-provider@workspace:packages/saas-provider"],
 
-    "@toolmirror/shared": ["@toolmirror/shared@workspace:packages/shared"],
+    "@corotum/shared": ["@corotum/shared@workspace:packages/shared"],
 
-    "@toolmirror/skills-adapter": ["@toolmirror/skills-adapter@workspace:packages/skills-adapter"],
+    "@corotum/skills-adapter": ["@corotum/skills-adapter@workspace:packages/skills-adapter"],
 
-    "@toolmirror/web": ["@toolmirror/web@workspace:apps/web"],
+    "@corotum/web": ["@corotum/web@workspace:apps/web"],
 
     "@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 

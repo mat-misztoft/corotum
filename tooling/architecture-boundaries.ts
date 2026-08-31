@@ -9,8 +9,8 @@ const bannedPackagePatterns: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   [/^(?:git|simple-git)(?:$|\/)/, "Git infrastructure"],
   [
-    /^@toolmirror\/(?:agent-targets|cli|git-provider|saas-provider|skills-adapter|web)(?:$|\/)/,
-    "runtime-specific ToolMirror package",
+    /^@corotum\/(?:agent-targets|cli|git-provider|saas-provider|skills-adapter|web)(?:$|\/)/,
+    "runtime-specific Corotum package",
   ],
   [
     /^(?:@cloudflare\/|cloudflare(?:$|\/)|workerd(?:$|\/)|workers(?:$|\/))/,

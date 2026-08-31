@@ -138,11 +138,11 @@ function jsonRequest(
   body: unknown,
   init?: ConstructorParameters<typeof Request>[1],
 ) {
-  return new Request(`https://toolmirror.com${path}`, {
+  return new Request(`https://corotum.com${path}`, {
     method: "POST",
     ...init,
     headers: {
-      origin: "https://toolmirror.com",
+      origin: "https://corotum.com",
       "content-type": "application/json",
       ...(init?.headers ?? {}),
     },
@@ -185,14 +185,14 @@ test("monthly and annual checkout charge $5.99 and $59.90 for the signed-in cust
       productId: "prod_month",
       customPrice: 599,
       customer: { email: "ada@example.com", name: "Ada" },
-      successUrl: "https://toolmirror.com/dashboard/billing",
+      successUrl: "https://corotum.com/dashboard/billing",
       metadata: { userId: "user_1", billingInterval: "month" },
     },
     {
       productId: "prod_year",
       customPrice: 5990,
       customer: { email: "ada@example.com", name: "Ada" },
-      successUrl: "https://toolmirror.com/dashboard/billing",
+      successUrl: "https://corotum.com/dashboard/billing",
       metadata: { userId: "user_1", billingInterval: "year" },
     },
   ]);
@@ -212,7 +212,7 @@ test("billing portal opens only the authenticated customer's Creem portal", asyn
     },
   });
   const webhook = await handleCreemWebhook(
-    new Request("https://toolmirror.com/api/v1/webhooks/creem", {
+    new Request("https://corotum.com/api/v1/webhooks/creem", {
       method: "POST",
       headers: {
         "creem-signature": await sign(payload, webhookSecret),
@@ -281,7 +281,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   );
 
   const invalid = await handleCreemWebhook(
-    new Request("https://toolmirror.com/api/v1/webhooks/creem", {
+    new Request("https://corotum.com/api/v1/webhooks/creem", {
       method: "POST",
       headers: { "creem-signature": "nope" },
       body: payload,
@@ -349,7 +349,7 @@ test("login and pairing work without entitlement while hosted sync and mutations
   const created = await handleCreatePairing(
     jsonRequest("/api/v1/cli/pairings", device, {
       headers: {
-        origin: "https://toolmirror.com",
+        origin: "https://corotum.com",
         "content-type": "application/json",
         [CLI_VERSION_HEADER]: "0.1.0",
       },
@@ -373,7 +373,7 @@ test("login and pairing work without entitlement while hosted sync and mutations
 
   const pull = await handleGetWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         headers: {
           [CLI_VERSION_HEADER]: "0.1.0",
@@ -389,7 +389,7 @@ test("login and pairing work without entitlement while hosted sync and mutations
 
   const push = await handlePutWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         method: "PUT",
         headers: {
@@ -423,7 +423,7 @@ test("login and pairing work without entitlement while hosted sync and mutations
   );
   const entitled = await handleGetWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         headers: {
           [CLI_VERSION_HEADER]: "0.1.0",
@@ -475,7 +475,7 @@ test("self-hosted Cloud does not require Creem entitlement", async () => {
   const workspaceId = issued.workspaceId as string;
   const pull = await handleGetWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         headers: {
           [CLI_VERSION_HEADER]: "0.1.0",

@@ -54,7 +54,7 @@ try {
     "Keep your agent skills in sync.",
     "One state. Everywhere.",
     "From skill to synced state.",
-    "One ToolMirror. Two ways to sync.",
+    "One Corotum. Two ways to sync.",
     "See every device at a glance.",
     "One skill. Many agents.",
     "Set it once. Keep it in sync.",
@@ -70,12 +70,12 @@ try {
     !home.ok ||
     !ordered ||
     !landing.includes("RECONCILE") ||
-    !landing.includes("TOOLMIRROR CLI") ||
+    !landing.includes("COROTUM CLI") ||
     !landing.includes("DESIRED STATE") ||
     !landing.includes("GIT SYNC / FREE") ||
     !landing.includes("$5.99/month · $59.90/year") ||
-    !landing.includes("toolmirror migrate cloud") ||
-    !landing.includes("toolmirror migrate git") ||
+    !landing.includes("corotum migrate cloud") ||
+    !landing.includes("corotum migrate git") ||
     !landing.includes("Your Git credentials stay local") ||
     !landing.includes("Hosted desired state") ||
     !landing.includes("No daemon, remote force-sync, or stored Git") ||
@@ -88,11 +88,11 @@ try {
     !landing.includes("Kiro CLI") ||
     !landing.includes("No remote force-sync.") ||
     !landing.includes(
-      "Start with ToolMirror Cloud, or use your own Git repository for free.",
+      "Start with Corotum Cloud, or use your own Git repository for free.",
     ) ||
-    !landing.includes("Start with ToolMirror Cloud") ||
+    !landing.includes("Start with Corotum Cloud") ||
     !landing.includes("View on GitHub") ||
-    !landing.includes("curl -fsSL https://toolmirror.com/install.sh | sh") ||
+    !landing.includes("curl -fsSL https://corotum.com/install.sh | sh") ||
     landing.includes("sync_device") ||
     landing.includes("sync_all_devices")
   ) {

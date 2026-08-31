@@ -88,9 +88,9 @@ function DashboardShell({
   return (
     <div className="dashboard dashboard-shell">
       <div className="dashboard-brand-rule" />
-      <nav className="dashboard-nav" aria-label="ToolMirror">
+      <nav className="dashboard-nav" aria-label="Corotum">
         <a className="wordmark" href="/dashboard">
-          ToolMirror
+          Corotum
         </a>
         <div className="dashboard-nav-links">
           {navItems.map((item) => (
@@ -273,7 +273,7 @@ export function DashboardSurface({ view }: { view: View }) {
               No managed skills yet.
               <br />
               <span>
-                Add skills from the CLI with <code>toolmirror add</code>.
+                Add skills from the CLI with <code>corotum add</code>.
               </span>
             </p>
           ) : (
@@ -380,7 +380,7 @@ export function DashboardSurface({ view }: { view: View }) {
                 No managed skills yet.
                 <br />
                 <span>
-                  Add skills from the CLI with <code>toolmirror add</code>.
+                  Add skills from the CLI with <code>corotum add</code>.
                 </span>
               </p>
             ) : (
@@ -420,7 +420,7 @@ export function DashboardSurface({ view }: { view: View }) {
                 No paired devices have reported yet.
                 <br />
                 <span>
-                  Pair a device from the CLI with <code>toolmirror login</code>.
+                  Pair a device from the CLI with <code>corotum login</code>.
                 </span>
               </p>
             ) : (
@@ -492,7 +492,7 @@ export function DashboardSurface({ view }: { view: View }) {
             className="dashboard-panel dashboard-billing-panel"
             aria-labelledby="billing-title"
           >
-            <h2 id="billing-title">ToolMirror Cloud</h2>
+            <h2 id="billing-title">Corotum Cloud</h2>
             {settings.hosted ? (
               <>
                 <div className="dashboard-billing-summary">
@@ -572,7 +572,7 @@ export function DashboardSurface({ view }: { view: View }) {
               <div className="dashboard-self-hosted">
                 <p className="dashboard-billing-label">Self-hosted Cloud</p>
                 <p>
-                  This ToolMirror Cloud instance is self-hosted. Cloud
+                  This Corotum Cloud instance is self-hosted. Cloud
                   functionality is free and has no billing portal.
                 </p>
               </div>
@@ -599,16 +599,16 @@ export function DashboardSurface({ view }: { view: View }) {
         <h2 id="cli-preferences">Local CLI preferences</h2>
         <p>
           Telemetry is an anonymous, opt-in preference stored locally by the
-          ToolMirror CLI. It is not a dashboard setting and is never tied to
+          Corotum CLI. It is not a dashboard setting and is never tied to
           your account or devices.
         </p>
         <p className="dashboard-settings-instruction">
           Change the preference separately on each machine:
         </p>
         <code className="dashboard-command">
-          toolmirror config set telemetry true
+          corotum config set telemetry true
           <br />
-          toolmirror config set telemetry false
+          corotum config set telemetry false
         </code>
       </section>
     </DashboardShell>

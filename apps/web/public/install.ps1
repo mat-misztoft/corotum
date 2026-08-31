@@ -1,4 +1,4 @@
-# Official ToolMirror installer.
+# Official Corotum installer.
 # This is the only officially supported installation method.
 # Manual binary download is not an officially supported installation method.
 # v0.1 binaries are unsigned.
@@ -13,12 +13,12 @@ function Write-InstallerError {
 
 function Get-ReleaseTarget {
   if ($env:TOOLMIRROR_OS -and $env:TOOLMIRROR_OS -ne "windows") {
-    throw "Use the official Unix installer: curl -fsSL https://toolmirror.com/install.sh | sh"
+    throw "Use the official Unix installer: curl -fsSL https://corotum.com/install.sh | sh"
   }
   $arch = $env:TOOLMIRROR_ARCH
   if (-not $arch) {
     if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64") {
-      throw "Windows arm64 is not supported in ToolMirror v0.1."
+      throw "Windows arm64 is not supported in Corotum v0.1."
     }
     $arch = "x64"
   }
@@ -50,7 +50,7 @@ function Add-UserPath {
   [Environment]::SetEnvironmentVariable("Path", $updated, "User")
 }
 
-Write-Output "Official ToolMirror installer"
+Write-Output "Official Corotum installer"
 Write-Output "This is the only officially supported installation method."
 Write-Output "Manual binary download is not an officially supported installation method."
 Write-Output "v0.1 binaries are unsigned."
@@ -58,7 +58,7 @@ Write-Output "v0.1 binaries are unsigned."
 $target = Get-ReleaseTarget
 $releaseBase = $env:TOOLMIRROR_RELEASE_BASE
 if ([string]::IsNullOrEmpty($releaseBase)) {
-  $releaseBase = "https://releases.toolmirror.com"
+  $releaseBase = "https://releases.corotum.com"
 }
 $releaseBase = $releaseBase.TrimEnd("/")
 
@@ -66,10 +66,10 @@ $binDir = $env:TOOLMIRROR_BIN_DIR
 if ([string]::IsNullOrEmpty($binDir)) {
   $binDir = Join-Path $env:LOCALAPPDATA "ToolMirror\bin"
 }
-$dest = Join-Path $binDir "toolmirror.exe"
-$filename = "toolmirror-$target.tar.gz"
+$dest = Join-Path $binDir "corotum.exe"
+$filename = "corotum-$target.tar.gz"
 
-$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("toolmirror-install-" + [guid]::NewGuid().ToString("n"))
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("corotum-install-" + [guid]::NewGuid().ToString("n"))
 New-Item -ItemType Directory -Path $tmp | Out-Null
 
 try {
@@ -102,7 +102,7 @@ try {
     throw "checksums.txt is missing binaries/$filename."
   }
 
-  Write-Output "Downloading ToolMirror $($latest.version) ($target)"
+  Write-Output "Downloading Corotum $($latest.version) ($target)"
   $archivePath = Join-Path $tmp $filename
   Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/releases/v$($latest.version)/binaries/$filename" -OutFile $archivePath
   $actual = Get-Sha256 $archivePath
@@ -117,11 +117,11 @@ try {
   New-Item -ItemType Directory -Path $extractDir | Out-Null
   tar -xzf $archivePath -C $extractDir
   if ($LASTEXITCODE -ne 0) {
-    throw "Failed to unpack the official ToolMirror archive."
+    throw "Failed to unpack the official Corotum archive."
   }
-  $staged = Join-Path $extractDir "toolmirror.exe"
+  $staged = Join-Path $extractDir "corotum.exe"
   if (-not (Test-Path $staged)) {
-    throw "Official archive did not contain toolmirror.exe."
+    throw "Official archive did not contain corotum.exe."
   }
 
   & $staged --version
@@ -133,7 +133,7 @@ try {
   Move-Item -Force $staged $dest
   Add-UserPath $binDir
   Write-Output "Installed $dest"
-  Write-Output "ToolMirror was installed with the official installer."
+  Write-Output "Corotum was installed with the official installer."
 }
 catch {
   Write-InstallerError $_.Exception.Message

@@ -7,7 +7,7 @@ const sections = [
   "Keep your agent skills in sync.",
   "One state. Everywhere.",
   "From skill to synced state.",
-  "One ToolMirror. Two ways to sync.",
+  "One Corotum. Two ways to sync.",
   "See every device at a glance.",
   "One skill. Many agents.",
   "Set it once. Keep it in sync.",
@@ -25,11 +25,11 @@ test("landing keeps the seven frozen sections in order", () => {
 test("final CTA copy, actions, and install command match planning", () => {
   expect(page).toContain('className="final-cta"');
   expect(page).toContain(
-    "Start with ToolMirror Cloud, or use your own Git repository for free.",
+    "Start with Corotum Cloud, or use your own Git repository for free.",
   );
-  expect(page).toContain("Start with ToolMirror Cloud");
+  expect(page).toContain("Start with Corotum Cloud");
   expect(page).toContain("View on GitHub");
-  expect(page).toContain("curl -fsSL https://toolmirror.com/install.sh | sh");
+  expect(page).toContain("curl -fsSL https://corotum.com/install.sh | sh");
   expect(page).not.toContain("sync_device");
   expect(page).not.toContain("sync_all_devices");
 });

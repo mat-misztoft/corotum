@@ -233,14 +233,14 @@ test("WebMCP mutations delegate to the dashboard service and report pending reso
 
 test("WebMCP transport rejects missing authorization, base revision, and idempotency before a revision", async () => {
   const db = mutationDatabase();
-  const unauthorized = await handleWebMcpTool(new Request("https://toolmirror.com/api/v1/webmcp", {
+  const unauthorized = await handleWebMcpTool(new Request("https://corotum.com/api/v1/webmcp", {
     method: "POST",
     body: JSON.stringify({ tool: "add_skill", baseRevisionId: null, idempotencyKey: "key", arguments: { source: "https://example.com/skills.git", skill: "review" } }),
   }), db as never, null, false);
   expect(unauthorized.status).toBe(401);
   expect(db.batches()).toBe(0);
 
-  const missingConcurrency = await handleWebMcpTool(new Request("https://toolmirror.com/api/v1/webmcp", {
+  const missingConcurrency = await handleWebMcpTool(new Request("https://corotum.com/api/v1/webmcp", {
     method: "POST",
     body: JSON.stringify({ tool: "add_skill", arguments: { source: "https://example.com/skills.git", skill: "review" } }),
   }), db as never, "user_1", false);

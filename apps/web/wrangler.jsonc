@@ -12,7 +12,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "toolmirror",
+      "database_name": "corotum",
       "database_id": "local-toolmirror-d1",
       "migrations_dir": "migrations"
     }
@@ -20,7 +20,7 @@
   "send_email": [
     {
       "name": "EMAIL",
-      "allowed_sender_addresses": ["auth@toolmirror.com"]
+      "allowed_sender_addresses": ["auth@corotum.com"]
     }
   ],
   "analytics_engine_datasets": [

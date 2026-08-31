@@ -40,7 +40,7 @@ export function registerAddCommand(program: Command, io: CliIo): void {
         try {
           const config = await new ConfigStore(paths).load();
           if (config.mode !== "git" || !config.gitRepository)
-            throw new Error("Run toolmirror init before adding Git skills.");
+            throw new Error("Run corotum init before adding Git skills.");
           const source = normalizeGitSource(sourceInput);
           const materializer = new GitSkillMaterializer();
           const candidates = await materializer.discover(source, options.ref);

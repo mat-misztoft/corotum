@@ -4,11 +4,11 @@ import { betterAuth } from "better-auth";
 import { createMagicLinkPlugin, validateAuthConfiguration } from "./auth";
 import type { EmailService } from "./email";
 
-const authOrigin = "https://toolmirror.example";
+const authOrigin = "https://corotum.example";
 
 const productionConfig = {
   BETTER_AUTH_SECRET: "a-secure-secret-with-at-least-thirty-two-characters",
-  BETTER_AUTH_URL: "https://toolmirror.example",
+  BETTER_AUTH_URL: "https://corotum.example",
   GITHUB_CLIENT_ID: "github-id",
   GITHUB_CLIENT_SECRET: "github-secret",
   GOOGLE_CLIENT_ID: "google-id",
@@ -100,15 +100,15 @@ test("magic links use hashed Better Auth tokens and the email boundary", async (
   expect(plugin.options.rateLimit).toEqual({ window: 60, max: 10 });
   await plugin.options.sendMagicLink({
     email: "ada@example.com",
-    url: "https://toolmirror.example/api/auth/magic-link/verify?token=secret",
+    url: "https://corotum.example/api/auth/magic-link/verify?token=secret",
     token: "secret",
   });
 
   expect(messages).toEqual([
     {
       to: "ada@example.com",
-      subject: "Sign in to ToolMirror",
-      link: "https://toolmirror.example/api/auth/magic-link/verify?token=secret",
+      subject: "Sign in to Corotum",
+      link: "https://corotum.example/api/auth/magic-link/verify?token=secret",
     },
   ]);
 });

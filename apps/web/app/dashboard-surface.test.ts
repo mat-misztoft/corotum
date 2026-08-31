@@ -23,7 +23,7 @@ test("dashboard keeps chrome and renders accessible state panels", () => {
 
 test("billing and settings use the shared dashboard language without new controls", () => {
   expect(surface).toContain("dashboard-billing-panel");
-  expect(surface).toContain("This ToolMirror Cloud instance is self-hosted.");
+  expect(surface).toContain("This Corotum Cloud instance is self-hosted.");
   expect(surface).toContain('className="dashboard-command"');
   expect(surface).toContain('if (view === "billing")');
   expect(surface).not.toContain("dashboard-legacy");

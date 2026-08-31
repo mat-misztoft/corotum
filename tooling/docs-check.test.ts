@@ -29,7 +29,7 @@ describe("docs-check", () => {
   test("does not treat global flags as commands", () => {
     expect(
       documentedToolmirrorCommands(
-        "`toolmirror --json sync` and `toolmirror --non-interactive status`",
+        "`corotum --json sync` and `corotum --non-interactive status`",
       ),
     ).toEqual(["status", "sync"]);
   });
@@ -39,7 +39,7 @@ describe("docs-check", () => {
   });
 
   test("rejects invented CLI commands and self-host Creem requirements", async () => {
-    const fixture = await mkdtemp(join(tmpdir(), "toolmirror-docs-"));
+    const fixture = await mkdtemp(join(tmpdir(), "corotum-docs-"));
     for (const relative of REQUIRED_DOC_FILES) {
       await mkdir(join(fixture, relative, ".."), { recursive: true });
       await writeFile(
@@ -79,7 +79,7 @@ describe("docs-check", () => {
 
     await writeFile(
       join(fixture, "docs/cli.md"),
-      `${await readFile(join(root, "docs/cli.md"))}\n\n\`toolmirror agents scan\`\n`,
+      `${await readFile(join(root, "docs/cli.md"))}\n\n\`corotum agents scan\`\n`,
     );
     await writeFile(
       join(fixture, "docs/self-hosting.md"),

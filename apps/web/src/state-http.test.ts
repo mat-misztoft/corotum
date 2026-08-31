@@ -132,7 +132,7 @@ function apiRequest(
   path: string,
   init?: ConstructorParameters<typeof Request>[1],
 ) {
-  return new Request(`https://toolmirror.com${path}`, init);
+  return new Request(`https://corotum.com${path}`, init);
 }
 
 function stateRequest(
@@ -324,7 +324,7 @@ test("device-token SaaSProvider pull/push talks to /api/v1 without login or repo
     return handlePutWorkspaceState(request, db, workspaceId);
   };
   const provider = new SaaSProvider({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     workspaceId,
     deviceToken: issued.token,
     fetch: fetchImpl,

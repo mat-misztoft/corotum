@@ -111,7 +111,7 @@ export class InitService {
     // returns CONFLICT before a mutation can touch selected local targets.
     const current = await this.provider.pull();
     if (current.kind === "success" && current.value.state.manifest.skills.length > 0) {
-      return { kind: "refused", reason: "ToolMirror is already initialized for this Git repository." };
+      return { kind: "refused", reason: "Corotum is already initialized for this Git repository." };
     }
     if (current.kind !== "success" && !isBootstrapProvider(this.provider)) {
       return { kind: "refused", reason: current.kind === "failure" ? current.error.message : "Initial desired state could not be loaded completely." };

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ToolMirrorConfig } from "./config";
+import type { CorotumConfig } from "./config";
 import { CliTelemetry, type TelemetryEvent } from "./telemetry";
 
 function fixture(consent: boolean | null = null) {
-  let config: ToolMirrorConfig = {
+  let config: CorotumConfig = {
     schemaVersion: 1,
     mode: null,
     workspaceId: null,

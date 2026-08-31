@@ -137,7 +137,7 @@ function reportRequest(
   init?: ConstructorParameters<typeof Request>[1],
 ) {
   return new Request(
-    `https://toolmirror.com/api/v1/devices/${deviceId}/sync-report`,
+    `https://corotum.com/api/v1/devices/${deviceId}/sync-report`,
     {
       method: "POST",
       ...init,
@@ -180,7 +180,7 @@ test("an authenticated device can report only its locally verified applied revis
 
   const created = await handlePutWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         method: "PUT",
         headers: {
@@ -252,7 +252,7 @@ test("a report cannot change another device or claim an unreported device is syn
   const workspaceId = first.workspaceId as string;
   const created = await handlePutWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         method: "PUT",
         headers: {
@@ -402,7 +402,7 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
   const workspaceId = issued.workspaceId as string;
   const created = await handlePutWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         method: "PUT",
         headers: {
@@ -511,8 +511,8 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
   expect(partialUpdateReport.status).toBe(200);
 
   const view = await handleGetDeviceTargetStatus(
-    new Request(`https://toolmirror.com/api/v1/devices/${issued.deviceId}`, {
-      headers: { origin: "https://toolmirror.com" },
+    new Request(`https://corotum.com/api/v1/devices/${issued.deviceId}`, {
+      headers: { origin: "https://corotum.com" },
     }),
     db,
     issued.deviceId,
@@ -540,8 +540,8 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
   expect(JSON.stringify(body.updates)).not.toContain("/");
 
   const stranger = await handleGetDeviceTargetStatus(
-    new Request(`https://toolmirror.com/api/v1/devices/${issued.deviceId}`, {
-      headers: { origin: "https://toolmirror.com" },
+    new Request(`https://corotum.com/api/v1/devices/${issued.deviceId}`, {
+      headers: { origin: "https://corotum.com" },
     }),
     db,
     issued.deviceId,
@@ -556,7 +556,7 @@ test("postDeviceSyncReport talks to /sync-report without pulling or executing re
   const workspaceId = issued.workspaceId as string;
   const created = await handlePutWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         method: "PUT",
         headers: {
@@ -578,7 +578,7 @@ test("postDeviceSyncReport talks to /sync-report without pulling or executing re
   const revision = (await created.json()) as { revisionId: string };
   const paths: string[] = [];
   const result = await postDeviceSyncReport({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     deviceId: issued.deviceId,
     deviceToken: issued.token,
     fetch: async (input, init) => {
@@ -607,7 +607,7 @@ test("postDeviceSyncReport talks to /sync-report without pulling or executing re
 
   const current = await handleGetWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         headers: {
           [CLI_VERSION_HEADER]: "0.1.0",
@@ -622,7 +622,7 @@ test("postDeviceSyncReport talks to /sync-report without pulling or executing re
   expect(
     "report" in
       new SaaSProvider({
-        origin: "https://toolmirror.com",
+        origin: "https://corotum.com",
         workspaceId,
         deviceToken: issued.token,
       }),
@@ -635,7 +635,7 @@ test("a SYNCED report for a stale applied revision is stored as BEHIND", async (
   const workspaceId = issued.workspaceId as string;
   const first = await handlePutWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         method: "PUT",
         headers: {
@@ -661,7 +661,7 @@ test("a SYNCED report for a stale applied revision is stored as BEHIND", async (
   };
   const second = await handlePutWorkspaceState(
     new Request(
-      `https://toolmirror.com/api/v1/workspaces/${workspaceId}/state`,
+      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
         method: "PUT",
         headers: {

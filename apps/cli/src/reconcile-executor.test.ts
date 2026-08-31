@@ -27,7 +27,7 @@ afterEach(async () =>
 );
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-executor-"));
+  const root = await mkdtemp(join(tmpdir(), "corotum-executor-"));
   roots.push(root);
   const source = join(root, "source");
   await mkdir(source);

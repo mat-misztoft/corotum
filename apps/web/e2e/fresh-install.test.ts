@@ -71,14 +71,14 @@ async function git(args: readonly string[]): Promise<string> {
 }
 
 async function gitFixture() {
-  const root = await tempDir("toolmirror-e2e-git-");
+  const root = await tempDir("corotum-e2e-git-");
   roots.push(root);
   const source = join(root, "source");
   const remote = join(root, "state.git");
   const stateWorktree = join(root, "state-worktree");
   await git(["init", "--initial-branch=main", source]);
-  await git(["-C", source, "config", "user.email", "tests@toolmirror.invalid"]);
-  await git(["-C", source, "config", "user.name", "ToolMirror tests"]);
+  await git(["-C", source, "config", "user.email", "tests@corotum.invalid"]);
+  await git(["-C", source, "config", "user.name", "Corotum tests"]);
   for (const [name, contents] of [
     ["adopted", "adopted exact bytes\n"],
     ["added", "added exact bytes\n"],
@@ -94,9 +94,9 @@ async function gitFixture() {
     stateWorktree,
     "config",
     "user.email",
-    "tests@toolmirror.invalid",
+    "tests@corotum.invalid",
   ]);
-  await git(["-C", stateWorktree, "config", "user.name", "ToolMirror tests"]);
+  await git(["-C", stateWorktree, "config", "user.name", "Corotum tests"]);
   await git(["-C", stateWorktree, "commit", "--allow-empty", "-m", "initial"]);
   await git(["init", "--bare", remote]);
   await git(["-C", stateWorktree, "remote", "add", "origin", remote]);
@@ -281,7 +281,7 @@ async function loginWithCli(
 }
 
 test("fresh installers produce a runnable CLI before Git and Cloud flows", async () => {
-  const work = await tempDir("toolmirror-e2e-install-");
+  const work = await tempDir("corotum-e2e-install-");
   roots.push(work);
   const files = await releaseLayout("0.1.0", join(work, "staging"));
   const server = startStaticServer(files);
@@ -290,15 +290,15 @@ test("fresh installers produce a runnable CLI before Git and Cloud flows", async
     await mkdir(unixHome, { recursive: true });
     const unix = await runInstallSh(unixHome, server.origin, "darwin", "arm64");
     expect(unix.code).toBe(0);
-    expect(unix.stdout).toContain("Official ToolMirror installer");
-    const dest = join(unixHome, ".local/bin/toolmirror");
+    expect(unix.stdout).toContain("Official Corotum installer");
+    const dest = join(unixHome, ".local/bin/corotum");
     const version = Bun.spawn([dest, "--version"], {
       stdout: "pipe",
       stderr: "pipe",
     });
     expect(await version.exited).toBe(0);
     expect(await new Response(version.stdout).text()).toBe(
-      "toolmirror 0.1.0\n",
+      "corotum 0.1.0\n",
     );
 
     const windows = await runWindowsInstallerFixture(
@@ -307,14 +307,14 @@ test("fresh installers produce a runnable CLI before Git and Cloud flows", async
       join(work, "windows-extract"),
     );
     expect(windows.code).toBe(0);
-    expect(windows.stdout).toContain("Official ToolMirror installer");
-    expect(windows.stdout).toContain("toolmirror 0.1.0");
+    expect(windows.stdout).toContain("Official Corotum installer");
+    expect(windows.stdout).toContain("corotum 0.1.0");
   } finally {
     server.stop();
   }
 });
 
-test("Git Sync completes without a ToolMirror Cloud subscription", async () => {
+test("Git Sync completes without a Corotum Cloud subscription", async () => {
   const { root, source, remote, stateWorktree } = await gitFixture();
   const adopted = await lockFor(source, skillId("sk_adopted"), "adopted");
   const added = await lockFor(source, skillId("sk_added"), "added");
@@ -710,7 +710,7 @@ test("hosted Cloud requires entitlement; self-hosted Cloud does not", async () =
 });
 
 test("CLI update replaces the official binary after a fresh install", async () => {
-  const work = await tempDir("toolmirror-e2e-update-");
+  const work = await tempDir("corotum-e2e-update-");
   roots.push(work);
   const currentFiles = await releaseLayout("0.1.0", join(work, "current"));
   const latestFiles = await releaseLayout("0.1.1", join(work, "latest"));
@@ -726,7 +726,7 @@ test("CLI update replaces the official binary after a fresh install", async () =
       "arm64",
     );
     expect(installed.code).toBe(0);
-    const dest = join(home, ".local/bin/toolmirror");
+    const dest = join(home, ".local/bin/corotum");
     const lock = new MutationLock(join(home, "process.lock"));
     const updated = await cliUpdate(
       {
@@ -749,7 +749,7 @@ test("CLI update replaces the official binary after a fresh install", async () =
     });
     expect(await version.exited).toBe(0);
     expect(await new Response(version.stdout).text()).toBe(
-      "toolmirror 0.1.1\n",
+      "corotum 0.1.1\n",
     );
   } finally {
     currentServer.stop();

@@ -119,7 +119,7 @@ function insertUser(sqlite: Database, userId: string) {
 }
 
 function api(path: string, init?: ConstructorParameters<typeof Request>[1]) {
-  return new Request(`https://toolmirror.com${path}`, init);
+  return new Request(`https://corotum.com${path}`, init);
 }
 
 async function sign(payload: string, secret: string) {
@@ -186,7 +186,7 @@ test("security: pairing and token hashes never persist plaintext secrets", async
   const guessed = await handleApprovePairing(
     api(`/api/v1/cli/pairings/${pairing.id}/approve`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
       body: JSON.stringify({ userCode: "XXXX-XXXX" }),
     }),
     db as never,
@@ -201,7 +201,7 @@ test("security: pairing and token hashes never persist plaintext secrets", async
   const approved = await handleApprovePairing(
     api(`/api/v1/cli/pairings/${pairing.id}/approve`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
       body: JSON.stringify({ userCode: pairing.userCode }),
     }),
     db as never,
@@ -237,7 +237,7 @@ test("security: pairing and token hashes never persist plaintext secrets", async
   const revoked = await handleRevokeDevice(
     api(`/api/v1/devices/${issued.deviceId}/revoke`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
     }),
     db as never,
     issued.deviceId,
@@ -337,7 +337,7 @@ test("security: unsigned webhooks, rate limits, and old CLIs cannot mutate Cloud
     },
   });
   const forged = await handleCreemWebhook(
-    new Request("https://toolmirror.com/api/v1/webhooks/creem", {
+    new Request("https://corotum.com/api/v1/webhooks/creem", {
       method: "POST",
       headers: { "creem-signature": "00" },
       body: payload,
@@ -349,7 +349,7 @@ test("security: unsigned webhooks, rate limits, and old CLIs cannot mutate Cloud
   expect(await hasHostedCloudAccess(db as never, "user_1", true)).toBe(false);
 
   const signed = await handleCreemWebhook(
-    new Request("https://toolmirror.com/api/v1/webhooks/creem", {
+    new Request("https://corotum.com/api/v1/webhooks/creem", {
       method: "POST",
       headers: { "creem-signature": await sign(payload, webhookSecret) },
       body: payload,
@@ -362,7 +362,7 @@ test("security: unsigned webhooks, rate limits, and old CLIs cannot mutate Cloud
 
   sqlite.query("UPDATE subscriptions SET status = 'canceled'").run();
   const replay = await handleCreemWebhook(
-    new Request("https://toolmirror.com/api/v1/webhooks/creem", {
+    new Request("https://corotum.com/api/v1/webhooks/creem", {
       method: "POST",
       headers: { "creem-signature": await sign(payload, webhookSecret) },
       body: payload,
@@ -415,7 +415,7 @@ test("security: credential URLs are rejected before Git, Cloud origin, or desire
   expect(
     () =>
       new SaaSProvider({
-        origin: "https://user:pass@toolmirror.com",
+        origin: "https://user:pass@corotum.com",
         workspaceId: "ws_1",
         deviceToken: "token",
       }),
@@ -502,7 +502,7 @@ test("security: credential URLs are rejected before Git, Cloud origin, or desire
 });
 
 test("security: log and telemetry injection cannot retain secrets or private skill data", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "toolmirror-security-logs-"));
+  const directory = await mkdtemp(join(tmpdir(), "corotum-security-logs-"));
   try {
     const logger = new SanitizedLogger(join(directory, "logs"));
     await logger.write('sync.failed\n{"token":"line-inject"}', {
@@ -513,7 +513,7 @@ test("security: log and telemetry injection cannot retain secrets or private ski
         "Bearer leaked-session https://ada:hunter2@git.example/skills.git token=inline-secret",
     });
     const output = await readFile(
-      join(directory, "logs", "toolmirror.log"),
+      join(directory, "logs", "corotum.log"),
       "utf8",
     );
     for (const secret of [
@@ -539,7 +539,7 @@ test("security: log and telemetry injection cannot retain secrets or private ski
   };
   const { db } = await securityDb();
   const rejected = await handlePostTelemetry(
-    new Request("https://toolmirror.com/api/v1/telemetry", {
+    new Request("https://corotum.com/api/v1/telemetry", {
       method: "POST",
       headers: { [CLI_VERSION_HEADER]: "0.1.0" },
       body: JSON.stringify({
@@ -588,9 +588,9 @@ test("security: malicious release metadata cannot escape install/update paths or
     "object path mismatch",
   );
 
-  const work = await mkdtemp(join(tmpdir(), "toolmirror-security-update-"));
+  const work = await mkdtemp(join(tmpdir(), "corotum-security-update-"));
   try {
-    const executablePath = join(work, "toolmirror");
+    const executablePath = join(work, "corotum");
     await writeFile(executablePath, "old-cli", { encoding: "utf8" });
     const original = await readFile(executablePath);
     const lock = new MutationLock(join(work, "process.lock"));
@@ -610,7 +610,7 @@ test("security: malicious release metadata cannot escape install/update paths or
       arch: "arm64",
       executablePath,
       pendingDir: join(work, "pending"),
-      releaseBase: "https://releases.toolmirror.com",
+      releaseBase: "https://releases.corotum.com",
       fetchBytes: async (url) => {
         const key = new URL(url).pathname.replace(/^\//, "");
         requested.push(key);

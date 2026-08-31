@@ -2,10 +2,10 @@ import { expect, test } from "bun:test";
 import { isSameOrigin, jsonError, readJson } from "./api";
 
 test("browser POSTs must match the request origin while CLI requests without Origin pass", () => {
-  const url = "https://toolmirror.com/api/v1/cli/pairings/pair_1/approve";
+  const url = "https://corotum.com/api/v1/cli/pairings/pair_1/approve";
   expect(
     isSameOrigin(
-      new Request(url, { headers: { origin: "https://toolmirror.com" } }),
+      new Request(url, { headers: { origin: "https://corotum.com" } }),
     ),
   ).toBe(true);
   expect(
@@ -19,7 +19,7 @@ test("browser POSTs must match the request origin while CLI requests without Ori
 test("JSON helpers return parsed bodies or compact API errors", async () => {
   expect(
     await readJson(
-      new Request("https://toolmirror.com", {
+      new Request("https://corotum.com", {
         method: "POST",
         body: '{"userCode":"ABCD-EFGH"}',
       }),
@@ -27,7 +27,7 @@ test("JSON helpers return parsed bodies or compact API errors", async () => {
   ).toEqual({ userCode: "ABCD-EFGH" });
   expect(
     await readJson(
-      new Request("https://toolmirror.com", { method: "POST", body: "{" }),
+      new Request("https://corotum.com", { method: "POST", body: "{" }),
     ),
   ).toBeNull();
 

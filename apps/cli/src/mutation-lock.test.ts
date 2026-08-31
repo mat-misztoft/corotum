@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 async function lockFile(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "toolmirror-lock-"));
+  const directory = await mkdtemp(join(tmpdir(), "corotum-lock-"));
   directories.push(directory);
   return join(directory, "runtime", "process.lock");
 }

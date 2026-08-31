@@ -7,7 +7,7 @@ import { type AgentAdapter, type AgentId, builtInAgentAdapters } from "./index";
 
 export type TargetMode = "symlink" | "copy";
 
-/** A local path ToolMirror is allowed to change. */
+/** A local path Corotum is allowed to change. */
 export type ManagedTarget = Readonly<{
   skillId: SkillId;
   agentId: AgentId;
@@ -149,7 +149,7 @@ export class AgentTargetManager {
     return { ownership: sortOwnership([...owned.values()]), outcomes };
   }
 
-  /** Removes ToolMirror ownership only; copied content remains an unmanaged skill. */
+  /** Removes Corotum ownership only; copied content remains an unmanaged skill. */
   async unmanage(
     skillId: SkillId,
     ownership: TargetOwnership,
@@ -191,7 +191,7 @@ export class AgentTargetManager {
     return { ownership: sortOwnership(remaining), outcomes };
   }
 
-  /** Removes only paths recorded as ToolMirror-owned. */
+  /** Removes only paths recorded as Corotum-owned. */
   async remove(
     skillId: SkillId,
     ownership: TargetOwnership,

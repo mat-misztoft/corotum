@@ -59,7 +59,7 @@ const agent = (
   globalSkillPaths: (homeDir) => [join(homeDir, skillsDirectory, "skills")],
 });
 
-/** Closed v0.1 registry. Adding an agent requires a ToolMirror release. */
+/** Closed v0.1 registry. Adding an agent requires a Corotum release. */
 export const builtInAgentAdapters: readonly AgentAdapter[] = [
   agent("codex", "Codex", ".codex"),
   agent("claude-code", "Claude Code", ".claude"),

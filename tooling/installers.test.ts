@@ -38,7 +38,7 @@ async function makeArchive(
   const binaryPath = join(staging, target.binary);
   await writeFile(
     binaryPath,
-    `#!/bin/sh\necho "toolmirror ${version}"\nexit 0\n`,
+    `#!/bin/sh\necho "corotum ${version}"\nexit 0\n`,
     { encoding: "utf8" },
   );
   await chmod755(binaryPath);
@@ -139,13 +139,13 @@ async function runWindowsInstallerFixture(
   pathEntries: string[];
 }> {
   const stdout: string[] = [
-    "Official ToolMirror installer",
+    "Official Corotum installer",
     "This is the only officially supported installation method.",
     "Manual binary download is not an officially supported installation method.",
     "v0.1 binaries are unsigned.",
   ];
   const pathFile = join(localAppData, "user-path.txt");
-  const dest = join(localAppData, "ToolMirror", "bin", "toolmirror.exe");
+  const dest = join(localAppData, "ToolMirror", "bin", "corotum.exe");
   const existing = Bun.file(dest);
   const existingBytes = (await existing.exists())
     ? new Uint8Array(await existing.arrayBuffer())
@@ -164,7 +164,7 @@ async function runWindowsInstallerFixture(
     const expected = checksums
       .split(/\r?\n/)
       .map((line) =>
-        /^([a-f0-9]{64}) {2}binaries\/toolmirror-windows-x64\.tar\.gz$/.exec(
+        /^([a-f0-9]{64}) {2}binaries\/corotum-windows-x64\.tar\.gz$/.exec(
           line,
         ),
       )
@@ -172,7 +172,7 @@ async function runWindowsInstallerFixture(
     if (!expected) throw new Error("checksums.txt is missing windows-x64");
     if (sha256(archive) !== expected) {
       throw new Error(
-        "SHA-256 mismatch for toolmirror-windows-x64.tar.gz. Existing install was not replaced.",
+        "SHA-256 mismatch for corotum-windows-x64.tar.gz. Existing install was not replaced.",
       );
     }
     const extract = join(extractRoot, "windows-extract");
@@ -185,7 +185,7 @@ async function runWindowsInstallerFixture(
       stderr: "pipe",
     });
     if ((await tar.exited) !== 0) throw new Error("extract failed");
-    const staged = join(extract, "toolmirror.exe");
+    const staged = join(extract, "corotum.exe");
     await chmod755(staged);
     const versionProc = Bun.spawn(["sh", staged, "--version"], {
       stdout: "pipe",
@@ -212,7 +212,7 @@ async function runWindowsInstallerFixture(
     stdout.push(
       `Installed ${dest}`,
       versionOut.trim(),
-      "ToolMirror was installed with the official installer.",
+      "Corotum was installed with the official installer.",
     );
     return {
       code: 0,
@@ -236,7 +236,7 @@ async function runWindowsInstallerFixture(
   }
 }
 
-const work = await mkdtemp(join(tmpdir(), "toolmirror-installers-"));
+const work = await mkdtemp(join(tmpdir(), "corotum-installers-"));
 afterAll(async () => {
   await rm(work, { recursive: true, force: true });
 });
@@ -246,7 +246,7 @@ describe("official installers", () => {
     const sh = await readFile(installSh, "utf8");
     const ps1 = await readFile(installPs1, "utf8");
     for (const source of [sh, ps1]) {
-      expect(source).toContain("Official ToolMirror installer");
+      expect(source).toContain("Official Corotum installer");
       expect(source).toContain("only officially supported installation method");
       expect(source).toContain(
         "Manual binary download is not an officially supported installation method.",
@@ -256,7 +256,7 @@ describe("official installers", () => {
     }
     expect(ps1).toContain("LOCALAPPDATA");
     expect(ps1).toContain("ToolMirror\\bin");
-    expect(ps1).toContain("toolmirror.exe");
+    expect(ps1).toContain("corotum.exe");
     expect(ps1).toContain("windows-x64");
     expect(ps1).toContain("Get-FileHash");
     expect(ps1).toContain('GetEnvironmentVariable("Path", "User")');
@@ -281,13 +281,13 @@ describe("official installers", () => {
             join(work, "windows-extract", target.id),
           );
           expect(result.code).toBe(0);
-          expect(result.stdout).toContain("Official ToolMirror installer");
+          expect(result.stdout).toContain("Official Corotum installer");
           expect(result.stdout).toContain("Installed");
           const dest = join(
             localAppData,
             "ToolMirror",
             "bin",
-            "toolmirror.exe",
+            "corotum.exe",
           );
           const version = Bun.spawn(["sh", dest, "--version"], {
             stdout: "pipe",
@@ -295,7 +295,7 @@ describe("official installers", () => {
           });
           expect(await version.exited).toBe(0);
           expect(await new Response(version.stdout).text()).toBe(
-            "toolmirror 0.1.0\n",
+            "corotum 0.1.0\n",
           );
           expect(result.pathEntries).toEqual([
             join(localAppData, "ToolMirror", "bin"),
@@ -308,21 +308,21 @@ describe("official installers", () => {
         const result = await runInstallSh(home, server.origin, os, arch);
         expect(result.stderr).toBe("");
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain("Official ToolMirror installer");
+        expect(result.stdout).toContain("Official Corotum installer");
         expect(result.stdout).toContain(
           "only officially supported installation method",
         );
         expect(server.requested).toContain(
           `releases/v0.1.0/binaries/${target.archive}`,
         );
-        const dest = join(home, ".local/bin/toolmirror");
+        const dest = join(home, ".local/bin/corotum");
         const version = Bun.spawn([dest, "--version"], {
           stdout: "pipe",
           stderr: "pipe",
         });
         expect(await version.exited).toBe(0);
         expect(await new Response(version.stdout).text()).toBe(
-          "toolmirror 0.1.0\n",
+          "corotum 0.1.0\n",
         );
       }
     } finally {
@@ -342,7 +342,7 @@ describe("official installers", () => {
     } finally {
       good.stop();
     }
-    const dest = join(home, ".local/bin/toolmirror");
+    const dest = join(home, ".local/bin/corotum");
     const before = sha256(new Uint8Array(await Bun.file(dest).arrayBuffer()));
     const tampered = await releaseLayout(
       "0.1.0",
@@ -350,11 +350,11 @@ describe("official installers", () => {
       (next) => {
         const junk = new TextEncoder().encode("tampered-archive");
         next.set(
-          "releases/v0.1.0/binaries/toolmirror-darwin-arm64.tar.gz",
+          "releases/v0.1.0/binaries/corotum-darwin-arm64.tar.gz",
           junk,
         );
         next.set(
-          "releases/v0.1.0/binaries/toolmirror-windows-x64.tar.gz",
+          "releases/v0.1.0/binaries/corotum-windows-x64.tar.gz",
           junk,
         );
       },
@@ -380,7 +380,7 @@ describe("official installers", () => {
       join(work, "windows-mismatch-extract-1"),
     );
     expect(firstWin.code).toBe(0);
-    const winDest = join(windowsDir, "ToolMirror", "bin", "toolmirror.exe");
+    const winDest = join(windowsDir, "ToolMirror", "bin", "corotum.exe");
     const winBefore = sha256(
       new Uint8Array(await Bun.file(winDest).arrayBuffer()),
     );
@@ -413,7 +413,7 @@ describe("official installers", () => {
     } finally {
       server.stop();
     }
-    const marker = "# Added by the official ToolMirror installer";
+    const marker = "# Added by the official Corotum installer";
     for (const name of [".profile", ".zshrc"]) {
       const text = await readFile(join(home, name), "utf8");
       expect(text.split(marker).length - 1).toBe(1);
@@ -452,7 +452,7 @@ describe("official installers", () => {
     );
     const home = join(work, "evil-version-home");
     await mkdir(join(home, ".local/bin"), { recursive: true });
-    const dest = join(home, ".local/bin/toolmirror");
+    const dest = join(home, ".local/bin/corotum");
     await writeFile(dest, "old-binary", { encoding: "utf8" });
     const server = startReleaseServer(files);
     try {

@@ -8,7 +8,7 @@ describe("portable package architecture boundaries", () => {
       'import { readFile } from "node:fs";',
       'import path from "path";',
       'import git from "simple-git";',
-      'import { pull } from "@toolmirror/git-provider";',
+      'import { pull } from "@corotum/git-provider";',
       'import { env } from "@cloudflare/workers-types";',
       'import React from "react";',
       'import { auth } from "better-auth";',
@@ -26,8 +26,8 @@ describe("portable package architecture boundaries", () => {
         reason: "Git infrastructure",
       }),
       expect.objectContaining({
-        source: "@toolmirror/git-provider",
-        reason: "runtime-specific ToolMirror package",
+        source: "@corotum/git-provider",
+        reason: "runtime-specific Corotum package",
       }),
       expect.objectContaining({
         source: "@cloudflare/workers-types",

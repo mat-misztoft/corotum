@@ -52,7 +52,7 @@ jobs:
       - run: bun ./tooling/release-build.ts --target ${{ matrix.target }}
       - name: Run linux-x64 final binary
         if: matrix.id == 'linux-x64'
-        run: bun run verify:cli dist/compile/toolmirror-linux-x64
+        run: bun run verify:cli dist/compile/corotum-linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: compile-${{ matrix.id }}

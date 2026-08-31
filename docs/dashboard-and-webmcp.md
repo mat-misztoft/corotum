@@ -2,7 +2,7 @@
 
 Cloud UI and WebMCP call the same application services. They change desired state only. v0.1 has no `sync_device` or `sync_all_devices` tool and does not remotely force a device to sync. A device applies or reports revisions only when the CLI runs on that device.
 
-On hosted toolmirror.com, paid Cloud functionality requires hosted Cloud entitlement. Self-hosted deployments do not require a Creem subscription.
+On hosted corotum.com, paid Cloud functionality requires hosted Cloud entitlement. Self-hosted deployments do not require a Creem subscription.
 
 ## Dashboard
 
@@ -65,4 +65,4 @@ Repository URLs must not include credentials. Retries with the same idempotency 
 
 When add, update, or set-ref succeeds but devices have not locked content yet, the response includes `pendingResolution`. That is success, not a remote sync.
 
-There is no WebMCP tool that runs `toolmirror sync` on a device.
+There is no WebMCP tool that runs `corotum sync` on a device.

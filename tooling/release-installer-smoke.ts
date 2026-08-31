@@ -67,7 +67,7 @@ const server = Bun.serve({
   },
 });
 
-const home = await mkdtemp(join(tmpdir(), "toolmirror-installer-smoke-"));
+const home = await mkdtemp(join(tmpdir(), "corotum-installer-smoke-"));
 try {
   const proc = Bun.spawn(["sh", installSh], {
     cwd: root,
@@ -94,7 +94,7 @@ try {
     console.error("Official installer smoke failed.");
     process.exit(1);
   }
-  const binary = join(home, ".local", "bin", "toolmirror");
+  const binary = join(home, ".local", "bin", "corotum");
   const versionProc = Bun.spawn([binary, "--version"], {
     stdout: "pipe",
     stderr: "pipe",
@@ -110,7 +110,7 @@ try {
     console.error("Installed official binary failed --version.");
     process.exit(1);
   }
-  if (!stdout.includes("Official ToolMirror installer")) {
+  if (!stdout.includes("Official Corotum installer")) {
     console.error("Installer did not identify itself as official.");
     process.exit(1);
   }

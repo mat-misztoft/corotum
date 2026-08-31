@@ -34,7 +34,7 @@ afterEach(async () => {
 async function fixture(): Promise<
   Readonly<{ bare: string; worktree: string }>
 > {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-git-state-"));
+  const root = await mkdtemp(join(tmpdir(), "corotum-git-state-"));
   temporaryDirectories.push(root);
   const worktree = join(root, "worktree");
   const bare = join(root, "remote.git");
@@ -44,9 +44,9 @@ async function fixture(): Promise<
     worktree,
     "config",
     "user.email",
-    "tests@toolmirror.invalid",
+    "tests@corotum.invalid",
   ]);
-  await git(["-C", worktree, "config", "user.name", "ToolMirror tests"]);
+  await git(["-C", worktree, "config", "user.name", "Corotum tests"]);
   await git(["-C", worktree, "commit", "--allow-empty", "-m", "initial"]);
   await git(["init", "--bare", bare]);
   await git(["-C", worktree, "remote", "add", "origin", bare]);
@@ -110,7 +110,7 @@ async function git(args: readonly string[]): Promise<string> {
 
 describe("GitStateProvider", () => {
   test("keeps an initial push pending until an empty remote accepts it", async () => {
-    const root = await mkdtemp(join(tmpdir(), "toolmirror-git-bootstrap-"));
+    const root = await mkdtemp(join(tmpdir(), "corotum-git-bootstrap-"));
     temporaryDirectories.push(root);
     const bare = join(root, "remote.git");
     await git(["init", "--bare", bare]);
@@ -132,7 +132,7 @@ describe("GitStateProvider", () => {
 
   test("stops before creating its cache when Git preflight fails", async () => {
     const source = await fixture();
-    const storage = join(source.worktree, "toolmirror-cache");
+    const storage = join(source.worktree, "corotum-cache");
     const provider = new GitStateProvider(storage, source.bare, async () => ({
       exitCode: 127,
       stderr: "git: command not found",
@@ -150,7 +150,7 @@ describe("GitStateProvider", () => {
 
   test("commits canonical full snapshots with transition metadata in its own clone", async () => {
     const source = await fixture();
-    const storage = join(source.worktree, "toolmirror-cache");
+    const storage = join(source.worktree, "corotum-cache");
     const provider = new GitStateProvider(storage, source.bare);
     const before = revisionId(
       (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(),

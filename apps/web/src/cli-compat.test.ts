@@ -23,7 +23,7 @@ test("Cloud rejects missing, invalid, and older CLI versions", () => {
 });
 
 test("incompatible CLIs receive HTTP 426 before any other Cloud payload", async () => {
-  const request = new Request("https://toolmirror.com/api/v1/cli/pairings");
+  const request = new Request("https://corotum.com/api/v1/cli/pairings");
   expect(cliVersionFrom(request)).toBeNull();
   expect(CLI_VERSION_HEADER).toBe("x-toolmirror-cli-version");
   const response = incompatibleCliResponse();

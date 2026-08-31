@@ -39,14 +39,14 @@ async function git(args: readonly string[]): Promise<string> {
 }
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-two-home-"));
+  const root = await mkdtemp(join(tmpdir(), "corotum-two-home-"));
   roots.push(root);
   const source = join(root, "source");
   const remote = join(root, "state.git");
   const stateWorktree = join(root, "state-worktree");
   await git(["init", "--initial-branch=main", source]);
-  await git(["-C", source, "config", "user.email", "tests@toolmirror.invalid"]);
-  await git(["-C", source, "config", "user.name", "ToolMirror tests"]);
+  await git(["-C", source, "config", "user.email", "tests@corotum.invalid"]);
+  await git(["-C", source, "config", "user.name", "Corotum tests"]);
   for (const [name, contents] of [["adopted", "adopted exact bytes\n"], ["added", "added exact bytes\n"]] as const) {
     await mkdir(join(source, "skills", name), { recursive: true });
     await writeFile(join(source, "skills", name, "SKILL.md"), contents);
@@ -55,8 +55,8 @@ async function fixture() {
   await git(["-C", source, "commit", "-m", "skills"]);
 
   await git(["init", "--initial-branch=main", stateWorktree]);
-  await git(["-C", stateWorktree, "config", "user.email", "tests@toolmirror.invalid"]);
-  await git(["-C", stateWorktree, "config", "user.name", "ToolMirror tests"]);
+  await git(["-C", stateWorktree, "config", "user.email", "tests@corotum.invalid"]);
+  await git(["-C", stateWorktree, "config", "user.name", "Corotum tests"]);
   await git(["-C", stateWorktree, "commit", "--allow-empty", "-m", "initial"]);
   await git(["init", "--bare", remote]);
   await git(["-C", stateWorktree, "remote", "add", "origin", remote]);
@@ -201,7 +201,7 @@ describe("Git Sync two-home safety", () => {
   });
 
   test("reports private Git authentication without persisting credentials or state", async () => {
-    const root = await mkdtemp(join(tmpdir(), "toolmirror-auth-required-"));
+    const root = await mkdtemp(join(tmpdir(), "corotum-auth-required-"));
     roots.push(root);
     const runner: GitCommandRunner = async ({ args }) =>
       args[0] === "--version"

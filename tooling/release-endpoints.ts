@@ -24,7 +24,7 @@ export async function smokeWorkerdEndpoints(
   const installShText = installSh.ok ? await installSh.text() : "";
   if (
     !installSh.ok ||
-    !installShText.includes("Official ToolMirror installer") ||
+    !installShText.includes("Official Corotum installer") ||
     !installShText.includes("v0.1 binaries are unsigned")
   ) {
     errors.push("docs installer endpoint /install.sh failed");

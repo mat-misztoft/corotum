@@ -39,7 +39,7 @@ afterEach(async () => {
 });
 
 async function tempDir(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "toolmirror-cli-update-"));
+  const directory = await mkdtemp(join(tmpdir(), "corotum-cli-update-"));
   directories.push(directory);
   return directory;
 }
@@ -63,7 +63,7 @@ async function makeArchive(
   const binaryPath = join(staging, target.binary);
   await writeFile(
     binaryPath,
-    `#!/bin/sh\necho "toolmirror ${version}"\nexit 0\n`,
+    `#!/bin/sh\necho "corotum ${version}"\nexit 0\n`,
     { encoding: "utf8" },
   );
   await chmod755(binaryPath);
@@ -151,7 +151,7 @@ async function createHarness(options?: {
   const executablePath = join(
     rootDir,
     "bin",
-    platform === "win32" ? "toolmirror.exe" : "toolmirror",
+    platform === "win32" ? "corotum.exe" : "corotum",
   );
   const original = new TextEncoder().encode("#!/bin/sh\necho old\n");
   await mkdir(join(rootDir, "bin"), { recursive: true });
@@ -234,7 +234,7 @@ describe("cli-update", () => {
       const result = await cliUpdate(harness.deps, { check: false });
       expect(result.status).toBe("UPDATED");
       const installed = await readFile(harness.executablePath, "utf8");
-      expect(installed).toContain("toolmirror 0.1.1");
+      expect(installed).toContain("corotum 0.1.1");
       expect(installed).not.toEqual(new TextDecoder().decode(harness.original));
     } finally {
       harness.stop();
@@ -271,7 +271,7 @@ describe("cli-update", () => {
   test("checksum mismatch rejects the archive without replacing the executable", async () => {
     const harness = await createHarness({
       mutate(files) {
-        const key = "releases/v0.1.1/binaries/toolmirror-darwin-arm64.tar.gz";
+        const key = "releases/v0.1.1/binaries/corotum-darwin-arm64.tar.gz";
         const bytes = files.get(key);
         if (!bytes) throw new Error("missing archive");
         const tampered = new Uint8Array(bytes);
@@ -317,7 +317,7 @@ describe("cli-update", () => {
         latest.artifacts["darwin-arm64"] = {
           ...latest.artifacts["darwin-arm64"],
           object: "releases/v0.1.1/binaries/../../secret.tar.gz",
-          filename: "toolmirror-evil.tar.gz",
+          filename: "corotum-evil.tar.gz",
         };
         files.set(
           "releases/latest.json",
@@ -348,10 +348,10 @@ describe("cli-update", () => {
       expect(result.status).toBe("STAGED");
       expect(await readFile(harness.executablePath)).toEqual(harness.original);
       const pending = await readFile(
-        join(harness.pendingDir, "toolmirror.exe"),
+        join(harness.pendingDir, "corotum.exe"),
         "utf8",
       );
-      expect(pending).toContain("toolmirror 0.1.1");
+      expect(pending).toContain("corotum 0.1.1");
     } finally {
       harness.stop();
     }
@@ -367,7 +367,7 @@ describe("cli-update", () => {
         status: "STAGED",
       });
       await writeFile(
-        join(harness.pendingDir, "toolmirror.exe"),
+        join(harness.pendingDir, "corotum.exe"),
         "tampered-pending",
       );
       const applied = await applyPendingCliUpdate(harness.deps);
@@ -389,7 +389,7 @@ describe("cli-update", () => {
       const applied = await applyPendingCliUpdate(harness.deps);
       expect(applied).toEqual({ status: "applied", version: "0.1.1" });
       expect(await readFile(harness.executablePath, "utf8")).toContain(
-        "toolmirror 0.1.1",
+        "corotum 0.1.1",
       );
     } finally {
       harness.stop();

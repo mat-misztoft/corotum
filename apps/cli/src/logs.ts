@@ -33,7 +33,7 @@ export class SanitizedLogger {
     });
     const maxBytes = this.options.maxBytes ?? LOG_FILE_MAX_BYTES;
     const line = `${Buffer.byteLength(entry, "utf8") <= maxBytes ? entry : JSON.stringify({ timestamp: new Date().toISOString(), event, details: "[TRUNCATED]" })}\n`;
-    const file = join(this.directory, "toolmirror.log");
+    const file = join(this.directory, "corotum.log");
 
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     if ((await sizeOf(file)) + Buffer.byteLength(line, "utf8") > maxBytes) {

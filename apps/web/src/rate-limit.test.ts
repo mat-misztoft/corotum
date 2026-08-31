@@ -126,7 +126,7 @@ test("throttled responses use 429 and Retry-After", async () => {
 test("client IP prefers Cloudflare connecting IP over X-Forwarded-For", () => {
   expect(
     clientIp(
-      new Request("https://toolmirror.com", {
+      new Request("https://corotum.com", {
         headers: {
           "cf-connecting-ip": "203.0.113.10",
           "x-forwarded-for": "198.51.100.1, 192.0.2.1",
@@ -136,10 +136,10 @@ test("client IP prefers Cloudflare connecting IP over X-Forwarded-For", () => {
   ).toBe("203.0.113.10");
   expect(
     clientIp(
-      new Request("https://toolmirror.com", {
+      new Request("https://corotum.com", {
         headers: { "x-forwarded-for": "198.51.100.1, 192.0.2.1" },
       }),
     ),
   ).toBe("198.51.100.1");
-  expect(clientIp(new Request("https://toolmirror.com"))).toBe("unknown");
+  expect(clientIp(new Request("https://corotum.com"))).toBe("unknown");
 });

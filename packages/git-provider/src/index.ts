@@ -57,7 +57,7 @@ export class GitStorageMigrationError extends Error {
 }
 
 /**
- * Relocates the complete ToolMirror-owned Git cache only after proving the
+ * Relocates the complete Corotum-owned Git cache only after proving the
  * configured source clone and desired-state files survived the copy. Config
  * persistence is deliberately last, so callers never point at partial state.
  */
@@ -89,7 +89,7 @@ export class GitStorageMigrator {
     const oldCache = join(from, sourceKey(source));
     if (!(await exists(oldCache))) {
       throw new GitStorageMigrationError(
-        "The ToolMirror-owned Git cache must exist before it can be moved.",
+        "The Corotum-owned Git cache must exist before it can be moved.",
       );
     }
     if (await exists(to)) {
@@ -210,7 +210,7 @@ export class GitStorageMigrator {
   }
 }
 
-/** A ToolMirror-owned Git clone that stores desired-state snapshots. */
+/** A Corotum-owned Git clone that stores desired-state snapshots. */
 export class GitStateProvider implements StateProvider {
   constructor(
     private readonly storagePath: string,
@@ -228,7 +228,7 @@ export class GitStateProvider implements StateProvider {
       await this.preflight();
       const cache = await this.cache();
       if (await this.hasHead(cache)) {
-        return { kind: "failure", error: { code: "CONFLICT", message: "ToolMirror is already initialized for this Git repository." } };
+        return { kind: "failure", error: { code: "CONFLICT", message: "Corotum is already initialized for this Git repository." } };
       }
       if (await this.readPending()) {
         return { kind: "failure", error: { code: "CONFLICT", message: "Resolve the previous PENDING_PUSH before changing desired state." } };
@@ -239,7 +239,7 @@ export class GitStateProvider implements StateProvider {
         writeFile(join(cache, lockfileFile), serializeLockfile(validated.lockfile)),
       ]);
       await this.command(cache, ["add", "--", manifestFile, lockfileFile]);
-      await this.command(cache, ["-c", "user.name=ToolMirror", "-c", "user.email=toolmirror@users.noreply.github.com", "commit", "--no-gpg-sign", "-m", "toolmirror: initialize"]);
+      await this.command(cache, ["-c", "user.name=Corotum", "-c", "user.email=toolmirror@users.noreply.github.com", "commit", "--no-gpg-sign", "-m", "corotum: initialize"]);
       try {
         await this.command(cache, ["push", "-u", "origin", "HEAD"]);
       } catch {
@@ -353,13 +353,13 @@ export class GitStateProvider implements StateProvider {
 
       await this.command(cache, [
         "-c",
-        "user.name=ToolMirror",
+        "user.name=Corotum",
         "-c",
         "user.email=toolmirror@users.noreply.github.com",
         "commit",
         "--no-gpg-sign",
         "-m",
-        `toolmirror: ${transition.type.toLowerCase()} ${transition.skillId}`,
+        `corotum: ${transition.type.toLowerCase()} ${transition.skillId}`,
       ]);
       try {
         await this.command(cache, ["push", "origin", "HEAD"]);
@@ -399,7 +399,7 @@ export class GitStateProvider implements StateProvider {
     const origin = await this.output(cache, ["remote", "get-url", "origin"]);
     if (origin !== source)
       throw new Error(
-        "ToolMirror Git cache source does not match its configured remote.",
+        "Corotum Git cache source does not match its configured remote.",
       );
     return cache;
   }
@@ -502,13 +502,13 @@ export class GitStateProvider implements StateProvider {
     await this.writeState(cache, state, transition);
     await this.command(cache, [
       "-c",
-      "user.name=ToolMirror",
+      "user.name=Corotum",
       "-c",
       "user.email=toolmirror@users.noreply.github.com",
       "commit",
       "--no-gpg-sign",
       "-m",
-      `toolmirror: ${message}`,
+      `corotum: ${message}`,
     ]);
   }
 
@@ -581,7 +581,7 @@ export class GitStateProvider implements StateProvider {
         error.code === "ENOENT"
       )
         return null;
-      throw new Error("ToolMirror PENDING_PUSH state is invalid.");
+      throw new Error("Corotum PENDING_PUSH state is invalid.");
     }
   }
 

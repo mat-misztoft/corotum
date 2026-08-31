@@ -44,7 +44,7 @@ const transition = { type: "ADD" as const, skillId: skill, metadata: {} };
 
 function provider(fetchImpl: typeof fetch, token = "device-token-secret") {
   return new SaaSProvider({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     workspaceId: "ws_1",
     deviceToken: token,
     fetch: fetchImpl,
@@ -65,7 +65,7 @@ test("Cloud origin must not include embedded credentials", () => {
   expect(
     () =>
       new SaaSProvider({
-        origin: "https://user:secret@toolmirror.com",
+        origin: "https://user:secret@corotum.com",
         workspaceId: "ws_1",
         deviceToken: "token",
       }),
@@ -87,7 +87,7 @@ test("pull authenticates with the device token and returns the current revision"
   expect(requests).toHaveLength(1);
   expect(requests[0].method).toBe("GET");
   expect(requests[0].url).toBe(
-    "https://toolmirror.com/api/v1/workspaces/ws_1/state",
+    "https://corotum.com/api/v1/workspaces/ws_1/state",
   );
   expect(requests[0].headers.get(DEVICE_TOKEN_HEADER)).toBe(
     "device-token-secret",

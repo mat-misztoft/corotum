@@ -97,7 +97,7 @@ test("telemetry transport accepts only compatible CLI allowlisted events", async
       points.push(point ?? {}),
   };
   const accepted = await handlePostTelemetry(
-    new Request("https://toolmirror.com/api/v1/telemetry", {
+    new Request("https://corotum.com/api/v1/telemetry", {
       method: "POST",
       headers: { "x-toolmirror-cli-version": "0.1.0" },
       body: JSON.stringify(validEvent),
@@ -109,7 +109,7 @@ test("telemetry transport accepts only compatible CLI allowlisted events", async
   expect(points).toHaveLength(1);
 
   const rejected = await handlePostTelemetry(
-    new Request("https://toolmirror.com/api/v1/telemetry", {
+    new Request("https://corotum.com/api/v1/telemetry", {
       method: "POST",
       headers: { "x-toolmirror-cli-version": "0.1.0" },
       body: JSON.stringify({

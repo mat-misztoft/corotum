@@ -15,39 +15,39 @@ export type ReleaseTarget = Readonly<{
   id: ReleaseTargetId;
   bunTarget: `bun-${ReleaseTargetId}`;
   archive: string;
-  binary: "toolmirror" | "toolmirror.exe";
+  binary: "corotum" | "corotum.exe";
 }>;
 
 export const RELEASE_TARGETS: readonly ReleaseTarget[] = [
   {
     id: "darwin-arm64",
     bunTarget: "bun-darwin-arm64",
-    archive: "toolmirror-darwin-arm64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-darwin-arm64.tar.gz",
+    binary: "corotum",
   },
   {
     id: "darwin-x64",
     bunTarget: "bun-darwin-x64",
-    archive: "toolmirror-darwin-x64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-darwin-x64.tar.gz",
+    binary: "corotum",
   },
   {
     id: "linux-arm64",
     bunTarget: "bun-linux-arm64",
-    archive: "toolmirror-linux-arm64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-linux-arm64.tar.gz",
+    binary: "corotum",
   },
   {
     id: "linux-x64",
     bunTarget: "bun-linux-x64",
-    archive: "toolmirror-linux-x64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-linux-x64.tar.gz",
+    binary: "corotum",
   },
   {
     id: "windows-x64",
     bunTarget: "bun-windows-x64",
-    archive: "toolmirror-windows-x64.tar.gz",
-    binary: "toolmirror.exe",
+    archive: "corotum-windows-x64.tar.gz",
+    binary: "corotum.exe",
   },
 ];
 
@@ -69,15 +69,15 @@ export type LatestJson = Readonly<{
 }>;
 
 export const FINAL_NOTES =
-  "ToolMirror v0.1. Unsigned. Official installers are the only supported installation method. Manual binary download is not an officially supported installation method.";
+  "Corotum v0.1. Unsigned. Official installers are the only supported installation method. Manual binary download is not an officially supported installation method.";
 
 export const UNSIGNED_NOTICE =
-  "ToolMirror v0.1 binaries are unsigned. Signing and notarization are out of scope for v0.1.";
+  "Corotum v0.1 binaries are unsigned. Signing and notarization are out of scope for v0.1.";
 
 export function compiledBinaryName(target: ReleaseTarget): string {
   return target.id === "windows-x64"
-    ? `toolmirror-${target.id}.exe`
-    : `toolmirror-${target.id}`;
+    ? `corotum-${target.id}.exe`
+    : `corotum-${target.id}`;
 }
 
 export function versionDir(version: string): string {
@@ -96,7 +96,7 @@ export function formatChecksums(
   version: string,
   entries: ReadonlyArray<readonly [string, string]>,
 ): string {
-  const header = `# SHA-256 checksums for ToolMirror v${version} (unsigned ${RELEASE_CHANNEL} final)\n`;
+  const header = `# SHA-256 checksums for Corotum v${version} (unsigned ${RELEASE_CHANNEL} final)\n`;
   return `${header}${entries.map(([sha, path]) => checksumLine(sha, path)).join("\n")}\n`;
 }
 

@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
 
-import type { ToolMirrorPaths } from "./platform";
+import type { CorotumPaths } from "./platform";
 import { SkillsStorageMigrator } from "./skills-storage-migration";
 
 const configSchema = z
@@ -27,11 +27,11 @@ const credentialsSchema = z
   })
   .strict();
 
-export type ToolMirrorConfig = z.infer<typeof configSchema>;
+export type CorotumConfig = z.infer<typeof configSchema>;
 export type Credentials = z.infer<typeof credentialsSchema>;
-export type ConfigKey = Exclude<keyof ToolMirrorConfig, "schemaVersion">;
+export type ConfigKey = Exclude<keyof CorotumConfig, "schemaVersion">;
 
-export const defaultConfig = (): ToolMirrorConfig => ({
+export const defaultConfig = (): CorotumConfig => ({
   schemaVersion: 1,
   mode: null,
   workspaceId: null,
@@ -45,8 +45,8 @@ export const defaultConfig = (): ToolMirrorConfig => ({
 });
 
 export function effectiveStoragePaths(
-  config: ToolMirrorConfig,
-  paths: ToolMirrorPaths,
+  config: CorotumConfig,
+  paths: CorotumPaths,
 ): Readonly<{ gitStoragePath: string; skillsStoragePath: string }> {
   return {
     gitStoragePath: config.gitStoragePath ?? paths.gitDir,
@@ -57,19 +57,19 @@ export function effectiveStoragePaths(
 /** Local configuration, including transactional canonical-store relocation. */
 export class ConfigStore {
   constructor(
-    private readonly paths: ToolMirrorPaths,
+    private readonly paths: CorotumPaths,
     private readonly skillsStorageMigrator = new SkillsStorageMigrator(),
   ) {}
 
-  async list(): Promise<ToolMirrorConfig> {
+  async list(): Promise<CorotumConfig> {
     return this.load();
   }
 
-  async get<Key extends ConfigKey>(key: Key): Promise<ToolMirrorConfig[Key]> {
+  async get<Key extends ConfigKey>(key: Key): Promise<CorotumConfig[Key]> {
     return (await this.load())[key];
   }
 
-  async set(key: ConfigKey, value: unknown): Promise<ToolMirrorConfig> {
+  async set(key: ConfigKey, value: unknown): Promise<CorotumConfig> {
     const current = await this.load();
     const candidate = configSchema.parse({ ...current, [key]: value });
     if (
@@ -87,13 +87,13 @@ export class ConfigStore {
     return candidate;
   }
 
-  async load(): Promise<ToolMirrorConfig> {
+  async load(): Promise<CorotumConfig> {
     return readJson(this.paths.configFile, configSchema, defaultConfig());
   }
 }
 
 export class CredentialsStore {
-  constructor(private readonly paths: ToolMirrorPaths) {}
+  constructor(private readonly paths: CorotumPaths) {}
 
   async load(): Promise<Credentials> {
     return readJson(this.paths.credentialsFile, credentialsSchema, {

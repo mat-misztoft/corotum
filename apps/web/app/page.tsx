@@ -1,8 +1,8 @@
 import { FlowStory } from "./landing-flow-story";
 
 const deviceTargets = [
-  { device: "Mac Mini", agent: "Codex", status: "SYNCED" },
-  { device: "Mac Mini", agent: "Pi", status: "SYNCED" },
+  { device: "Desktop", agent: "Codex", status: "SYNCED" },
+  { device: "Desktop", agent: "Pi", status: "SYNCED" },
   { device: "VPS", agent: "Codex", status: "DRIFTED" },
   { device: "VPS", agent: "Pi", status: "AUTH_REQUIRED" },
 ] as const;
@@ -48,14 +48,14 @@ export default function Home() {
   return (
     <main className="landing">
       <header className="landing-header">
-        <a className="wordmark" href="/" aria-label="ToolMirror home">
-          ToolMirror
+        <a className="wordmark" href="/" aria-label="Corotum home">
+          Corotum
         </a>
         <nav aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
           <a href="#git-cloud">Git / Cloud</a>
           <a href="#agents">Agents</a>
-          <a href="https://github.com/toolmirror/toolmirror">GitHub</a>
+          <a href="https://github.com/mat_misztoft/corotum">GitHub</a>
           <a href="/sign-in">Sign in</a>
         </nav>
       </header>
@@ -65,16 +65,16 @@ export default function Home() {
           <p className="dispatch-label">01 / ONE DESIRED STATE</p>
           <h1 id="hero-heading">Keep your agent skills in sync.</h1>
           <p className="hero-summary">
-            Manage your skills once. ToolMirror keeps every agent and every
+            Manage your skills once. Corotum keeps every agent and every
             machine on the same exact version.
           </p>
           <div className="hero-actions">
             <a className="button button-primary" href="/sign-in">
-              Start with ToolMirror Cloud
+              Start with Corotum Cloud
             </a>
             <a
               className="button button-secondary"
-              href="https://github.com/toolmirror/toolmirror"
+              href="https://github.com/mat_misztoft/corotum"
             >
               View on GitHub
             </a>
@@ -83,7 +83,7 @@ export default function Home() {
             className="install-command"
             aria-label="Official install command"
           >
-            curl -fsSL https://toolmirror.com/install.sh | sh
+            curl -fsSL https://corotum.com/install.sh | sh
           </code>
         </div>
 
@@ -106,15 +106,15 @@ export default function Home() {
           <p className="dispatch-label">02 / RECONCILIATION</p>
           <h2 id="state-everywhere-heading">One state. Everywhere.</h2>
           <p>
-            Your Mac, laptop and VPS should not each have a different version of
-            the same skill setup. ToolMirror keeps them aligned automatically.
+            Your desktop, laptop and VPS should not each have a different version of
+            the same skill setup. Corotum keeps them aligned automatically.
           </p>
         </div>
         {/* biome-ignore lint/performance/noImgElement: Static landing artwork must retain its supplied dimensions. */}
         <img
           className="landing-visual"
           src="/images/landing/02-reconciliation.jpg"
-          alt="ToolMirror reconciliation across device states."
+          alt="Corotum reconciliation across device states."
           width={1000}
           height={1000}
         />
@@ -125,7 +125,7 @@ export default function Home() {
           <p className="dispatch-label">03 / ACTUAL PRODUCT FLOW</p>
           <h2 id="product-flow-heading">From skill to synced state.</h2>
           <p>
-            Add a skill once. ToolMirror knows what should exist, what actually
+            Add a skill once. Corotum knows what should exist, what actually
             exists, and applies only what needs to change.
           </p>
         </div>
@@ -157,7 +157,7 @@ export default function Home() {
             <li>
               <h3>ADD</h3>
               <code>
-                toolmirror add vercel-labs/skills --skill frontend-design
+                corotum add vercel-labs/skills --skill frontend-design
               </code>
               <p>Add the selected skill to desired state.</p>
             </li>
@@ -201,7 +201,7 @@ export default function Home() {
               <h3>SYNCED</h3>
               <p>
                 Each device reports the locked revision after its CLI runs{" "}
-                <code>toolmirror sync</code>.
+                <code>corotum sync</code>.
               </p>
             </li>
           </ol>
@@ -215,9 +215,9 @@ export default function Home() {
       >
         <div className="git-cloud-heading">
           <p className="dispatch-label">04 / GIT OR CLOUD</p>
-          <h2 id="git-cloud-heading">One ToolMirror. Two ways to sync.</h2>
+          <h2 id="git-cloud-heading">One Corotum. Two ways to sync.</h2>
           <p>
-            Keep your state in your own Git repository, or use ToolMirror Cloud
+            Keep your state in your own Git repository, or use Corotum Cloud
             for hosted sync, devices, dashboard and WebMCP.
           </p>
         </div>
@@ -225,7 +225,7 @@ export default function Home() {
         <img
           className="landing-visual"
           src="/images/landing/04-two-ways-to-sync.jpg"
-          alt="ToolMirror syncs through Git or ToolMirror Cloud."
+          alt="Corotum syncs through Git or Corotum Cloud."
           width={1000}
           height={1000}
         />
@@ -264,7 +264,7 @@ export default function Home() {
           </table>
           <p className="device-dispatch-note">
             Status is current per device and agent after that machine runs
-            ToolMirror. No remote force-sync.
+            Corotum. No remote force-sync.
           </p>
         </div>
       </section>
@@ -278,7 +278,7 @@ export default function Home() {
             Gemini and more.
           </p>
           <p>
-            With ToolMirror Cloud, agents can also manage your desired state
+            With Corotum Cloud, agents can also manage your desired state
             through WebMCP.
           </p>
         </div>
@@ -316,15 +316,15 @@ export default function Home() {
         <p className="dispatch-label">07 / FINAL CTA</p>
         <h2 id="final-cta-heading">Set it once. Keep it in sync.</h2>
         <p>
-          Start with ToolMirror Cloud, or use your own Git repository for free.
+          Start with Corotum Cloud, or use your own Git repository for free.
         </p>
         <div className="hero-actions">
           <a className="button button-primary" href="/sign-in">
-            Start with ToolMirror Cloud
+            Start with Corotum Cloud
           </a>
           <a
             className="button button-secondary"
-            href="https://github.com/toolmirror/toolmirror"
+            href="https://github.com/mat_misztoft/corotum"
           >
             View on GitHub
           </a>
@@ -333,7 +333,7 @@ export default function Home() {
           className="install-command"
           aria-label="Official install command"
         >
-          curl -fsSL https://toolmirror.com/install.sh | sh
+          curl -fsSL https://corotum.com/install.sh | sh
         </code>
       </section>
     </main>

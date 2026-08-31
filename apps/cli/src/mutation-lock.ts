@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 
 export class MutationLockedError extends Error {
   constructor(readonly pid: number) {
-    super(`Another ToolMirror mutation is already running (PID ${pid}).`);
+    super(`Another Corotum mutation is already running (PID ${pid}).`);
     this.name = "MutationLockedError";
   }
 }
@@ -37,7 +37,7 @@ export class MutationLock {
       }
     }
 
-    throw new Error("Unable to acquire the ToolMirror mutation lock.");
+    throw new Error("Unable to acquire the Corotum mutation lock.");
   }
 }
 
@@ -46,7 +46,7 @@ async function readLockPid(file: string): Promise<number> {
   try {
     value = JSON.parse(await readFile(file, "utf8"));
   } catch {
-    throw new Error("ToolMirror mutation lock is invalid; remove it manually.");
+    throw new Error("Corotum mutation lock is invalid; remove it manually.");
   }
 
   if (
@@ -57,7 +57,7 @@ async function readLockPid(file: string): Promise<number> {
     !Number.isSafeInteger(value.pid) ||
     value.pid <= 0
   ) {
-    throw new Error("ToolMirror mutation lock is invalid; remove it manually.");
+    throw new Error("Corotum mutation lock is invalid; remove it manually.");
   }
   return value.pid;
 }

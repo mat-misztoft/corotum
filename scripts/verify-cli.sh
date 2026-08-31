@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-binary=${1:?usage: verify-cli.sh path-to-toolmirror}
-expected='toolmirror 0.1.0'
+binary=${1:?usage: verify-cli.sh path-to-corotum}
+expected='corotum 0.1.0'
 actual=$(env -i PATH=/usr/bin:/bin "$binary" --version)
 
 if [ "$actual" != "$expected" ]; then

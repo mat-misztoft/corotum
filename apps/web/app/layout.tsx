@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ToolMirror",
+  title: "Corotum",
   description: "Keep your agent skills in sync.",
 };
 

@@ -7,7 +7,7 @@ import {
 import type { CliOutcome } from "./cli-contracts";
 import type { ConfigStore, CredentialsStore } from "./config";
 
-export const DEFAULT_CLOUD_ORIGIN = "https://toolmirror.com";
+export const DEFAULT_CLOUD_ORIGIN = "https://corotum.com";
 export const DEVICE_CODE_HEADER = "x-toolmirror-device-code";
 export const PAIRING_LIFETIME_MS = 10 * 60 * 1000;
 export const PAIRING_POLL_INTERVAL_MS = 1_000;
@@ -92,7 +92,7 @@ export function cloudOriginFrom(value: string): string {
 }
 
 export function defaultCloudDevice(cliVersion: string): CloudDevice {
-  const name = hostname().trim() || "toolmirror-device";
+  const name = hostname().trim() || "corotum-device";
   return {
     name: name.slice(0, 128),
     platform: process.platform,
@@ -141,7 +141,7 @@ export class CloudAuthService {
   async login(): Promise<CloudLoginResult> {
     if ((await this.deps.credentials.load()).cloudDeviceToken) {
       throw new CloudAuthError(
-        "Already logged in. Run toolmirror logout first.",
+        "Already logged in. Run corotum logout first.",
         "GENERAL_ERROR",
       );
     }
@@ -250,14 +250,14 @@ export class CloudAuthService {
       if (status === "APPROVED") return;
       if (status === "EXPIRED" || status === "CONSUMED") {
         throw new CloudAuthError(
-          "Cloud pairing expired. Run toolmirror login again.",
+          "Cloud pairing expired. Run corotum login again.",
           "GENERAL_ERROR",
         );
       }
       await this.sleep(this.pollIntervalMs);
     }
     throw new CloudAuthError(
-      "Cloud pairing expired. Run toolmirror login again.",
+      "Cloud pairing expired. Run corotum login again.",
       "GENERAL_ERROR",
     );
   }

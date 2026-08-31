@@ -16,10 +16,10 @@ import {
   type Credentials,
   CredentialsStore,
   defaultConfig,
-  type ToolMirrorConfig,
+  type CorotumConfig,
 } from "./config";
 import { SanitizedLogger } from "./logs";
-import type { ToolMirrorPaths } from "./platform";
+import type { CorotumPaths } from "./platform";
 
 const deviceCode = "device-code-secret-value";
 const deviceToken = "plaintext-device-token-secret";
@@ -39,15 +39,15 @@ afterEach(async () => {
 });
 
 function memoryStores(initial?: {
-  config?: ToolMirrorConfig;
+  config?: CorotumConfig;
   credentials?: Credentials;
 }) {
   let config = initial?.config ?? defaultConfig();
   let credentials = initial?.credentials ?? { schemaVersion: 1 as const };
   return {
     config: {
-      set: async (key: keyof ToolMirrorConfig, value: unknown) => {
-        config = { ...config, [key]: value } as ToolMirrorConfig;
+      set: async (key: keyof CorotumConfig, value: unknown) => {
+        config = { ...config, [key]: value } as CorotumConfig;
         return config;
       },
       snapshot: () => config,
@@ -153,7 +153,7 @@ function service(
   return {
     stores,
     subject: new CloudAuthService({
-      origin: "https://toolmirror.com",
+      origin: "https://corotum.com",
       config: stores.config,
       credentials: stores.credentials,
       fetch: cloud.fetch,
@@ -174,8 +174,8 @@ function service(
   };
 }
 
-async function temporaryPaths(): Promise<ToolMirrorPaths> {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-cloud-auth-"));
+async function temporaryPaths(): Promise<CorotumPaths> {
+  const root = await mkdtemp(join(tmpdir(), "corotum-cloud-auth-"));
   directories.push(root);
   return {
     configDir: join(root, "config"),
@@ -191,7 +191,7 @@ async function temporaryPaths(): Promise<ToolMirrorPaths> {
 
 describe("cloud origin", () => {
   test("rejects embedded credentials", () => {
-    expect(() => cloudOriginFrom("https://user:secret@toolmirror.com")).toThrow(
+    expect(() => cloudOriginFrom("https://user:secret@corotum.com")).toThrow(
       "Cloud origin must not include credentials.",
     );
   });
@@ -207,7 +207,7 @@ describe("CLI Cloud login", () => {
       verificationUrl: string;
     }> = [];
     const subject = new CloudAuthService({
-      origin: "https://toolmirror.com",
+      origin: "https://corotum.com",
       config: new ConfigStore(paths),
       credentials: new CredentialsStore(paths),
       fetch: cloud.fetch,
@@ -232,12 +232,12 @@ describe("CLI Cloud login", () => {
     const result = await subject.login();
     expect(result).toEqual({ deviceId, workspaceId });
     expect(cloud.opened).toEqual([
-      verificationUrlFor("https://toolmirror.com", userCode),
+      verificationUrlFor("https://corotum.com", userCode),
     ]);
     expect(pairingNotices).toEqual([
       {
         userCode,
-        verificationUrl: verificationUrlFor("https://toolmirror.com", userCode),
+        verificationUrl: verificationUrlFor("https://corotum.com", userCode),
       },
     ]);
 
@@ -308,7 +308,7 @@ describe("CLI Cloud logout", () => {
 
     const cloud = pairingCloud();
     const subject = new CloudAuthService({
-      origin: "https://toolmirror.com",
+      origin: "https://corotum.com",
       config,
       credentials,
       fetch: cloud.fetch,
@@ -384,7 +384,7 @@ describe("CLI Cloud auth output contracts", () => {
   });
 
   test("sanitized logs redact pairing and device secrets", async () => {
-    const root = await mkdtemp(join(tmpdir(), "toolmirror-cloud-logs-"));
+    const root = await mkdtemp(join(tmpdir(), "corotum-cloud-logs-"));
     directories.push(root);
     const logger = new SanitizedLogger(join(root, "logs"));
     await logger.write("cloud.login.started", {
@@ -393,7 +393,7 @@ describe("CLI Cloud auth output contracts", () => {
       token: deviceToken,
       pairingId,
     });
-    const output = await readFile(join(root, "logs", "toolmirror.log"), "utf8");
+    const output = await readFile(join(root, "logs", "corotum.log"), "utf8");
     expect(output).not.toContain(deviceCode);
     expect(output).not.toContain(userCode);
     expect(output).not.toContain(deviceToken);

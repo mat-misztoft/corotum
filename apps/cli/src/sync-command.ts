@@ -213,7 +213,7 @@ function assertGitConfig(
   repository: string | null,
 ): asserts repository is string {
   if (mode !== "git" || !repository)
-    throw new Error("Run toolmirror init before using Git Sync.");
+    throw new Error("Run corotum init before using Git Sync.");
 }
 function write(
   io: CliIo,

@@ -112,7 +112,7 @@ test("Playwright: pairing approval, hosted billing gate, and device status", asy
       },
     });
     const webhook = await handleCreemWebhook(
-      new Request("https://toolmirror.com/api/v1/webhooks/creem", {
+      new Request("https://corotum.com/api/v1/webhooks/creem", {
         method: "POST",
         headers: { "creem-signature": await sign(payload, webhookSecret) },
         body: payload,
@@ -126,7 +126,7 @@ test("Playwright: pairing approval, hosted billing gate, and device status", asy
     const skill = skillId("sk_playwright");
     const created = await handlePutWorkspaceState(
       new Request(
-        `https://toolmirror.com/api/v1/workspaces/${laptop.workspaceId}/state`,
+        `https://corotum.com/api/v1/workspaces/${laptop.workspaceId}/state`,
         {
           method: "PUT",
           headers: {
@@ -178,7 +178,7 @@ test("Playwright: pairing approval, hosted billing gate, and device status", asy
     expect(created.status).toBe(200);
     const report = await handlePostDeviceSyncReport(
       new Request(
-        `https://toolmirror.com/api/v1/devices/${laptop.deviceId}/sync-report`,
+        `https://corotum.com/api/v1/devices/${laptop.deviceId}/sync-report`,
         {
           method: "POST",
           headers: {
@@ -217,7 +217,7 @@ test("Playwright: pairing approval, hosted billing gate, and device status", asy
       return page.text();
     });
     expect(selfDashboard).toContain(
-      "This is a self-hosted ToolMirror Cloud instance. Cloud functionality is free and has no billing portal.",
+      "This is a self-hosted Corotum Cloud instance. Cloud functionality is free and has no billing portal.",
     );
     expect(selfDashboard).not.toContain("Current subscription");
 

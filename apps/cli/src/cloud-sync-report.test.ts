@@ -9,7 +9,7 @@ import {
 test("sync reports must use this device’s locally verified applied revision", async () => {
   const requests: Request[] = [];
   const service = new CloudSyncReportService({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     deviceId: "dev_1",
     credentials: {
       load: async () => ({
@@ -57,7 +57,7 @@ test("sync reports must use this device’s locally verified applied revision", 
   expect(receipt.deviceId).toBe("dev_1");
   expect(requests).toHaveLength(1);
   expect(requests[0].url).toBe(
-    "https://toolmirror.com/api/v1/devices/dev_1/sync-report",
+    "https://corotum.com/api/v1/devices/dev_1/sync-report",
   );
   expect(requests[0].url).not.toContain("dev_2");
   expect(await requests[0].json()).toEqual({
@@ -96,7 +96,7 @@ test("partial target outcomes stay visible in the reported aggregate", () => {
 test("sync reports send sanitized per-agent target outcomes", async () => {
   const requests: Request[] = [];
   const service = new CloudSyncReportService({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     deviceId: "dev_1",
     credentials: {
       load: async () => ({

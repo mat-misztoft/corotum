@@ -6,9 +6,9 @@ export default function SignInPage() {
       <div className="sign-in-panel">
         <div className="sign-in-brand-rule" aria-hidden="true" />
         <a className="wordmark" href="/">
-          ToolMirror
+          Corotum
         </a>
-        <p className="sign-in-kicker">TOOLMIRROR CLOUD</p>
+        <p className="sign-in-kicker">COROTUM CLOUD</p>
         <h1>Sign in</h1>
         <p className="sign-in-intro">
           Use your account to manage your Cloud workspace.

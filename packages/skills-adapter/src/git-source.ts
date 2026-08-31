@@ -187,7 +187,7 @@ export class GitSkillMaterializer {
   }
 
   private async clone(source: string): Promise<string> {
-    const checkout = await mkdtemp(join(tmpdir(), "toolmirror-git-"));
+    const checkout = await mkdtemp(join(tmpdir(), "corotum-git-"));
     const result = await this.runGit({
       args: ["clone", "--quiet", "--no-checkout", source, checkout],
     });
@@ -250,7 +250,7 @@ export class GitSkillMaterializer {
     archive: Uint8Array,
     path: string,
   ): Promise<string> {
-    const temporary = await mkdtemp(join(tmpdir(), "toolmirror-git-hash-"));
+    const temporary = await mkdtemp(join(tmpdir(), "corotum-git-hash-"));
     try {
       const file = join(temporary, "skill.tar");
       await writeFile(file, archive);

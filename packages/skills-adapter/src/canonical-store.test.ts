@@ -24,7 +24,7 @@ afterEach(async () => {
 });
 
 async function fixture(name: string, content: string): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "toolmirror-canonical-"));
+  const directory = await mkdtemp(join(tmpdir(), "corotum-canonical-"));
   temporaryDirectories.push(directory);
   await mkdir(join(directory, name), { recursive: true });
   await writeFile(join(directory, name, "SKILL.md"), content);
@@ -33,7 +33,7 @@ async function fixture(name: string, content: string): Promise<string> {
 
 describe("CanonicalSkillStore", () => {
   test("keeps skills with the same display name separate by stable ID", async () => {
-    const root = await mkdtemp(join(tmpdir(), "toolmirror-store-"));
+    const root = await mkdtemp(join(tmpdir(), "corotum-store-"));
     temporaryDirectories.push(root);
     const source = await fixture("frontend-design", "# Frontend design\n");
     const hash = await hashSkillDirectory(source);
@@ -54,7 +54,7 @@ describe("CanonicalSkillStore", () => {
   });
 
   test("replaces only verified content", async () => {
-    const root = await mkdtemp(join(tmpdir(), "toolmirror-store-"));
+    const root = await mkdtemp(join(tmpdir(), "corotum-store-"));
     temporaryDirectories.push(root);
     const oldSource = await fixture("example", "# Old\n");
     const newSource = await fixture("example", "# New\n");
@@ -85,7 +85,7 @@ describe("CanonicalSkillStore", () => {
   });
 
   test("rejects symlinks rather than hashing them as managed content", async () => {
-    const root = await mkdtemp(join(tmpdir(), "toolmirror-store-"));
+    const root = await mkdtemp(join(tmpdir(), "corotum-store-"));
     temporaryDirectories.push(root);
     const source = await fixture("example", "# Example\n");
     await symlink("SKILL.md", join(source, "linked.md"));

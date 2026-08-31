@@ -84,10 +84,10 @@ describe("CLI automation contracts", () => {
   test("exposes help and the compiled CLI version contract", async () => {
     const help = fixtureIo();
     expect(await runCli(["--help"], help.io)).toBe(ExitCode.SUCCESS);
-    expect(help.output.join("")).toContain("Usage: toolmirror");
+    expect(help.output.join("")).toContain("Usage: corotum");
 
     const version = fixtureIo();
     expect(await runCli(["--version"], version.io)).toBe(ExitCode.SUCCESS);
-    expect(version.output.join("")).toBe(`toolmirror ${CLI_VERSION}\n`);
+    expect(version.output.join("")).toBe(`corotum ${CLI_VERSION}\n`);
   });
 });

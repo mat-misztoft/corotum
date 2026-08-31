@@ -79,7 +79,7 @@ function apiRequest(
   path: string,
   init?: ConstructorParameters<typeof Request>[1],
 ) {
-  return new Request(`https://toolmirror.com${path}`, init);
+  return new Request(`https://corotum.com${path}`, init);
 }
 
 test("an incompatible CLI receives 426 before pairing state is created", async () => {
@@ -146,7 +146,7 @@ test("a compatible CLI can still pair, and browser approve is not gated on CLI v
   const approved = await handleApprovePairing(
     apiRequest(`/api/v1/cli/pairings/${pairing.id}/approve`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
       body: JSON.stringify({ userCode: pairing.userCode }),
     }),
     db,
@@ -208,7 +208,7 @@ test("device mutations over the per-user limit are throttled", async () => {
     last = await handleRevokeDevice(
       apiRequest("/api/v1/devices/dev_missing/revoke", {
         method: "POST",
-        headers: { origin: "https://toolmirror.com" },
+        headers: { origin: "https://corotum.com" },
       }),
       db,
       "dev_missing",

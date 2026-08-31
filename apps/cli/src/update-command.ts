@@ -33,7 +33,7 @@ export function registerUpdateCommand(program: Command, io: CliIo): void {
       });
       const config = await new ConfigStore(paths).load();
       if (config.mode !== "git" || !config.gitRepository)
-        throw new Error("Run toolmirror init before updating Git skills.");
+        throw new Error("Run corotum init before updating Git skills.");
       const storage = effectiveStoragePaths(config, paths);
       const stateStore = new LocalOperationalStateStore(
         join(paths.stateDir, "state.json"),

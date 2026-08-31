@@ -9,7 +9,7 @@ import {
   defaultConfig,
   effectiveStoragePaths,
 } from "./config";
-import { resolvePlatformPaths, type ToolMirrorPaths } from "./platform";
+import { resolvePlatformPaths, type CorotumPaths } from "./platform";
 
 const temporaryDirectories: string[] = [];
 
@@ -21,8 +21,8 @@ afterEach(async () => {
   );
 });
 
-async function temporaryPaths(): Promise<ToolMirrorPaths> {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-config-"));
+async function temporaryPaths(): Promise<CorotumPaths> {
+  const root = await mkdtemp(join(tmpdir(), "corotum-config-"));
   temporaryDirectories.push(root);
   return {
     configDir: join(root, "config"),
@@ -41,10 +41,10 @@ describe("platform paths", () => {
     expect(
       resolvePlatformPaths({ homeDir: "/home/alex", platform: "linux" }),
     ).toMatchObject({
-      configFile: "/home/alex/.config/toolmirror/config.json",
-      dataDir: "/home/alex/.local/share/toolmirror",
-      stateDir: "/home/alex/.local/state/toolmirror",
-      runtimeDir: "/home/alex/.local/state/toolmirror/toolmirror",
+      configFile: "/home/alex/.config/corotum/config.json",
+      dataDir: "/home/alex/.local/share/corotum",
+      stateDir: "/home/alex/.local/state/corotum",
+      runtimeDir: "/home/alex/.local/state/corotum/corotum",
     });
     expect(
       resolvePlatformPaths({
@@ -58,10 +58,10 @@ describe("platform paths", () => {
         },
       }),
     ).toMatchObject({
-      configDir: "/config/toolmirror",
-      dataDir: "/data/toolmirror",
-      stateDir: "/state/toolmirror",
-      runtimeDir: "/run/user/42/toolmirror",
+      configDir: "/config/corotum",
+      dataDir: "/data/corotum",
+      stateDir: "/state/corotum",
+      runtimeDir: "/run/user/42/corotum",
     });
     expect(
       resolvePlatformPaths({ homeDir: "/Users/alex", platform: "darwin" }),

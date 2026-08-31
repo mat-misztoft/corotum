@@ -34,7 +34,7 @@ export function registerRestoreCommand(program: Command, io: CliIo): void {
       try {
         const config = await new ConfigStore(paths).load();
         if (config.mode !== "git" || !config.gitRepository)
-          throw new Error("Run toolmirror init before restoring Git skills.");
+          throw new Error("Run corotum init before restoring Git skills.");
         const storage = effectiveStoragePaths(config, paths);
         const stateStore = new LocalOperationalStateStore(
           join(paths.stateDir, "state.json"),

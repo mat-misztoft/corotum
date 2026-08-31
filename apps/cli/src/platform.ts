@@ -8,7 +8,7 @@ export type PlatformEnvironment = Readonly<{
   env?: Readonly<Record<string, string | undefined>>;
 }>;
 
-export type ToolMirrorPaths = Readonly<{
+export type CorotumPaths = Readonly<{
   configDir: string;
   configFile: string;
   credentialsFile: string;
@@ -28,15 +28,15 @@ function valueOr(
   return value && value.length > 0 ? value : fallback;
 }
 
-/** Resolves all local ToolMirror paths in one platform-aware place. */
+/** Resolves all local Corotum paths in one platform-aware place. */
 export function resolvePlatformPaths(
   env: PlatformEnvironment,
-): ToolMirrorPaths {
+): CorotumPaths {
   const { homeDir, platform } = env;
 
   if (!homeDir) {
     throw new Error(
-      "A home directory is required to resolve ToolMirror paths.",
+      "A home directory is required to resolve Corotum paths.",
     );
   }
 
@@ -84,21 +84,21 @@ export function resolvePlatformPaths(
 
   const configDir = join(
     valueOr(env, "XDG_CONFIG_HOME", join(homeDir, ".config")),
-    "toolmirror",
+    "corotum",
   );
   const dataDir = join(
     valueOr(env, "XDG_DATA_HOME", join(homeDir, ".local", "share")),
-    "toolmirror",
+    "corotum",
   );
   const stateDir = join(
     valueOr(env, "XDG_STATE_HOME", join(homeDir, ".local", "state")),
-    "toolmirror",
+    "corotum",
   );
   return paths(
     configDir,
     dataDir,
     stateDir,
-    join(valueOr(env, "XDG_RUNTIME_DIR", stateDir), "toolmirror"),
+    join(valueOr(env, "XDG_RUNTIME_DIR", stateDir), "corotum"),
   );
 }
 
@@ -107,7 +107,7 @@ function paths(
   dataDir: string,
   stateDir: string,
   runtimeDir: string,
-): ToolMirrorPaths {
+): CorotumPaths {
   return {
     configDir,
     configFile: join(configDir, "config.json"),

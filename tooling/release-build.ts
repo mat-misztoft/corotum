@@ -88,7 +88,7 @@ async function archiveTarget(
   await mkdir(staging, { recursive: true });
   const staged = join(staging, target.binary);
   await Bun.write(staged, Bun.file(binaryPath));
-  if (target.binary !== "toolmirror.exe") {
+  if (target.binary !== "corotum.exe") {
     const chmod = Bun.spawn(["chmod", "755", staged], {
       cwd: root,
       stdout: "inherit",

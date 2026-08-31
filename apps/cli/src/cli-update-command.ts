@@ -13,7 +13,7 @@ export function registerCliUpdateCommand(
 ): void {
   program
     .command("cli-update")
-    .description("update the ToolMirror CLI from official release metadata")
+    .description("update the Corotum CLI from official release metadata")
     .option(
       "--check",
       "report release availability without modifying the executable",

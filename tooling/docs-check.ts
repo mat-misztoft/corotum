@@ -63,7 +63,7 @@ export function documentedToolmirrorCommands(
 ): readonly string[] {
   const names = new Set<string>();
   for (const match of markdownCode(markdown).matchAll(
-    /toolmirror(?:\s+(?:--json|--non-interactive))*\s+([a-z][\w-]*)/g,
+    /corotum(?:\s+(?:--json|--non-interactive))*\s+([a-z][\w-]*)/g,
   )) {
     names.add(match[1]);
   }
@@ -139,7 +139,7 @@ export async function checkDocs(
   const selfHost = files.get("docs/self-hosting.md") ?? "";
   for (const missing of includesAll(selfHost, [
     "Creem is not required",
-    "hosted ToolMirror billing is not required",
+    "hosted Corotum billing is not required",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",
     "GITHUB_CLIENT_ID",
@@ -204,7 +204,7 @@ export async function checkDocs(
         "Email Sending",
         "sending domain",
         "DNS",
-        "AUTH_EMAIL_FROM=auth@toolmirror.com",
+        "AUTH_EMAIL_FROM=auth@corotum.com",
         "send_email",
         "EMAIL",
         "does not need a separate email API key",
@@ -216,8 +216,8 @@ export async function checkDocs(
       selfHost,
       [
         "own email-delivery configuration",
-        "ToolMirror-owned Cloudflare Email Service resources",
-        "AUTH_EMAIL_FROM=auth@toolmirror.com",
+        "Corotum-owned Cloudflare Email Service resources",
+        "AUTH_EMAIL_FROM=auth@corotum.com",
         "EMAIL is not a `.dev.vars` secret",
         "does not require an email API key",
         "Creem",
@@ -234,10 +234,10 @@ export async function checkDocs(
 
   const install = files.get("docs/install.md") ?? "";
   for (const missing of includesAll(install, [
-    "curl -fsSL https://toolmirror.com/install.sh | sh",
-    "irm https://toolmirror.com/install.ps1 | iex",
-    "toolmirror cli-update",
-    "toolmirror cli-update --check",
+    "curl -fsSL https://corotum.com/install.sh | sh",
+    "irm https://corotum.com/install.ps1 | iex",
+    "corotum cli-update",
+    "corotum cli-update --check",
     "SHA-256",
   ])) {
     findings.push({
@@ -248,8 +248,8 @@ export async function checkDocs(
 
   const migrate = files.get("docs/migration.md") ?? "";
   for (const missing of includesAll(migrate, [
-    "toolmirror migrate cloud",
-    "toolmirror migrate git",
+    "corotum migrate cloud",
+    "corotum migrate git",
     "--strategy",
   ])) {
     findings.push({
@@ -263,7 +263,7 @@ export async function checkDocs(
       if (!registered.has(command)) {
         findings.push({
           file: relative,
-          message: `Documented command \`toolmirror ${command}\` is not registered in the CLI.`,
+          message: `Documented command \`corotum ${command}\` is not registered in the CLI.`,
         });
       }
     }

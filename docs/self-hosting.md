@@ -1,6 +1,6 @@
-# Self-hosted ToolMirror Cloud
+# Self-hosted Corotum Cloud
 
-Self-hosted ToolMirror Cloud is free under AGPLv3. Hosted ToolMirror billing is not required for self-hosted Cloud. Creem is not required. Do not configure Creem. Auth and OAuth are configured independently from hosted billing.
+Self-hosted Corotum Cloud is free under AGPLv3. Hosted Corotum billing is not required for self-hosted Cloud. Creem is not required. Do not configure Creem. Auth and OAuth are configured independently from hosted billing.
 
 There is no daemon and no remote forced sync. Devices pair in a browser and apply or report state only when the CLI runs on that device.
 
@@ -8,7 +8,7 @@ There is no daemon and no remote forced sync. Devices pair in a browser and appl
 
 The `apps/web` Cloudflare Worker (vinext / Next.js on workerd) plus one D1 database. The same process serves the landing page, dashboard, WebMCP, and `/api/v1/` Cloud API.
 
-Leave `TOOLMIRROR_HOSTED` unset or set it to `false`. Only `true` or `1` turns on hosted toolmirror.com billing. Self-hosted Cloud paths do not check Creem entitlement.
+Leave `TOOLMIRROR_HOSTED` unset or set it to `false`. Only `true` or `1` turns on hosted corotum.com billing. Self-hosted Cloud paths do not check Creem entitlement.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Leave `TOOLMIRROR_HOSTED` unset or set it to `false`. Only `true` or `1` turns o
 - Public HTTPS origin for the Worker
 - An independently configured transactional email service/binding for magic-link delivery
 
-Creem, a Creem account, and hosted toolmirror.com subscription products are not prerequisites.
+Creem, a Creem account, and hosted corotum.com subscription products are not prerequisites.
 
 ## AGPL obligations
 
@@ -30,15 +30,15 @@ This software is licensed under [GNU AGPLv3](../LICENSE). If you run a modified 
 From `apps/web`:
 
 ```bash
-npx wrangler d1 create toolmirror
+npx wrangler d1 create corotum
 ```
 
-Put the returned `database_id` in `apps/web/wrangler.jsonc` under `d1_databases` for binding `DB`, database name `toolmirror`, `migrations_dir` `migrations`. The repository ships with `database_id` `local-toolmirror-d1` for local use; production must use the created id.
+Put the returned `database_id` in `apps/web/wrangler.jsonc` under `d1_databases` for binding `DB`, database name `corotum`, `migrations_dir` `migrations`. The repository ships with `database_id` `local-toolmirror-d1` for local use; production must use the created id.
 
 Apply migrations:
 
 ```bash
-npx wrangler d1 migrations apply toolmirror --remote
+npx wrangler d1 migrations apply corotum --remote
 ```
 
 Local development:
@@ -51,7 +51,7 @@ bun run db:migrate
 
 | Binding | Name | Purpose |
 | --- | --- | --- |
-| `DB` | D1 `toolmirror` | Auth, workspaces, revisions, devices, reports |
+| `DB` | D1 `corotum` | Auth, workspaces, revisions, devices, reports |
 | `ASSETS` | `dist/client` | Built web assets |
 | `TOOLMIRROR_TELEMETRY` | Analytics Engine dataset `toolmirror_telemetry` | Optional anonymous CLI telemetry ingest |
 
@@ -75,7 +75,7 @@ Create the OAuth apps with:
 
 Replace the origin with your `BETTER_AUTH_URL`. Partial OAuth (id without secret, or only one provider) is rejected.
 
-OAuth and email magic-link sign-in are independent of Creem and of hosted toolmirror.com billing.
+OAuth and email magic-link sign-in are independent of Creem and of hosted corotum.com billing.
 
 ## Environment variables
 
@@ -105,23 +105,23 @@ Example `vars` (do not put secrets here):
 }
 ```
 
-Do not set hosted billing variables. Hosted ToolMirror billing is not required for self-hosted Cloud.
+Do not set hosted billing variables. Hosted Corotum billing is not required for self-hosted Cloud.
 
 ## Email magic links
 
 The `/sign-in` page supports GitHub, Google, and passwordless email links. Email requests always show the same confirmation for new and existing addresses, so the flow does not disclose account existence. Links are hashed at rest, expire, can be used once, and reject unsafe redirects.
 
-A self-hosted deployment must provide its **own** email-delivery configuration. It must not use ToolMirror-owned Cloudflare Email Service resources, sender domains, or hosted credentials, and it does not require hosted entitlement or Creem. The shipped Worker integration expects an `EMAIL` Cloudflare `send_email` binding and an `AUTH_EMAIL_FROM` sender address; configure both in your own Cloudflare account and for your own onboarded sending domain, or replace the application email boundary with your independently operated transport.
+A self-hosted deployment must provide its **own** email-delivery configuration. It must not use Corotum-owned Cloudflare Email Service resources, sender domains, or hosted credentials, and it does not require hosted entitlement or Creem. The shipped Worker integration expects an `EMAIL` Cloudflare `send_email` binding and an `AUTH_EMAIL_FROM` sender address; configure both in your own Cloudflare account and for your own onboarded sending domain, or replace the application email boundary with your independently operated transport.
 
 For local development, put only the email sender setting in `apps/web/.dev.vars`:
 
 ```dotenv
-AUTH_EMAIL_FROM=auth@toolmirror.com
+AUTH_EMAIL_FROM=auth@corotum.com
 ```
 
 Use your own sender address in a real self-host. `EMAIL` is not a `.dev.vars` secret: it is the Worker `send_email` binding declared in `wrangler.jsonc`. That binding path does not require an email API key. Ensure your chosen provider has enabled sending and that its required sender-domain DNS/authentication records are live before testing real delivery.
 
-Authentication and pairing remain available without a subscription. In contrast, the hosted `toolmirror.com` deployment uses its own Cloudflare Email Service binding and separately gates paid Cloud operations with Creem; self-hosted Cloud stays usable without Creem.
+Authentication and pairing remain available without a subscription. In contrast, the hosted `corotum.com` deployment uses its own Cloudflare Email Service binding and separately gates paid Cloud operations with Creem; self-hosted Cloud stays usable without Creem.
 
 Optional CLI-side variables, used on devices rather than the Worker:
 
@@ -142,7 +142,7 @@ bun run web:build
 From `apps/web`:
 
 ```bash
-npx wrangler d1 migrations apply toolmirror --remote
+npx wrangler d1 migrations apply corotum --remote
 npx wrangler deploy
 ```
 
@@ -155,13 +155,13 @@ Confirm `https://cloud.example.com` serves the site. Unauthenticated users go to
 3. Pair a device:
 
 ```bash
-toolmirror login --origin https://cloud.example.com
+corotum login --origin https://cloud.example.com
 ```
 
 Or initialize Cloud and adopt selected local skills in one step:
 
 ```bash
-toolmirror init cloud --source owner/skills --origin https://cloud.example.com
+corotum init cloud --source owner/skills --origin https://cloud.example.com
 ```
 
 `init cloud` opens the pairing browser flow when the device is not already logged in. Hosted entitlement is not required.
@@ -169,7 +169,7 @@ toolmirror init cloud --source owner/skills --origin https://cloud.example.com
 4. Open `/dashboard` for skills, devices, target reports, and settings. Self-hosted billing UI states that Cloud functionality is free and has no billing portal.
 5. Mutate Cloud desired state with [WebMCP](./dashboard-and-webmcp.md) (or the same-origin dashboard mutation API). Git CLI mutation commands (`add`, `sync`, and the rest) require Git Sync mode.
 6. Revoke a device from `/dashboard/devices`. Revoke invalidates only that device token and keeps remote machine data.
-7. `toolmirror logout --origin https://cloud.example.com` revokes the local token.
+7. `corotum logout --origin https://cloud.example.com` revokes the local token.
 
 Pairing codes expire after 10 minutes. Cloud may return `426 Upgrade Required` when the CLI is older than `0.1.0`. Git Sync is independent of that check.
 
@@ -180,8 +180,8 @@ Supported agents are listed in [cli.md](./cli.md). v0.1 manages global/user-leve
 Git ↔ Cloud migration:
 
 ```bash
-toolmirror migrate cloud --strategy replace --origin https://cloud.example.com
-toolmirror migrate git git@github.com:example/toolmirror-state.git --strategy merge --origin https://cloud.example.com
+corotum migrate cloud --strategy replace --origin https://cloud.example.com
+corotum migrate git git@github.com:example/corotum-state.git --strategy merge --origin https://cloud.example.com
 ```
 
 See [migration.md](./migration.md). Identity (skill id, source, ref, lock revision, hash, targets) is preserved. The canonical local store is not rewritten by migrate.

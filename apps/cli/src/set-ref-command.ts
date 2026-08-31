@@ -34,7 +34,7 @@ export function registerSetRefCommand(program: Command, io: CliIo): void {
         const config = await new ConfigStore(paths).load();
         if (config.mode !== "git" || !config.gitRepository)
           throw new Error(
-            "Run toolmirror init before changing Git skill refs.",
+            "Run corotum init before changing Git skill refs.",
           );
         const storage = effectiveStoragePaths(config, paths);
         const stateStore = new LocalOperationalStateStore(

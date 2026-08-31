@@ -1,11 +1,11 @@
 {
-  "name": "@toolmirror/web",
+  "name": "@corotum/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "vinext build",
-    "db:migrate": "drizzle-kit generate && CI=1 wrangler d1 migrations apply toolmirror --local",
+    "db:migrate": "drizzle-kit generate && CI=1 wrangler d1 migrations apply corotum --local",
     "smoke": "bun ./scripts/smoke.ts"
   },
   "dependencies": {

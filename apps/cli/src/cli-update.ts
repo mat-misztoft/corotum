@@ -15,7 +15,7 @@ import { z } from "zod";
 import { MutationLock, MutationLockedError } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
 
-export const DEFAULT_RELEASE_BASE = "https://releases.toolmirror.com";
+export const DEFAULT_RELEASE_BASE = "https://releases.corotum.com";
 
 export type CliUpdatePlatform = "darwin" | "linux" | "win32";
 export type CliUpdateArch = "arm64" | "x64";
@@ -29,34 +29,34 @@ export type ReleaseTargetId =
 type ReleaseTarget = Readonly<{
   id: ReleaseTargetId;
   archive: string;
-  binary: "toolmirror" | "toolmirror.exe";
+  binary: "corotum" | "corotum.exe";
 }>;
 
 const RELEASE_TARGETS: Readonly<Record<ReleaseTargetId, ReleaseTarget>> = {
   "darwin-arm64": {
     id: "darwin-arm64",
-    archive: "toolmirror-darwin-arm64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-darwin-arm64.tar.gz",
+    binary: "corotum",
   },
   "darwin-x64": {
     id: "darwin-x64",
-    archive: "toolmirror-darwin-x64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-darwin-x64.tar.gz",
+    binary: "corotum",
   },
   "linux-arm64": {
     id: "linux-arm64",
-    archive: "toolmirror-linux-arm64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-linux-arm64.tar.gz",
+    binary: "corotum",
   },
   "linux-x64": {
     id: "linux-x64",
-    archive: "toolmirror-linux-x64.tar.gz",
-    binary: "toolmirror",
+    archive: "corotum-linux-x64.tar.gz",
+    binary: "corotum",
   },
   "windows-x64": {
     id: "windows-x64",
-    archive: "toolmirror-windows-x64.tar.gz",
-    binary: "toolmirror.exe",
+    archive: "corotum-windows-x64.tar.gz",
+    binary: "corotum.exe",
   },
 };
 
@@ -74,8 +74,8 @@ const latestJsonSchema = z
         .object({
           object: z.string().min(1),
           sha256: z.string().regex(/^[a-f0-9]{64}$/),
-          filename: z.string().regex(/^toolmirror-[a-z0-9-]+\.tar\.gz$/),
-          binary: z.enum(["toolmirror", "toolmirror.exe"]),
+          filename: z.string().regex(/^corotum-[a-z0-9-]+\.tar\.gz$/),
+          binary: z.enum(["corotum", "corotum.exe"]),
         })
         .strict(),
     ),
@@ -123,7 +123,7 @@ export function releaseTarget(
 ): ReleaseTargetId {
   if (platform === "win32") {
     if (arch !== "x64") {
-      throw new Error("Windows arm64 is not supported in ToolMirror v0.1.");
+      throw new Error("Windows arm64 is not supported in Corotum v0.1.");
     }
     return "windows-x64";
   }
@@ -142,11 +142,11 @@ export async function fetchReleaseBytes(url: string): Promise<Uint8Array> {
   try {
     response = await fetch(url);
   } catch {
-    throw new Error("Failed to download the official ToolMirror release.");
+    throw new Error("Failed to download the official Corotum release.");
   }
   if (!response.ok) {
     throw new Error(
-      `Failed to download the official ToolMirror release (${response.status}).`,
+      `Failed to download the official Corotum release (${response.status}).`,
     );
   }
   return new Uint8Array(await response.arrayBuffer());
@@ -214,7 +214,7 @@ export async function cliUpdate(
     );
     if (sha256Hex(archive) !== release.sha256) {
       throw new Error(
-        "SHA-256 mismatch for the official ToolMirror archive. The existing executable was not replaced.",
+        "SHA-256 mismatch for the official Corotum archive. The existing executable was not replaced.",
       );
     }
     const binary = await extractBinary(archive, target.binary);
@@ -298,15 +298,15 @@ function resolveExecutablePath(
   }
   const current = process.execPath;
   const name = current.replace(/\\/g, "/").split("/").pop()?.toLowerCase();
-  if (name === "toolmirror" || name === "toolmirror.exe") return current;
+  if (name === "corotum" || name === "corotum.exe") return current;
   if (platform === "win32") {
     const localAppData =
       env.LOCALAPPDATA && env.LOCALAPPDATA.length > 0
         ? env.LOCALAPPDATA
         : join(homeDir, "AppData", "Local");
-    return join(localAppData, "ToolMirror", "bin", "toolmirror.exe");
+    return join(localAppData, "ToolMirror", "bin", "corotum.exe");
   }
-  return join(homeDir, ".local", "bin", "toolmirror");
+  return join(homeDir, ".local", "bin", "corotum");
 }
 
 function releaseUrl(base: string, objectPath: string): string {
@@ -331,7 +331,7 @@ async function loadVerifiedRelease(
   } catch (error) {
     throw error instanceof Error
       ? error
-      : new Error("Failed to download the official ToolMirror release.");
+      : new Error("Failed to download the official Corotum release.");
   }
 
   let parsed: z.infer<typeof latestJsonSchema>;
@@ -362,7 +362,7 @@ async function loadVerifiedRelease(
   } catch (error) {
     throw error instanceof Error
       ? error
-      : new Error("Failed to download the official ToolMirror release.");
+      : new Error("Failed to download the official Corotum release.");
   }
 
   const checksums = parseChecksums(new TextDecoder().decode(checksumBytes));
@@ -393,7 +393,7 @@ async function extractBinary(
   archive: Uint8Array,
   binaryName: string,
 ): Promise<Uint8Array> {
-  const dir = await mkdtempDir("toolmirror-cli-update-");
+  const dir = await mkdtempDir("corotum-cli-update-");
   try {
     const archivePath = join(dir, "archive.tar.gz");
     const extractDir = join(dir, "extract");
@@ -404,7 +404,7 @@ async function extractBinary(
       stderr: "pipe",
     });
     if ((await tar.exited) !== 0) {
-      throw new Error("Failed to unpack the official ToolMirror archive.");
+      throw new Error("Failed to unpack the official Corotum archive.");
     }
     const staged = join(extractDir, binaryName);
     let stat: Awaited<ReturnType<typeof lstat>>;
@@ -491,7 +491,7 @@ async function replaceWindowsExecutable(
 }
 
 function pendingExePath(pendingDir: string): string {
-  return join(pendingDir, "toolmirror.exe");
+  return join(pendingDir, "corotum.exe");
 }
 
 function pendingMetaPath(pendingDir: string): string {

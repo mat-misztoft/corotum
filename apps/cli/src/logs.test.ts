@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 async function logDirectory(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "toolmirror-logs-"));
+  const directory = await mkdtemp(join(tmpdir(), "corotum-logs-"));
   directories.push(directory);
   return join(directory, "logs");
 }
@@ -28,16 +28,16 @@ describe("sanitized logs", () => {
     await logger.write("sync.failed", {
       token: "abc123",
       source: "https://alex:password@example.test/skills.git",
-      sensitivePath: "/private/toolmirror",
+      sensitivePath: "/private/corotum",
       skillContent: "private SKILL.md body",
       message: "Bearer session-value",
     });
 
-    const output = await readFile(join(directory, "toolmirror.log"), "utf8");
+    const output = await readFile(join(directory, "corotum.log"), "utf8");
     for (const secret of [
       "abc123",
       "alex:password",
-      "/private/toolmirror",
+      "/private/corotum",
       "private SKILL.md body",
       "session-value",
     ]) {
@@ -52,7 +52,7 @@ describe("sanitized logs", () => {
     await logger.write('sync.failed\n{"token":"line-inject"}', {
       message: "ok",
     });
-    const output = await readFile(join(directory, "toolmirror.log"), "utf8");
+    const output = await readFile(join(directory, "corotum.log"), "utf8");
     expect(output).not.toContain("line-inject");
     expect(output).toContain("invalid.event");
   });
@@ -68,11 +68,11 @@ describe("sanitized logs", () => {
 
     const files = (await readdir(directory)).sort();
     expect(files).toEqual([
-      "toolmirror.log",
-      "toolmirror.log.1",
-      "toolmirror.log.2",
-      "toolmirror.log.3",
-      "toolmirror.log.4",
+      "corotum.log",
+      "corotum.log.1",
+      "corotum.log.2",
+      "corotum.log.3",
+      "corotum.log.4",
     ]);
     await Promise.all(
       files.map(async (file) => {

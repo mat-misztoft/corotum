@@ -53,9 +53,9 @@ export function createCli(
 ): Command {
   const program = new Command();
   program
-    .name("toolmirror")
+    .name("corotum")
     .description("Keep your agent skills in sync.")
-    .version(`toolmirror ${CLI_VERSION}`)
+    .version(`corotum ${CLI_VERSION}`)
     .option("--json", "emit machine-readable JSON", false)
     .option("--non-interactive", "never prompt for input", false)
     .allowUnknownOption(false)
@@ -86,7 +86,7 @@ export function createCli(
       );
       return;
     }
-    io.writeOutput("Run toolmirror --help to see available commands.\n");
+    io.writeOutput("Run corotum --help to see available commands.\n");
   });
 
   return program;
@@ -154,5 +154,5 @@ function isCommanderDisplayRequest(argv: readonly string[]): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "ToolMirror command failed.";
+  return error instanceof Error ? error.message : "Corotum command failed.";
 }

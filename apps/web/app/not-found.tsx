@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Page not found | ToolMirror",
+  title: "Page not found | Corotum",
 };
 
 export default function NotFound() {
@@ -10,7 +10,7 @@ export default function NotFound() {
       <section className="not-found-shell" aria-labelledby="not-found-title">
         <div className="not-found-brand-rule" aria-hidden="true" />
         <a className="wordmark" href="/">
-          ToolMirror
+          Corotum
         </a>
 
         <div className="not-found-layout">
@@ -19,7 +19,7 @@ export default function NotFound() {
             <h1 id="not-found-title">Page not found</h1>
             <p>
               This route does not exist, or it may have moved. Return to
-              ToolMirror to continue.
+              Corotum to continue.
             </p>
             <div className="not-found-actions">
               <a className="not-found-primary" href="/">

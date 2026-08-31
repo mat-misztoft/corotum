@@ -42,7 +42,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "toolmirror-local-state-"));
+  const root = await mkdtemp(join(tmpdir(), "corotum-local-state-"));
   directories.push(root);
   const skillsStoragePath = join(root, "skills");
   const canonicalPath = join(skillsStoragePath, id);

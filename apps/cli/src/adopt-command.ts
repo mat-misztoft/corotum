@@ -58,7 +58,7 @@ export function registerAdoptCommand(program: Command, io: CliIo): void {
         try {
           const config = await new ConfigStore(paths).load();
           if (config.mode !== "git" || !config.gitRepository)
-            throw new Error("Run toolmirror init before adopting Git skills.");
+            throw new Error("Run corotum init before adopting Git skills.");
           const storage = effectiveStoragePaths(config, paths);
           const provider = new GitStateProvider(
             storage.gitStoragePath,

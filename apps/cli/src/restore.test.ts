@@ -112,7 +112,7 @@ describe("CLI restore", () => {
   });
 
   test("refuses an untracked target and a replaced managed symlink", async () => {
-    const root = await mkdtemp(join(tmpdir(), "toolmirror-restore-"));
+    const root = await mkdtemp(join(tmpdir(), "corotum-restore-"));
     roots.push(root);
     const canonical = join(root, "canonical");
     const target = join(root, ".pi", "agent", "skills", "restore");

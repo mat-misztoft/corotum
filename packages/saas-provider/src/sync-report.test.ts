@@ -4,7 +4,7 @@ import { postDeviceSyncReport } from "./sync-report";
 
 test("SaaSProvider still does not expose reporting on the state boundary", () => {
   const saas: SaaSProvider = new SaaSProvider({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     workspaceId: "ws_1",
     deviceToken: "token",
     fetch: async () => new Response("{}"),
@@ -16,7 +16,7 @@ test("SaaSProvider still does not expose reporting on the state boundary", () =>
 test("postDeviceSyncReport sends only this device id and aggregate", async () => {
   const requests: Request[] = [];
   const result = await postDeviceSyncReport({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     deviceId: "dev_1",
     deviceToken: "device-token-secret",
     fetch: async (input, init) => {
@@ -44,7 +44,7 @@ test("postDeviceSyncReport sends only this device id and aggregate", async () =>
   expect(requests).toHaveLength(1);
   expect(requests[0].method).toBe("POST");
   expect(requests[0].url).toBe(
-    "https://toolmirror.com/api/v1/devices/dev_1/sync-report",
+    "https://corotum.com/api/v1/devices/dev_1/sync-report",
   );
   expect(requests[0].url).not.toContain("dev_2");
   expect(requests[0].headers.get(DEVICE_TOKEN_HEADER)).toBe(
@@ -66,7 +66,7 @@ test("postDeviceSyncReport sends only this device id and aggregate", async () =>
 test("postDeviceSyncReport includes device-performed update checks", async () => {
   const requests: Request[] = [];
   await postDeviceSyncReport({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     deviceId: "dev_1",
     deviceToken: "device-token-secret",
     fetch: async (input, init) => {
@@ -96,7 +96,7 @@ test("postDeviceSyncReport includes device-performed update checks", async () =>
 test("Cloud origin must not include embedded credentials", async () => {
   expect(
     await postDeviceSyncReport({
-      origin: "https://user:secret@toolmirror.com",
+      origin: "https://user:secret@corotum.com",
       deviceId: "dev_1",
       deviceToken: "token",
       report: { appliedRevisionId: "rev_1", syncStatus: "SYNCED" },
@@ -110,7 +110,7 @@ test("Cloud origin must not include embedded credentials", async () => {
 test("postDeviceSyncReport includes per-agent target outcomes when provided", async () => {
   const requests: Request[] = [];
   await postDeviceSyncReport({
-    origin: "https://toolmirror.com",
+    origin: "https://corotum.com",
     deviceId: "dev_1",
     deviceToken: "device-token-secret",
     fetch: async (input, init) => {

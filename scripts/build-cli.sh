@@ -11,7 +11,7 @@ case "$target" in
     ;;
 esac
 
-output="dist/toolmirror-${target#bun-}"
+output="dist/corotum-${target#bun-}"
 rm -rf dist
 mkdir -p dist
 

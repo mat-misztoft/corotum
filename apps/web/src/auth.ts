@@ -77,7 +77,7 @@ export function createMagicLinkPlugin(emailService: EmailService) {
     async sendMagicLink({ email, url }) {
       await emailService.sendAuthenticationEmail({
         to: email,
-        subject: "Sign in to ToolMirror",
+        subject: "Sign in to Corotum",
         link: url,
       });
     },
@@ -90,7 +90,7 @@ export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
   const { secret, github, google } = validateAuthConfiguration(env);
 
   return betterAuth({
-    appName: "ToolMirror",
+    appName: "Corotum",
     baseURL: env.BETTER_AUTH_URL,
     secret,
     advanced: { disableOriginCheck: false },

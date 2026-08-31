@@ -46,7 +46,7 @@ export function registerRemoveCommands(program: Command, io: CliIo): void {
           const config = await new ConfigStore(paths).load();
           if (config.mode !== "git" || !config.gitRepository)
             throw new Error(
-              `Run toolmirror init before ${name}ing Git skills.`,
+              `Run corotum init before ${name}ing Git skills.`,
             );
           const storage = effectiveStoragePaths(config, paths);
           const stateStore = new LocalOperationalStateStore(

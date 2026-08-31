@@ -8,8 +8,8 @@ import {
 
 const authMessage = {
   to: "ada@example.com",
-  subject: "Sign in to ToolMirror",
-  link: "https://toolmirror.com/api/auth/magic-link?token=secret-token",
+  subject: "Sign in to Corotum",
+  link: "https://corotum.com/api/auth/magic-link?token=secret-token",
 };
 
 function binding(messages: unknown[], reject = false): CloudflareEmailBinding {
@@ -38,7 +38,7 @@ test("hosted authentication email dispatches through the EMAIL binding", async (
   const messages: unknown[] = [];
   const service = createCloudflareEmailService({
     TOOLMIRROR_HOSTED: "true",
-    AUTH_EMAIL_FROM: "auth@toolmirror.com",
+    AUTH_EMAIL_FROM: "auth@corotum.com",
     EMAIL: binding(messages),
   });
 
@@ -47,10 +47,10 @@ test("hosted authentication email dispatches through the EMAIL binding", async (
   expect(messages).toEqual([
     {
       to: "ada@example.com",
-      from: "auth@toolmirror.com",
-      subject: "Sign in to ToolMirror",
-      text: "Open this link to sign in: https://toolmirror.com/api/auth/magic-link?token=secret-token",
-      html: '<p>Open this link to sign in: <a href="https://toolmirror.com/api/auth/magic-link?token=secret-token">https://toolmirror.com/api/auth/magic-link?token=secret-token</a></p>',
+      from: "auth@corotum.com",
+      subject: "Sign in to Corotum",
+      text: "Open this link to sign in: https://corotum.com/api/auth/magic-link?token=secret-token",
+      html: '<p>Open this link to sign in: <a href="https://corotum.com/api/auth/magic-link?token=secret-token">https://corotum.com/api/auth/magic-link?token=secret-token</a></p>',
     },
   ]);
 });
@@ -66,13 +66,13 @@ test("delivery configuration fails before sending when the sender or EMAIL bindi
   expect(() =>
     createCloudflareEmailService({
       TOOLMIRROR_HOSTED: "true",
-      AUTH_EMAIL_FROM: "auth@toolmirror.com",
+      AUTH_EMAIL_FROM: "auth@corotum.com",
     }),
   ).toThrow(EmailDeliveryError);
   expect(() =>
     createCloudflareEmailService({
       TOOLMIRROR_HOSTED: "true",
-      AUTH_EMAIL_FROM: "auth@toolmirror.com",
+      AUTH_EMAIL_FROM: "auth@corotum.com",
       EMAIL: {} as CloudflareEmailBinding,
     }),
   ).toThrow(EmailDeliveryError);
@@ -86,7 +86,7 @@ test("delivery configuration fails before sending when the sender or EMAIL bindi
   expect(messages).toEqual([]);
 });
 
-test("hosted delivery only accepts a ToolMirror-domain sender", () => {
+test("hosted delivery only accepts a Corotum-domain sender", () => {
   expect(() =>
     createCloudflareEmailService({
       TOOLMIRROR_HOSTED: "true",
@@ -99,7 +99,7 @@ test("hosted delivery only accepts a ToolMirror-domain sender", () => {
 test("provider failures expose neither message tokens nor binding details", async () => {
   const service = createCloudflareEmailService({
     TOOLMIRROR_HOSTED: "true",
-    AUTH_EMAIL_FROM: "auth@toolmirror.com",
+    AUTH_EMAIL_FROM: "auth@corotum.com",
     EMAIL: binding([], true),
   });
 

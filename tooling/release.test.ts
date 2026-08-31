@@ -66,11 +66,11 @@ describe("final release layout", () => {
       "releases/v0.1.0/checksums.txt",
       "releases/v0.1.0/UNSIGNED",
       "releases/v0.1.0/SOURCE",
-      "releases/v0.1.0/binaries/toolmirror-darwin-arm64.tar.gz",
-      "releases/v0.1.0/binaries/toolmirror-darwin-x64.tar.gz",
-      "releases/v0.1.0/binaries/toolmirror-linux-arm64.tar.gz",
-      "releases/v0.1.0/binaries/toolmirror-linux-x64.tar.gz",
-      "releases/v0.1.0/binaries/toolmirror-windows-x64.tar.gz",
+      "releases/v0.1.0/binaries/corotum-darwin-arm64.tar.gz",
+      "releases/v0.1.0/binaries/corotum-darwin-x64.tar.gz",
+      "releases/v0.1.0/binaries/corotum-linux-arm64.tar.gz",
+      "releases/v0.1.0/binaries/corotum-linux-x64.tar.gz",
+      "releases/v0.1.0/binaries/corotum-windows-x64.tar.gz",
     ]);
     expect(RELEASE_CHANNEL).toBe("v0.1");
   });
@@ -83,14 +83,14 @@ describe("final release layout", () => {
 
   test("rejects a missing platform, checksum mismatch, or pipeline-proof leftover", () => {
     const missing = layoutFiles("0.1.0", {
-      "releases/v0.1.0/binaries/toolmirror-linux-arm64.tar.gz": undefined,
+      "releases/v0.1.0/binaries/corotum-linux-arm64.tar.gz": undefined,
     });
     expect(verifyReleaseLayout("0.1.0", missing, sha256).join("\n")).toContain(
-      "missing releases/v0.1.0/binaries/toolmirror-linux-arm64.tar.gz",
+      "missing releases/v0.1.0/binaries/corotum-linux-arm64.tar.gz",
     );
 
     const mismatch = layoutFiles("0.1.0", {
-      "releases/v0.1.0/binaries/toolmirror-linux-x64.tar.gz":
+      "releases/v0.1.0/binaries/corotum-linux-x64.tar.gz":
         fakeArchive("tampered"),
     });
     expect(verifyReleaseLayout("0.1.0", mismatch, sha256).join("\n")).toContain(
@@ -116,7 +116,7 @@ describe("final release layout", () => {
     expect(errors).toContain("must be marked final");
 
     const reused = layoutFiles("0.1.0", {
-      "releases/v0.1.0/binaries/toolmirror-linux-x64.tar.gz":
+      "releases/v0.1.0/binaries/corotum-linux-x64.tar.gz":
         new TextEncoder().encode("pipeline-proof-archive:linux-x64"),
     });
     expect(verifyReleaseLayout("0.1.0", reused, sha256).join("\n")).toContain(
@@ -138,10 +138,10 @@ describe("final release layout", () => {
 
   test("parses sha256sum checksums and maps upload keys 1:1 onto R2", async () => {
     const text = formatChecksums("0.1.0", [
-      ["a".repeat(64), "binaries/toolmirror-linux-x64.tar.gz"],
+      ["a".repeat(64), "binaries/corotum-linux-x64.tar.gz"],
     ]);
     expect(
-      parseChecksums(text).get("binaries/toolmirror-linux-x64.tar.gz"),
+      parseChecksums(text).get("binaries/corotum-linux-x64.tar.gz"),
     ).toBe("a".repeat(64));
     const uploaded: string[] = [];
     const keys = listUploadKeys("0.1.0");
@@ -160,7 +160,7 @@ describe("final release layout", () => {
     const config = { send_email: [{ name: "EMAIL" }] };
     expect(
       emailReleaseConfigurationErrors({
-        authEmailFrom: "auth@toolmirror.com",
+        authEmailFrom: "auth@corotum.com",
         config,
         remoteSecrets: [{ name: "AUTH_EMAIL_FROM" }],
       }),
@@ -233,19 +233,19 @@ describe("final release layout", () => {
 
   test("workerd and release endpoint smoke reject pipeline-proof leftovers", async () => {
     const responses: Record<string, Response> = {
-      "https://toolmirror.com/api/health": Response.json({ status: "ok" }),
-      "https://toolmirror.com/install.sh": new Response(
-        "# Official ToolMirror installer.\n# v0.1 binaries are unsigned.\n",
+      "https://corotum.com/api/health": Response.json({ status: "ok" }),
+      "https://corotum.com/install.sh": new Response(
+        "# Official Corotum installer.\n# v0.1 binaries are unsigned.\n",
       ),
-      "https://toolmirror.com/install.ps1": new Response(
-        "# Official ToolMirror installer\n# v0.1 binaries are unsigned.\n",
+      "https://corotum.com/install.ps1": new Response(
+        "# Official Corotum installer\n# v0.1 binaries are unsigned.\n",
       ),
-      "https://toolmirror.com/api/v1/cli/pairings": new Response(
+      "https://corotum.com/api/v1/cli/pairings": new Response(
         JSON.stringify({ error: "CLI upgrade required" }),
         { status: 426 },
       ),
-      "https://toolmirror.com/api/auth/get-session": Response.json(null),
-      "https://releases.toolmirror.com/releases/latest.json": Response.json(
+      "https://corotum.com/api/auth/get-session": Response.json(null),
+      "https://releases.corotum.com/releases/latest.json": Response.json(
         buildLatestJson("0.1.0", {
           "darwin-arm64": "a".repeat(64),
           "darwin-x64": "a".repeat(64),
@@ -261,16 +261,16 @@ describe("final release layout", () => {
       return response.clone();
     };
     expect(
-      await smokeWorkerdEndpoints("https://toolmirror.com", fetchImpl, {
+      await smokeWorkerdEndpoints("https://corotum.com", fetchImpl, {
         requireAuth: true,
         requireCliGate: true,
       }),
     ).toEqual([]);
     expect(
-      await smokeReleaseManifest("https://releases.toolmirror.com", fetchImpl),
+      await smokeReleaseManifest("https://releases.corotum.com", fetchImpl),
     ).toEqual([]);
 
-    responses["https://releases.toolmirror.com/releases/latest.json"] =
+    responses["https://releases.corotum.com/releases/latest.json"] =
       Response.json({
         channel: "pipeline-proof",
         final: false,
@@ -280,7 +280,7 @@ describe("final release layout", () => {
       });
     expect(
       (
-        await smokeReleaseManifest("https://releases.toolmirror.com", fetchImpl)
+        await smokeReleaseManifest("https://releases.corotum.com", fetchImpl)
       ).join("\n"),
     ).toContain(PIPELINE_PROOF_REUSE_ERROR);
   });

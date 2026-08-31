@@ -1,8 +1,8 @@
-# ToolMirror
+# Corotum
 
 Keep your agent skills in sync.
 
-ToolMirror is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. It supports a free Git Sync backend and hosted or self-hosted ToolMirror Cloud.
+Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. It supports a free Git Sync backend and hosted or self-hosted Corotum Cloud.
 
 v0.1 binaries are unsigned. Official installers are the only supported installation method. There is no daemon and no remote forced sync.
 
@@ -11,20 +11,20 @@ v0.1 binaries are unsigned. Official installers are the only supported installat
 macOS/Linux:
 
 ```bash
-curl -fsSL https://toolmirror.com/install.sh | sh
+curl -fsSL https://corotum.com/install.sh | sh
 ```
 
 Windows:
 
 ```powershell
-irm https://toolmirror.com/install.ps1 | iex
+irm https://corotum.com/install.ps1 | iex
 ```
 
 Update:
 
 ```bash
-toolmirror cli-update --check
-toolmirror cli-update
+corotum cli-update --check
+corotum cli-update
 ```
 
 ## Docs
@@ -32,7 +32,7 @@ toolmirror cli-update
 - [Public documentation](./docs/README.md)
 - [Git Sync](./docs/git-sync.md)
 - [Self-hosted Cloud](./docs/self-hosting.md) — Creem is not required
-- [Hosted toolmirror.com](./docs/hosted-cloud.md)
+- [Hosted corotum.com](./docs/hosted-cloud.md)
 
 ## Development
 
@@ -49,7 +49,7 @@ Build and verify the macOS arm64 standalone binary:
 
 ```bash
 bun run build:cli
-./scripts/verify-cli.sh dist/toolmirror-darwin-arm64
+./scripts/verify-cli.sh dist/corotum-darwin-arm64
 ```
 
 Linux x64 is built and run in [the compile proof workflow](./.github/workflows/cli-compile.yml).

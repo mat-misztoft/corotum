@@ -28,7 +28,7 @@ async function fixture(): Promise<{
   directory: string;
   tag: string;
 }> {
-  const directory = await mkdtemp(join(tmpdir(), "toolmirror-source-fixture-"));
+  const directory = await mkdtemp(join(tmpdir(), "corotum-source-fixture-"));
   temporaryDirectories.push(directory);
   await git(["init", "--initial-branch=main", directory]);
   await git([
@@ -36,9 +36,9 @@ async function fixture(): Promise<{
     directory,
     "config",
     "user.email",
-    "tests@toolmirror.invalid",
+    "tests@corotum.invalid",
   ]);
-  await git(["-C", directory, "config", "user.name", "ToolMirror tests"]);
+  await git(["-C", directory, "config", "user.name", "Corotum tests"]);
   await mkdir(join(directory, "skills", "example"), { recursive: true });
   await writeFile(
     join(directory, "skills", "example", "SKILL.md"),

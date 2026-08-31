@@ -20,7 +20,7 @@ import { resolvePlatformPaths } from "./platform";
 export function registerCloudAuthCommands(program: Command, io: CliIo): void {
   program
     .command("login")
-    .description("pair this device with ToolMirror Cloud in a browser")
+    .description("pair this device with Corotum Cloud in a browser")
     .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
     .action(async (options: { origin: string }) => {
       const { service, paths, origin } = cloudAuthContext(
@@ -127,7 +127,7 @@ function writeLogout(
     io,
     program,
     { outcome: "SUCCESS" as const, ...result },
-    result.revoked ? "Logged out of ToolMirror Cloud.\n" : "Not logged in.\n",
+    result.revoked ? "Logged out of Corotum Cloud.\n" : "Not logged in.\n",
   );
 }
 

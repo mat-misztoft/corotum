@@ -71,7 +71,7 @@ export async function makeArchive(
   const binaryPath = join(staging, target.binary);
   await writeFile(
     binaryPath,
-    `#!/bin/sh\necho "toolmirror ${version}"\nexit 0\n`,
+    `#!/bin/sh\necho "corotum ${version}"\nexit 0\n`,
     { encoding: "utf8" },
   );
   await chmod755(binaryPath);
@@ -157,7 +157,7 @@ export async function runWindowsInstallerFixture(
   files: Map<string, Uint8Array>,
   extractRoot: string,
 ): Promise<{ code: number; stdout: string }> {
-  const dest = join(localAppData, "ToolMirror", "bin", "toolmirror.exe");
+  const dest = join(localAppData, "ToolMirror", "bin", "corotum.exe");
   const latest = JSON.parse(
     new TextDecoder().decode(files.get("releases/latest.json")),
   ) as LatestJson;
@@ -174,7 +174,7 @@ export async function runWindowsInstallerFixture(
     stderr: "pipe",
   });
   if ((await tar.exited) !== 0) throw new Error("extract failed");
-  const staged = join(extract, "toolmirror.exe");
+  const staged = join(extract, "corotum.exe");
   await chmod755(staged);
   await mkdir(join(localAppData, "ToolMirror", "bin"), { recursive: true });
   await Bun.write(dest, Bun.file(staged));
@@ -187,7 +187,7 @@ export async function runWindowsInstallerFixture(
   if ((await version.exited) !== 0) throw new Error("windows --version failed");
   return {
     code: 0,
-    stdout: `Official ToolMirror installer\nInstalled ${dest}\n${versionOut}`,
+    stdout: `Official Corotum installer\nInstalled ${dest}\n${versionOut}`,
   };
 }
 
@@ -330,7 +330,7 @@ const dashboardPage = `<!doctype html>
         ? (settings.subscription
           ? "Current subscription: " + settings.subscription.status
           : "No active Cloud subscription.")
-        : "This is a self-hosted ToolMirror Cloud instance. Cloud functionality is free and has no billing portal.";
+        : "This is a self-hosted Corotum Cloud instance. Cloud functionality is free and has no billing portal.";
     }).catch((error) => {
       document.getElementById("error").textContent = String(error);
     });

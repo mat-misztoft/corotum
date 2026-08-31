@@ -264,7 +264,7 @@ function pairingRequest(
   path: string,
   init?: ConstructorParameters<typeof Request>[1],
 ) {
-  return new Request(`https://toolmirror.com${path}`, init);
+  return new Request(`https://corotum.com${path}`, init);
 }
 
 test("pairing HTTP flow creates, polls, approves once, and refuses a second exchange", async () => {
@@ -301,7 +301,7 @@ test("pairing HTTP flow creates, polls, approves once, and refuses a second exch
   const unauthenticated = await handleApprovePairing(
     pairingRequest(`/api/v1/cli/pairings/${pairing.id}/approve`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
       body: JSON.stringify({ userCode: pairing.userCode }),
     }),
     db,
@@ -325,7 +325,7 @@ test("pairing HTTP flow creates, polls, approves once, and refuses a second exch
   const approved = await handleApprovePairing(
     pairingRequest(`/api/v1/cli/pairings/${pairing.id}/approve`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
       body: JSON.stringify({ userCode: pairing.userCode }),
     }),
     db,
@@ -345,7 +345,7 @@ test("pairing HTTP flow creates, polls, approves once, and refuses a second exch
   const replay = await handleApprovePairing(
     pairingRequest(`/api/v1/cli/pairings/${pairing.id}/approve`, {
       method: "POST",
-      headers: { origin: "https://toolmirror.com" },
+      headers: { origin: "https://corotum.com" },
       body: JSON.stringify({ userCode: pairing.userCode }),
     }),
     db,

@@ -182,7 +182,7 @@ export class LocalReconcileExecutor {
     }>
   > {
     const temporaryRoot = await mkdtemp(
-      join(tmpdir(), "toolmirror-reconcile-"),
+      join(tmpdir(), "corotum-reconcile-"),
     );
     const temporarySkill = join(temporaryRoot, "skill");
     try {
