@@ -1,8 +1,10 @@
 import {
   DomainValidationError,
+  parseDispositionLedger,
   parseRevisionTransition,
   type RevisionTransition,
   validateDesiredState,
+  validateV2DesiredState,
 } from "../../../packages/core/src/index";
 import { jsonError, readJson } from "./api";
 import {
@@ -13,6 +15,7 @@ import { protectCloudRequest } from "./cloud-protect";
 import {
   type CloudRevision,
   InvalidIdempotencyKeyError,
+  isV2CloudState,
   loadCurrentDesiredState,
   mutateDesiredState,
   RevisionConflictError,
@@ -187,6 +190,10 @@ export async function handlePostPendingResolution(
       workspaceId,
     );
     if (current.id !== payload.baseRevision) throw new RevisionConflictError();
+    // Never coerce v2 source or artifact locks through the legacy shape.
+    if (isV2CloudState(current.state)) throw new DomainValidationError(
+      "VALIDATION_ERROR", "v2 pending resolution is not supported by this endpoint.",
+    );
     const pending = current.state.manifest.skills.find(
       (skill) => skill.id === payload.skillId,
     );
@@ -262,6 +269,7 @@ export async function handlePutWorkspaceState(
     baseRevision?: unknown;
     idempotencyKey?: unknown;
     transition?: unknown;
+    dispositionLedger?: unknown;
   };
   if (
     payload.baseRevision !== null &&
@@ -279,17 +287,25 @@ export async function handlePutWorkspaceState(
     return jsonError("Desired state is required", 400);
 
   try {
-    const state = validateDesiredState(payload.state as never, "cloud");
-    const sources = [
-      ...state.manifest.skills.map((skill) => skill.source),
-      ...state.lockfile.skills.flatMap((skill) => [
-        skill.source,
-        skill.repository,
-      ]),
-    ];
+    const rawState = payload.state as { manifest?: { version?: unknown } };
+    const state = rawState.manifest?.version === 2
+      ? validateV2DesiredState(payload.state as never)
+      : validateDesiredState(payload.state as never, "cloud");
+    const sources = isV2CloudState(state)
+      ? [
+          ...state.manifest.skills.flatMap((skill) => skill.source ? [skill.source.repository] : []),
+          ...state.lockfile.skills.flatMap((skill) => skill.source ? [skill.source.repository] : []),
+        ]
+      : [
+          ...state.manifest.skills.map((skill) => skill.source),
+          ...state.lockfile.skills.flatMap((skill) => [skill.source, skill.repository]),
+        ];
     if (sources.some((value) => containsEmbeddedCredentials(value))) {
       return jsonError("Repository must not include credentials", 400);
     }
+    const dispositionLedger = payload.dispositionLedger === undefined
+      ? undefined
+      : parseDispositionLedger(JSON.stringify(payload.dispositionLedger));
     const revision = await mutateDesiredState(db as never, {
       workspaceId,
       userId: authenticated.device.userId,
@@ -298,6 +314,7 @@ export async function handlePutWorkspaceState(
       actor: { type: "device", id: authenticated.device.deviceId },
       state,
       transition,
+      dispositionLedger,
     });
     return Response.json(envelope(revision));
   } catch (error) {

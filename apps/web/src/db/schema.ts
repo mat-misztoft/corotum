@@ -97,6 +97,10 @@ export const workspaceRevisions = sqliteTable(
     operationType: text("operation_type").notNull(),
     operationSkillId: text("operation_skill_id"),
     operationMetadataJson: text("operation_metadata_json").notNull(),
+    /** v2 durable REMOVE/UNMANAGE ledger; v1 rows contain an empty v2 ledger. */
+    dispositionLedgerJson: text("disposition_ledger_json")
+      .notNull()
+      .default('{"version":2,"activeDispositions":{}}'),
   },
   (table) => [
     uniqueIndex("workspace_revisions_workspace_sequence_unique").on(
@@ -113,9 +117,10 @@ export const workspaceSkills = sqliteTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     skillId: text("skill_id").notNull(),
-    source: text().notNull(),
+    /** v2 artifact-backed skills intentionally have no source provenance. */
+    source: text(),
     skillName: text("skill_name").notNull(),
-    ref: text().notNull(),
+    ref: text(),
     targetsJson: text("targets_json").notNull(),
     repository: text(),
     lockedRevision: text("locked_revision"),
@@ -129,10 +134,61 @@ export const workspaceSkills = sqliteTable(
       table.workspaceId,
       table.skillId,
     ),
-    uniqueIndex("workspace_skills_workspace_source_skill_unique").on(
+    uniqueIndex("workspace_skills_workspace_normalized_name_unique").on(
       table.workspaceId,
-      table.source,
-      table.skillName,
+      sql`lower(skill_name)`,
+    ),
+  ],
+);
+
+/** Immutable metadata only; archive bytes live in workspace-scoped R2. */
+export const workspaceArtifacts = sqliteTable(
+  "workspace_artifacts",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    skillId: text("skill_id").notNull(),
+    integrityHash: text("integrity_hash").notNull(),
+    kind: text().notNull(),
+    contentHash: text("content_hash").notNull(),
+    locator: text().notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("workspace_artifacts_workspace_skill_integrity_unique").on(
+      table.workspaceId,
+      table.skillId,
+      table.integrityHash,
+    ),
+  ],
+);
+
+/** Snapshot references make current/previous artifact retention candidates queryable. */
+export const workspaceRevisionArtifacts = sqliteTable(
+  "workspace_revision_artifacts",
+  {
+    revisionId: text("revision_id")
+      .notNull()
+      .references(() => workspaceRevisions.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    skillId: text("skill_id").notNull(),
+    integrityHash: text("integrity_hash").notNull(),
+  },
+  (table) => [
+    uniqueIndex("workspace_revision_artifacts_unique").on(
+      table.revisionId,
+      table.skillId,
+      table.integrityHash,
+    ),
+    uniqueIndex("workspace_revision_artifacts_lookup_unique").on(
+      table.workspaceId,
+      table.revisionId,
+      table.skillId,
+      table.integrityHash,
     ),
   ],
 );

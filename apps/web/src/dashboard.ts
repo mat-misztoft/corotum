@@ -1,6 +1,6 @@
 import { type DesiredState, type RevisionTransition, skillId } from "../../../packages/core/src/index";
 import { requireHostedCloudAccess } from "./billing";
-import { loadCurrentDesiredState, mutateDesiredState, type CloudRevision } from "./revisions";
+import { isV2CloudState, loadCurrentDesiredState, mutateDesiredState, type CloudDesiredState, type CloudRevision } from "./revisions";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
 type DashboardDatabase = WorkspaceDatabase & {
@@ -34,7 +34,7 @@ type TargetRow = Readonly<{
 export type DashboardView = Readonly<{
   workspace: { id: string; name: string };
   revision: { id: string | null; sequence: number };
-  skills: readonly (DesiredState["manifest"]["skills"][number] & { locked: boolean })[];
+  skills: readonly (CloudDesiredState["manifest"]["skills"][number] & { locked: boolean })[];
   devices: readonly (DeviceRow & { targets: readonly TargetRow[] })[];
 }>;
 
@@ -122,6 +122,8 @@ export async function mutateDashboard(
   const workspace = await ensureDefaultWorkspace(db, input.userId);
   const current = await loadCurrentDesiredState(db, input.userId, workspace.id);
   if (current.id !== input.baseRevisionId) throw new Error("BASE_REVISION_CONFLICT");
+  // The current dashboard form only supplies v1 source fields.
+  if (isV2CloudState(current.state)) throw new Error("V2_DASHBOARD_MUTATION_UNSUPPORTED");
   let skills = [...current.state.manifest.skills];
   let locks = [...current.state.lockfile.skills];
   let transition: RevisionTransition;

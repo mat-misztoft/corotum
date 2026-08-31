@@ -235,6 +235,49 @@ test("an authenticated device can pull empty Cloud state and push an idempotent 
   ).toEqual({ count: 1 });
 });
 
+test("v2 artifact locks atomically materialize nullable source rows and immutable references", async () => {
+  const { sqlite, db } = await stateDb();
+  const { issued, workspaceId } = await pairedDevice(db, sqlite);
+  const hash = `sha256:${"a".repeat(64)}`;
+  const artifactState = {
+    manifest: { version: 2 as const, skills: [{
+      id: skill, name: "review", targets: "all" as const,
+      resolutionStatus: "RESOLVED" as const,
+    }] },
+    lockfile: { version: 2 as const, skills: [{
+      id: skill, name: "review", materialization: { kind: "artifact" as const,
+        artifact: { kind: "r2-tar-zst" as const, contentHash: hash, integrityHash: hash,
+          locator: `workspaces/${workspaceId}/artifacts/${skill}/${hash}.tar.zst`, sizeBytes: 42 } },
+    }] },
+  };
+  const ledger = { version: 2, activeDispositions: {
+    sk_01JRemoved: { skillId: "sk_01JRemoved", name: "removed", disposition: "UNMANAGE", effectiveSequence: 1 },
+  } };
+  const response = await handlePutWorkspaceState(
+    stateRequest(workspaceId, issued.token, { method: "PUT", body: JSON.stringify({
+      state: artifactState, baseRevision: null, idempotencyKey: "v2-artifact-1", transition,
+      dispositionLedger: ledger,
+    }) }), db, workspaceId,
+  );
+  expect(response.status).toBe(200);
+  expect(sqlite.query("SELECT source, ref, content_hash AS contentHash FROM workspace_skills").get())
+    .toEqual({ source: null, ref: null, contentHash: hash });
+  expect(sqlite.query("SELECT locator, size_bytes AS sizeBytes FROM workspace_artifacts").get())
+    .toEqual({ locator: artifactState.lockfile.skills[0].materialization.artifact.locator, sizeBytes: 42 });
+  expect(sqlite.query("SELECT skill_id AS skillId, integrity_hash AS integrityHash FROM workspace_revision_artifacts").get())
+    .toEqual({ skillId: skill, integrityHash: hash });
+  expect(JSON.parse((sqlite.query("SELECT disposition_ledger_json AS ledger FROM workspace_revisions").get() as { ledger: string }).ledger))
+    .toEqual(ledger);
+  const stale = await handlePutWorkspaceState(
+    stateRequest(workspaceId, issued.token, { method: "PUT", body: JSON.stringify({
+      state: artifactState, baseRevision: "rev_stale", idempotencyKey: "v2-artifact-stale", transition,
+    }) }), db, workspaceId,
+  );
+  expect(stale.status).toBe(409);
+  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get()).toEqual({ count: 1 });
+  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_revision_artifacts").get()).toEqual({ count: 1 });
+});
+
 test("the first device resolution locks a pending skill once and a competing resolver conflicts", async () => {
   const { sqlite, db } = await stateDb();
   const firstDevice = await pairedDevice(db, sqlite);
