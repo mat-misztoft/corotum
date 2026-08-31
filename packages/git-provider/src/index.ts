@@ -685,6 +685,19 @@ export type V2PendingPushStatus =
 
 type V2PendingPush = Readonly<{ baseRevision: string }>;
 
+/** Called before the first worktree mutation that would publish artifact content. */
+export type V2ArtifactWriteConsent = (
+  changedSkillIds: readonly string[],
+) => Promise<void>;
+
+/** A caller must explicitly authorize any Git commit containing local artifacts. */
+export class V2ArtifactConsentRequiredError extends Error {
+  constructor() {
+    super("Git artifact publishing requires explicit consent before local content is committed.");
+    this.name = "V2ArtifactConsentRequiredError";
+  }
+}
+
 /**
  * Git-backed v2 desired state.  It deliberately has no compatibility fallback:
  * callers either read the complete Corotum v2 snapshot or use the dedicated
@@ -695,6 +708,7 @@ export class V2GitStateProvider {
     private readonly storagePath: string,
     private readonly source: string,
     private readonly runGit: GitCommandRunner = runSystemGit,
+    private readonly confirmArtifactWrite?: V2ArtifactWriteConsent,
   ) {}
 
   async pull(): Promise<V2GitStateEnvelope> {
@@ -730,6 +744,11 @@ export class V2GitStateProvider {
     await this.command(cache, ["merge", "--ff-only", "@{upstream}"]);
     if ((await this.revision(cache)) !== input.baseRevision) {
       throw new Error("Git desired state has changed.");
+    }
+    const changedArtifacts = await this.changedArtifacts(cache, state);
+    if (changedArtifacts.length > 0) {
+      if (!this.confirmArtifactWrite) throw new V2ArtifactConsentRequiredError();
+      await this.confirmArtifactWrite(changedArtifacts);
     }
 
     const staging = await mkdtemp(join(this.storagePath, ".corotum-v2-stage-"));
@@ -780,6 +799,29 @@ export class V2GitStateProvider {
     } finally {
       await rm(staging, { force: true, recursive: true });
     }
+  }
+
+  private async changedArtifacts(
+    cache: string,
+    next: V2DesiredState,
+  ): Promise<readonly string[]> {
+    const previous = (await exists(join(cache, v2ManifestFile)))
+      ? await this.read(cache).then((envelope) => envelope.state)
+      : null;
+    const priorById = new Map(
+      previous?.lockfile.skills.flatMap((skill) =>
+        skill.materialization.kind === "artifact"
+          ? [[skill.id, skill.materialization.artifact.integrityHash]]
+          : [],
+      ),
+    );
+    return next.lockfile.skills
+      .filter(
+        (skill) =>
+          skill.materialization.kind === "artifact" &&
+          priorById.get(skill.id) !== skill.materialization.artifact.integrityHash,
+      )
+      .map((skill) => skill.id);
   }
 
   private async stageArtifacts(staging: string, state: V2DesiredState, supplied: Readonly<Record<string, string>>): Promise<void> {

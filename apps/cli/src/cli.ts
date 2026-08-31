@@ -1,4 +1,5 @@
 import { Command, CommanderError } from "commander";
+import { V2ArtifactConsentRequiredError } from "../../../packages/git-provider/src/index";
 import { registerAddCommand } from "./add-command";
 import { registerAdoptCommand } from "./adopt-command";
 import {
@@ -25,6 +26,7 @@ export const CLI_VERSION = "0.1.0";
 export type CliOptions = Readonly<{
   json: boolean;
   nonInteractive: boolean;
+  allowArtifacts: boolean;
 }>;
 
 export type CliIo = Readonly<{
@@ -58,6 +60,11 @@ export function createCli(
     .version(`corotum ${CLI_VERSION}`)
     .option("--json", "emit machine-readable JSON", false)
     .option("--non-interactive", "never prompt for input", false)
+    .option(
+      "--allow-artifacts",
+      "allow committing exact local artifact content to Git",
+      false,
+    )
     .allowUnknownOption(false)
     .configureOutput({
       writeErr: suppressErrorOutput ? () => undefined : io.writeError,
@@ -124,7 +131,13 @@ export async function runCli(
     if (json) {
       io.writeOutput(
         `${JSON.stringify(
-          jsonEnvelope({ outcome, error: errorMessage(error) }),
+          jsonEnvelope({
+            outcome:
+              error instanceof V2ArtifactConsentRequiredError
+                ? "CONFIRMATION_REQUIRED"
+                : outcome,
+            error: errorMessage(error),
+          }),
         )}\n`,
       );
     } else if (!(error instanceof CommanderError)) {

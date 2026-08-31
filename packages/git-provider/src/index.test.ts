@@ -147,7 +147,7 @@ describe("V2GitStateProvider", () => {
     const source = await fixture(); const root = await mkdtemp(join(tmpdir(), "corotum-git-artifact-")); temporaryDirectories.push(root);
     await writeFile(join(root, "SKILL.md"), "# Review\\n"); await mkdir(join(root, "templates")); await writeFile(join(root, "templates", "x.txt"), "x");
     const { scanNormalizedContent } = await import("../../skills-adapter/src/normalized-content"); const hash = (await scanNormalizedContent(root)).contentHash; const integrity = await gitTreeHash(root);
-    const provider = new V2GitStateProvider(join(source.worktree, "v2-cache"), source.bare); const base = (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim();
+    const provider = new V2GitStateProvider(join(source.worktree, "v2-cache"), source.bare, undefined, async () => undefined); const base = (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim();
     const pushed = await provider.push({ state: v2State("artifact", hash, integrity), ledger: { version: 2, activeDispositions: { [skillId("sk_old")]: { skillId: skillId("sk_old"), name: "old", disposition: "UNMANAGE", effectiveSequence: 1 } } }, baseRevision: base, artifacts: { [skillId("sk_gitV2")]: root } });
     expect(pushed.ledger.activeDispositions[skillId("sk_old")]?.disposition).toBe("UNMANAGE");
     expect((await provider.pull()).state.lockfile.skills[0]?.materialization.kind).toBe("artifact");
@@ -176,7 +176,7 @@ describe("V2GitStateProvider", () => {
     await writeFile(join(root, "SKILL.md"), "# Local artifact\n");
     const { scanNormalizedContent } = await import("../../skills-adapter/src/normalized-content"); const contentHash = (await scanNormalizedContent(root)).contentHash; const integrityHash = await gitTreeHash(root);
     const artifactId = skillId("sk_replayArtifact");
-    const local = new V2GitStateProvider(join(source.worktree, "v2-a"), source.bare);
+    const local = new V2GitStateProvider(join(source.worktree, "v2-a"), source.bare, undefined, async () => undefined);
     const initial = await local.push({ state: v2State("source", hash), ledger: { version: 2, activeDispositions: {} }, baseRevision: (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim() });
     const localState: V2DesiredState = {
       manifest: { version: 2, skills: [...initial.state.manifest.skills, { id: artifactId, name: "local-artifact", targets: "all", resolutionStatus: "RESOLVED" }] },
