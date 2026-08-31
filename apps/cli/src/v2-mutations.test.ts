@@ -39,6 +39,31 @@ describe("v2 mutation commands", () => {
     expect(result[0]).toMatchObject({ kind: "source-unavailable" });
   });
 
+  test("keeps a persisted snapshot recoverable when local application fails", async () => {
+    const state = provider(empty);
+    const service = new V2MutationService(state, resolver, {
+      apply: async () => { throw new Error("disk full"); },
+    });
+    const result = await service.add({
+      name: "alpha",
+      source: { repository: "https://example.test/a.git", path: "alpha", ref: "main" },
+    });
+    expect(result).toMatchObject({ kind: "persisted-not-applied", revision, reason: "disk full" });
+    expect((await state.pull()).state.lockfile.skills[0]?.source?.revision).toBe(revision);
+  });
+
+  test("does not persist when resolution fails", async () => {
+    const state = provider(empty);
+    const service = new V2MutationService(state, {
+      resolve: async () => { throw new Error("upstream unavailable"); },
+    });
+    expect(await service.add({
+      name: "alpha",
+      source: { repository: "https://example.test/a.git", path: "alpha", ref: "main" },
+    })).toMatchObject({ kind: "refused", reason: "upstream unavailable" });
+    expect(state.pushes).toBe(0);
+  });
+
   test("set-ref resolves before persistence and check is read-only", async () => {
     const state = provider(empty);
     const service = new V2MutationService(state, resolver);

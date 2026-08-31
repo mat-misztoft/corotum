@@ -27,6 +27,7 @@ export type V2LocalApplier = Readonly<{
 
 export type V2MutationResult =
   | Readonly<{ kind: "success"; skillId: SkillId; revision: string }>
+  | Readonly<{ kind: "persisted-not-applied"; skillId: SkillId; revision: string; reason: string }>
   | Readonly<{ kind: "duplicate"; skillId: SkillId }>
   | Readonly<{ kind: "source-unavailable"; skillId: SkillId; reason: string }>
   | Readonly<{ kind: "refused"; reason: string }>;
@@ -130,11 +131,28 @@ export class V2MutationService {
   }
 
   private async persistAndApply(current: Awaited<ReturnType<V2MutationProvider["pull"]>>, state: V2DesiredState, ids: readonly SkillId[], artifacts?: Readonly<Record<string, string>>): Promise<V2MutationResult> {
+    let persisted: Awaited<ReturnType<V2MutationProvider["push"]>>;
     try {
-      const persisted = await this.provider.push({ state: validateV2DesiredState(state), ledger: current.ledger, baseRevision: current.revisionId, artifacts });
+      // Validation occurs before any provider write; rejected intent cannot
+      // produce a partial desired-state snapshot.
+      persisted = await this.provider.push({ state: validateV2DesiredState(state), ledger: current.ledger, baseRevision: current.revisionId, artifacts });
+    } catch (error) {
+      return refused(error);
+    }
+    try {
       await this.applier?.apply({ state: persisted.state, revisionId: persisted.revisionId, skillIds: ids });
       return { kind: "success", skillId: ids[0]!, revision: persisted.revisionId };
-    } catch (error) { return refused(error); }
+    } catch (error) {
+      // Publishing precedes local installation by design. Do not claim the
+      // mutation was rolled back: ordinary reconciliation can apply this exact
+      // persisted snapshot on retry without consulting HEAD.
+      return {
+        kind: "persisted-not-applied",
+        skillId: ids[0]!,
+        revision: persisted.revisionId,
+        reason: error instanceof Error ? error.message : "Local application failed.",
+      };
+    }
   }
 }
 
