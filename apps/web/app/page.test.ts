@@ -2,18 +2,20 @@ import { expect, test } from "bun:test";
 
 const page = await Bun.file(`${import.meta.dir}/page.tsx`).text();
 const styles = await Bun.file(`${import.meta.dir}/globals.css`).text();
+const billing = await Bun.file(`${import.meta.dir}/billing-toggle.tsx`).text();
 
 const sections = [
   "Keep your agent skills in sync.",
   "One state. Everywhere.",
   "From skill to synced state.",
   "One Corotum. Two ways to sync.",
+  "Choose your sync.",
   "See every device at a glance.",
   "One skill. Many agents.",
   "Set it once. Keep it in sync.",
 ] as const;
 
-test("landing keeps the seven frozen sections in order", () => {
+test("landing keeps the product sections in order", () => {
   let cursor = 0;
   for (const copy of sections) {
     const index = page.indexOf(copy, cursor);
@@ -37,8 +39,31 @@ test("final CTA copy, actions, and install command match planning", () => {
 test("landing login and Cloud CTAs go to /sign-in", () => {
   expect(page).toContain('<a href="/sign-in">Sign in</a>');
   expect(page).toContain('href="/sign-in">');
-  expect(page.match(/href="\/sign-in"/g)?.length).toBe(3);
+  expect(page.match(/href="\/sign-in"/g)?.length).toBe(4);
   expect(page).not.toContain('href="/dashboard"');
+});
+
+test("pricing keeps the hosted and self-hosted paths clear", () => {
+  expect(page).toContain("GIT SYNC");
+  expect(page).toContain("COROTUM CLOUD");
+  expect(billing).toContain("const monthly = 5.99");
+  expect(billing).toContain("const yearly = 59.9");
+  expect(page).toContain("Self-hosted Corotum Cloud is free under AGPLv3.");
+  expect(page).toContain("hosted corotum.com service.");
+  expect(styles).toContain(".pricing-plans");
+  expect(styles).toContain("grid-template-columns: 1fr 1fr");
+});
+
+test("Cloud billing uses keyboard-ready radios and derives the annual saving", () => {
+  expect(billing).toContain('type="radio"');
+  expect(billing).toContain('name="billing-period"');
+  expect(billing).toContain("monthly * 12 - yearly");
+  expect(billing).toContain("Math.round(yearlySavings / monthly)");
+  expect(billing).toContain('className="billing-saving"');
+  expect(billing).toContain("Save {savedMonths} months");
+  expect(billing).not.toContain("cloud-saving is-hidden");
+  expect(styles).toContain(".billing-period input:checked + span");
+  expect(styles).toContain(".billing-period input:focus-visible + span");
 });
 
 test("landing keeps keyboard focus and overflow-safe diagrams", () => {

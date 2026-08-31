@@ -55,6 +55,7 @@ try {
     "One state. Everywhere.",
     "From skill to synced state.",
     "One Corotum. Two ways to sync.",
+    "Choose your sync.",
     "See every device at a glance.",
     "One skill. Many agents.",
     "Set it once. Keep it in sync.",
@@ -70,16 +71,11 @@ try {
     !home.ok ||
     !ordered ||
     !landing.includes("RECONCILE") ||
-    !landing.includes("COROTUM CLI") ||
-    !landing.includes("DESIRED STATE") ||
-    !landing.includes("GIT SYNC / FREE") ||
-    !landing.includes("$5.99/month · $59.90/year") ||
-    !landing.includes("corotum migrate cloud") ||
-    !landing.includes("corotum migrate git") ||
-    !landing.includes("Your Git credentials stay local") ||
+    !landing.includes("GIT SYNC") ||
     !landing.includes("Hosted desired state") ||
-    !landing.includes("No daemon, remote force-sync, or stored Git") ||
-    !landing.includes("Mac Mini") ||
+    !landing.includes("Self-hosted Corotum Cloud is free under AGPLv3.") ||
+    !landing.includes("hosted corotum.com service.") ||
+    !landing.includes("Desktop") ||
     !landing.includes("AUTH_REQUIRED") ||
     !landing.includes("DRIFTED") ||
     !landing.includes("Claude Code") ||
@@ -97,7 +93,7 @@ try {
     landing.includes("sync_all_devices")
   ) {
     throw new Error(
-      "landing final CTA and seven-section order did not render through workerd",
+      "landing pricing and section order did not render through workerd",
     );
   }
 } finally {

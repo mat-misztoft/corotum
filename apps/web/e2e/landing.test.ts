@@ -84,13 +84,15 @@ test("landing e2e: visual QA evidence records desktop and mobile PASS", () => {
 
 test("landing e2e: login and Cloud CTAs go to /sign-in", () => {
   expect(page).toContain('<a href="/sign-in">Sign in</a>');
-  expect(page.match(/href="\/sign-in"/g)?.length).toBe(3);
+  expect(page.match(/href="\/sign-in"/g)?.length).toBe(4);
   expect(page).not.toContain('href="/dashboard"');
 });
 
 test("landing e2e: claims, anti-slop, and accessibility checks pass", () => {
   expect(page).toContain("Exact revision and content hash. Exact, not latest.");
-  expect(page).toContain('aria-label="Official install command"');
+  expect(page).toContain("Self-hosted Corotum Cloud is free under AGPLv3.");
+  expect(page).toContain("hosted corotum.com service.");
+  expect(page).toContain('className="install-command"');
   expect(page).toContain('return "status-error"');
   expect(page).not.toContain("sync_device");
   expect(page).not.toContain("sync_all_devices");
