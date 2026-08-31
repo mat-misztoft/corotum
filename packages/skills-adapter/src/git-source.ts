@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 
 import type { LockedSkill } from "../../core/src/index";
 import { hashSkillDirectory } from "./canonical-store";
+import { scanNormalizedContent } from "./normalized-content";
 
 export type GitSourceErrorCode =
   | "AUTH_REQUIRED"
@@ -40,6 +41,14 @@ export type ResolveGitSkillInput = Readonly<{
   skill: string;
   ref: string;
   path?: string;
+}>;
+
+/** Immutable Git input shared with the v2 exact-content pipeline. */
+export type LockedGitSource = Readonly<{
+  repository: string;
+  path: string;
+  revision: string;
+  contentHash: string;
 }>;
 
 export type ResolvedGitSkill = Readonly<{
@@ -151,6 +160,21 @@ export class GitSkillMaterializer {
 
   /** Writes only verified locked content, replacing the destination atomically. */
   async materialize(lock: LockedSkill, destination: string): Promise<void> {
+    return this.materializeSource(lock, destination, hashSkillDirectory);
+  }
+
+  /** Materializes an immutable v2 source lock without consulting its follow ref. */
+  async materializeLockedSource(lock: LockedGitSource, destination: string): Promise<void> {
+    return this.materializeSource(lock, destination, async (directory) =>
+      (await scanNormalizedContent(directory)).contentHash,
+    );
+  }
+
+  private async materializeSource(
+    lock: LockedGitSource,
+    destination: string,
+    contentHash: (directory: string) => Promise<string>,
+  ): Promise<void> {
     const source = normalizeGitSource(lock.repository);
     const path = normalizeSkillPath(lock.path);
     const checkout = await this.clone(source);
@@ -169,15 +193,14 @@ export class GitSkillMaterializer {
       await writeFile(join(staging, "skill.tar"), archive);
       await this.extract(join(staging, "skill.tar"), staging, path);
       await rm(join(staging, "skill.tar"), { force: true });
-      if ((await hashSkillDirectory(staging)) !== lock.contentHash) {
+      if ((await contentHash(staging)) !== lock.contentHash) {
         throw new GitSourceError(
           "HASH_MISMATCH",
           "Locked skill content does not match its expected hash.",
         );
       }
       await mkdir(dirname(destination), { recursive: true });
-      await rm(destination, { force: true, recursive: true });
-      await rename(staging, destination);
+      await publishDirectory(staging, destination);
     } catch (error) {
       await rm(staging, { force: true, recursive: true });
       throw error;
@@ -306,6 +329,28 @@ function normalizeSkillPath(path: string): string {
     );
   }
   return normalized;
+}
+
+async function publishDirectory(staging: string, destination: string): Promise<void> {
+  const backup = `${destination}.${crypto.randomUUID()}.backup`;
+  let moved = false;
+  try {
+    await rename(destination, backup);
+    moved = true;
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+  try {
+    await rename(staging, destination);
+  } catch (error) {
+    if (moved) await rename(backup, destination).catch(() => undefined);
+    throw error;
+  }
+  if (moved) await rm(backup, { force: true, recursive: true });
+}
+
+function isNotFound(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
 function gitFailure(stderr: string): GitSourceError {

@@ -46,21 +46,19 @@ export async function createArtifactArchive(directory: string): Promise<Artifact
 }
 
 /**
- * Validates the complete archive before staging any files, then atomically
- * replaces destination only when both declared hashes match.
- */
-export async function extractArtifactArchive(
+/** Validates an archive and returns an unpublished verified staging directory. */
+export async function stageArtifactArchive(
   bytes: Uint8Array,
-  destination: string,
+  stagingParent: string,
   expected: Readonly<{ integrityHash: `sha256:${string}`; contentHash: `sha256:${string}` }>,
-): Promise<void> {
+): Promise<string> {
   if (sha256(bytes) !== expected.integrityHash) throw mismatch("Artifact integrity hash does not match.");
   let tar: Uint8Array;
   try { tar = Bun.zstdDecompressSync(bytes); }
   catch { throw unavailable("Artifact stream is corrupt or unavailable."); }
   const entries = parseTar(tar);
-  await mkdir(dirname(destination), { recursive: true });
-  const staging = await mkdtemp(join(dirname(destination), ".corotum-artifact-"));
+  await mkdir(stagingParent, { recursive: true });
+  const staging = await mkdtemp(join(stagingParent, ".corotum-artifact-"));
   try {
     for (const entry of entries) {
       const path = join(staging, ...entry.path.split("/"));
@@ -69,11 +67,22 @@ export async function extractArtifactArchive(
     }
     const scanned = await scanNormalizedContent(staging);
     if (scanned.contentHash !== expected.contentHash) throw mismatch("Extracted artifact content hash does not match.");
-    await publish(staging, destination);
+    return staging;
   } catch (error) {
     await rm(staging, { force: true, recursive: true });
     throw error;
   }
+}
+
+/** Validates the complete archive before publishing it atomically. */
+export async function extractArtifactArchive(
+  bytes: Uint8Array,
+  destination: string,
+  expected: Readonly<{ integrityHash: `sha256:${string}`; contentHash: `sha256:${string}` }>,
+): Promise<void> {
+  const staging = await stageArtifactArchive(bytes, dirname(destination), expected);
+  try { await publish(staging, destination); }
+  catch (error) { await rm(staging, { force: true, recursive: true }); throw error; }
 }
 
 type TarEntry = Readonly<{ path: string; content: Uint8Array }>;
