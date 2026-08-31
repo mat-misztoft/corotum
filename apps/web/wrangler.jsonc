@@ -9,6 +9,12 @@
     "binding": "ASSETS",
     "not_found_handling": "none"
   },
+  "r2_buckets": [
+    {
+      "binding": "ARTIFACTS",
+      "bucket_name": "corotum-artifacts"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
