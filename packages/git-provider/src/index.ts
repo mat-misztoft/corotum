@@ -811,7 +811,7 @@ export class V2GitStateProvider {
     let pendingRecorded = false;
     try {
       const artifacts = input.artifacts ?? {};
-      await this.stageArtifacts(staging, state, artifacts);
+      await this.stageArtifacts(staging, state, artifacts, cache);
       await writeFile(join(staging, v2ManifestFile), serializeV2Manifest(state.manifest));
       await writeFile(join(staging, v2LockfileFile), serializeV2Lockfile(state.lockfile));
       await writeFile(join(staging, v2TransitionsFile), serializeDispositionLedger(input.ledger));
@@ -879,7 +879,12 @@ export class V2GitStateProvider {
       .map((skill) => skill.id);
   }
 
-  private async stageArtifacts(staging: string, state: V2DesiredState, supplied: Readonly<Record<string, string>>): Promise<void> {
+  private async stageArtifacts(
+    staging: string,
+    state: V2DesiredState,
+    supplied: Readonly<Record<string, string>>,
+    cache: string,
+  ): Promise<void> {
     const expected = new Set<string>();
     for (const lock of state.lockfile.skills) {
       if (lock.materialization.kind === "source") {
@@ -887,9 +892,10 @@ export class V2GitStateProvider {
         continue;
       }
       expected.add(lock.id);
-      const source = supplied[lock.id];
-      if (!source) throw new Error(`Artifact-backed skill ${lock.id} is missing its artifact tree.`);
       const locator = this.artifactLocator(lock);
+      const cached = join(cache, locator);
+      const source = supplied[lock.id] ?? ((await exists(cached)) ? cached : undefined);
+      if (!source) throw new Error(`Artifact-backed skill ${lock.id} is missing its artifact tree.`);
       const destination = join(staging, locator);
       const scanned = await scanNormalizedContent(source);
       if (scanned.contentHash !== lock.materialization.artifact.contentHash) throw new Error(`Artifact ${lock.id} content hash does not match.`);

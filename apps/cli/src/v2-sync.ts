@@ -18,6 +18,7 @@ import {
   type V2ReconcileOperation,
   type V2ReconcilePlan,
 } from "../../../packages/core/src/index";
+import { MaterializationError } from "../../../packages/skills-adapter/src/exact-materializer";
 import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 import {
   expectedV2Hash,
@@ -46,7 +47,7 @@ export type V2SyncProviderPort = Readonly<{
 export type V2SyncOperationResult = Readonly<{
   kind: V2ReconcileOperation["kind"];
   skillId: SkillId;
-  status: "SUCCESS" | "ERROR" | "LOCAL_CONFLICT" | "DRIFTED";
+  status: "SUCCESS" | "ERROR" | "LOCAL_CONFLICT" | "DRIFTED" | "AUTH_REQUIRED";
   error?: string;
 }>;
 
@@ -288,6 +289,14 @@ export class V2SyncService {
       }
       return { kind: operation.kind, skillId, status: "SUCCESS" };
     } catch (error) {
+      if (error instanceof MaterializationError && error.code === "AUTH_REQUIRED") {
+        return {
+          kind: operation.kind,
+          skillId,
+          status: "AUTH_REQUIRED",
+          error: error.message,
+        };
+      }
       if (error instanceof V2LocalApplyError) {
         return {
           kind: operation.kind,
@@ -400,11 +409,17 @@ export function v2SyncStatusPayload(
     "operations" in result && Array.isArray(result.operations)
       ? result.operations
       : result.snapshot.plan.operations;
+  const authRequired = operations.some(
+    (item) => "status" in item && item.status === "AUTH_REQUIRED",
+  );
   const recovery = result.recovery;
   const pendingPush = "pendingPush" in result && result.pendingPush;
   let status = "READY";
   let outcome: string = "SUCCESS";
-  if ("kind" in result && result.kind === "synced") status = "SYNCED";
+  if (authRequired) {
+    status = "AUTH_REQUIRED";
+    outcome = "AUTH_REQUIRED";
+  } else if ("kind" in result && result.kind === "synced") status = "SYNCED";
   else if ("kind" in result && result.kind === "partial") {
     status = conflict ? "LOCAL_CONFLICT" : drifted ? "DRIFTED" : "PARTIAL";
     outcome = conflict ? "CONFLICT" : "PARTIAL_SUCCESS";

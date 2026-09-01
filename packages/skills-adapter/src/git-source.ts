@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { access, constants, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -114,7 +114,7 @@ export async function resolveGitDefaultRef(
 ): Promise<string> {
   const source = normalizeGitSource(sourceInput);
   const result = await runGit({ args: ["ls-remote", "--symref", source, "HEAD"] });
-  if (result.exitCode !== 0) throw gitFailure(result.stderr);
+  if (result.exitCode !== 0) throw await gitFailure(result.stderr, source);
   const match = new TextDecoder()
     .decode(result.stdout)
     .match(/^ref:\s+refs\/heads\/(\S+)\s+HEAD/m);
@@ -144,7 +144,7 @@ export class GitSkillMaterializer {
         args: ["ls-tree", "-r", "--name-only", revision],
         cwd: checkout,
       });
-      if (result.exitCode !== 0) throw gitFailure(result.stderr);
+      if (result.exitCode !== 0) throw await gitFailure(result.stderr);
       const paths = new TextDecoder()
         .decode(result.stdout)
         .split("\n")
@@ -251,7 +251,7 @@ export class GitSkillMaterializer {
     });
     if (result.exitCode !== 0) {
       await rm(checkout, { force: true, recursive: true });
-      throw gitFailure(result.stderr);
+      throw await gitFailure(result.stderr, source);
     }
     return checkout;
   }
@@ -261,13 +261,13 @@ export class GitSkillMaterializer {
       args: ["fetch", "--quiet", "origin", ref],
       cwd: checkout,
     });
-    if (fetched.exitCode !== 0) throw gitFailure(fetched.stderr);
+    if (fetched.exitCode !== 0) throw await gitFailure(fetched.stderr);
 
     const result = await this.runGit({
       args: ["rev-parse", "--verify", `${ref}^{commit}`],
       cwd: checkout,
     });
-    if (result.exitCode !== 0) throw gitFailure(result.stderr);
+    if (result.exitCode !== 0) throw await gitFailure(result.stderr);
     return new TextDecoder().decode(result.stdout).trim();
   }
 
@@ -300,7 +300,7 @@ export class GitSkillMaterializer {
       args: ["archive", "--format=tar", revision, path],
       cwd: checkout,
     });
-    if (result.exitCode !== 0) throw gitFailure(result.stderr);
+    if (result.exitCode !== 0) throw await gitFailure(result.stderr);
     return result.stdout;
   }
 
@@ -389,7 +389,7 @@ function isNotFound(error: unknown): error is NodeJS.ErrnoException {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
-function gitFailure(stderr: string): GitSourceError {
+async function gitFailure(stderr: string, source?: string): Promise<GitSourceError> {
   const message = stderr.trim() || "Git could not access the requested source.";
   if (
     /authentication|authorization|permission denied|could not read username|terminal prompts disabled/i.test(
@@ -401,5 +401,22 @@ function gitFailure(stderr: string): GitSourceError {
       "Git authentication is required to access this source.",
     );
   }
+  if (source && (await localSourceIsUnreadable(source))) {
+    return new GitSourceError(
+      "AUTH_REQUIRED",
+      "Git authentication is required to access this source.",
+    );
+  }
   return new GitSourceError("SOURCE_UNAVAILABLE", message);
+}
+
+async function localSourceIsUnreadable(source: string): Promise<boolean> {
+  const path = source.startsWith("file:") ? new URL(source).pathname : source;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path)) return false;
+  try {
+    await access(path, constants.R_OK);
+    return false;
+  } catch (error) {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "EACCES";
+  }
 }

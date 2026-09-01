@@ -345,15 +345,13 @@ export class V2LocalApplier implements V2LocalApplierContract {
   }
 
   private materializer(): ExactContentMaterializer {
+    const treePath = (locator: string) =>
+      join(this.input.storagePath, sourceKey(this.input.repository), locator);
     return new ExactContentMaterializer(
       undefined,
       this.input.artifactReader ??
-        (async (locator) =>
-          new Uint8Array(
-            await readFile(
-              join(this.input.storagePath, sourceKey(this.input.repository), locator),
-            ),
-          )),
+        (async (locator) => new Uint8Array(await readFile(treePath(locator)))),
+      async (locator) => treePath(locator),
     );
   }
 }

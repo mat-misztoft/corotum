@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import type { AgentId } from "../../../packages/agent-targets/src/index";
@@ -12,7 +12,7 @@ import {
   skillId,
   validateV2DesiredState,
 } from "../../../packages/core/src/index";
-import { gitTreeHash } from "../../../packages/git-provider/src/index";
+import { gitTreeHash, V2ArtifactConsentRequiredError } from "../../../packages/git-provider/src/index";
 import { createArtifactArchive } from "../../../packages/skills-adapter/src/artifact-archive";
 import {
   CanonicalSkillStore,
@@ -205,6 +205,7 @@ export class InitTransactionService {
         };
         await this.deps.recovery.save(marker);
       } catch (error) {
+        if (error instanceof V2ArtifactConsentRequiredError) throw error;
         return {
           kind: "refused",
           reason: error instanceof Error ? error.message : "Initial desired state could not be saved.",
@@ -412,15 +413,21 @@ export class InitTransactionService {
           ? await materializer.stage(lock)
           : { directory: prepared.path, cleanup: async () => undefined };
       try {
-        await canonicalStore.replaceFromDirectory(
-          prepared.id,
-          lock.name,
-          staged.directory,
-          await hashSkillDirectory(staged.directory),
-        );
         const canonicalPath = canonicalStore.pathFor(lock.name);
-        if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
-          throw new Error("Canonical skill content did not match the persisted lock.");
+        if (await pathExists(canonicalPath)) {
+          if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
+            throw new Error("Unmanaged named canonical skill differs from the locked hash.");
+          }
+        } else {
+          await canonicalStore.replaceFromDirectory(
+            prepared.id,
+            lock.name,
+            staged.directory,
+            await hashSkillDirectory(staged.directory),
+          );
+          if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
+            throw new Error("Canonical skill content did not match the persisted lock.");
+          }
         }
         const exposed = await targets.expose({
           skillId: prepared.id,
@@ -483,4 +490,13 @@ function retainedManifestSource(source: InitSkillOutcome["source"]): SourceMetad
 
 function sourceKey(source: string): string {
   return new Bun.CryptoHasher("sha256").update(source).digest("hex");
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch {
+    return false;
+  }
 }

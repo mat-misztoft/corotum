@@ -42,6 +42,29 @@ describe("ExactContentMaterializer", () => {
     finally { await staged.cleanup(); }
   });
 
+  test("stages git-tree artifacts from a directory without contacting upstream", async () => {
+    const input = await mkdtemp(join(tmpdir(), "corotum-exact-gittree-")); directories.push(input);
+    await writeFile(join(input, "SKILL.md"), "# Git tree\n");
+    const contentHash = (await scanNormalizedContent(input)).contentHash;
+    const lock: V2LockedSkill = {
+      id: skillId("sk_tree"),
+      name: "tree",
+      materialization: {
+        kind: "artifact",
+        artifact: {
+          kind: "git-tree",
+          locator: "artifacts/sk_tree/deadbeef",
+          contentHash,
+          integrityHash: contentHash,
+          sizeBytes: 12,
+        },
+      },
+    };
+    const staged = await new ExactContentMaterializer(undefined, async () => new Uint8Array(), async () => input).stage(lock);
+    try { expect(await readFile(join(staged.directory, "SKILL.md"), "utf8")).toBe("# Git tree\n"); }
+    finally { await staged.cleanup(); }
+  });
+
   test("stages artifacts without contacting upstream, with or without retained source metadata", async () => {
     const input = await mkdtemp(join(tmpdir(), "corotum-exact-artifact-")); directories.push(input);
     await writeFile(join(input, "SKILL.md"), "# Artifact\n");

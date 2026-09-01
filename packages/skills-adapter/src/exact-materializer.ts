@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import type { DomainErrorCode, V2LockedSkill } from "../../core/src/index";
 import { ArtifactArchiveError, stageArtifactArchive } from "./artifact-archive";
@@ -31,6 +31,9 @@ export type ArtifactReader = (
   locator: string,
 ) => Promise<Uint8Array>;
 
+/** Resolves a git-tree artifact locator to an existing sanitized directory. */
+export type ArtifactTreeResolver = (locator: string) => Promise<string>;
+
 export type VerifiedStagingDirectory = Readonly<{
   directory: string;
   contentHash: `sha256:${string}`;
@@ -46,6 +49,7 @@ export class ExactContentMaterializer {
     private readonly git: GitSkillMaterializer = new GitSkillMaterializer(),
     private readonly readArtifact: ArtifactReader = async (locator) =>
       new Uint8Array(await readFile(locator)),
+    private readonly resolveArtifactTree: ArtifactTreeResolver = async (locator) => locator,
   ) {}
 
   async stage(lock: V2LockedSkill): Promise<VerifiedStagingDirectory> {
@@ -55,6 +59,18 @@ export class ExactContentMaterializer {
       if (lock.materialization.kind === "source") {
         if (!lock.source) throw new MaterializationError("SOURCE_UNAVAILABLE", "Source materialization has no immutable source lock.");
         await this.git.materializeLockedSource(lock.source, directory);
+      } else if (lock.materialization.artifact.kind === "git-tree") {
+        const tree = await this.resolveArtifactTree(lock.materialization.artifact.locator);
+        const metadata = await lstat(tree).catch(() => null);
+        if (metadata?.isDirectory()) {
+          await stageGitTree(tree, directory);
+        } else {
+          let bytes: Uint8Array;
+          try { bytes = await this.readArtifact(lock.materialization.artifact.locator); }
+          catch (error) { throw mapMaterializationError(error, "artifact"); }
+          const staging = await stageArtifactArchive(bytes, root, lock.materialization.artifact);
+          await rename(staging, directory);
+        }
       } else {
         let bytes: Uint8Array;
         try { bytes = await this.readArtifact(lock.materialization.artifact.locator); }
@@ -74,6 +90,16 @@ export class ExactContentMaterializer {
       await rm(root, { force: true, recursive: true });
       throw mapMaterializationError(error, lock.materialization.kind);
     }
+  }
+}
+
+async function stageGitTree(source: string, destination: string): Promise<void> {
+  const scanned = await scanNormalizedContent(source);
+  await mkdir(destination, { recursive: true });
+  for (const file of scanned.files) {
+    const target = join(destination, file.path);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, file.content, { mode: 0o600 });
   }
 }
 
