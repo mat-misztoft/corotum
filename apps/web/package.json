@@ -4,9 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "portless",
+    "dev:app": "vinext dev --port 5173",
     "build": "vinext build",
     "db:migrate": "drizzle-kit generate && CI=1 wrangler d1 migrations apply corotum --local",
     "smoke": "bun ./scripts/smoke.ts"
+  },
+  "portless": {
+    "name": "corotum",
+    "script": "dev:app",
+    "appPort": 5173
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "1.54.2",

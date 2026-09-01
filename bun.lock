@@ -9,6 +9,7 @@
         "@types/bun": "^1.4.0",
         "@types/node": "^26.4.0",
         "playwright": "1.56.1",
+        "portless": "^0.15.6",
         "typescript": "5.9.3",
       },
     },
@@ -131,6 +132,22 @@
     "@cloudflare/workerd-windows-64": ["@cloudflare/workerd-windows-64@1.20260828.1", "", { "os": "win32", "cpu": "x64" }, "sha512-yvr77hC7dUbvK5K+SCg062kkPq3sx+drV1PcgHslzHDYcJBtT0V3X80qLE49LW1vq2svaeNmsVQS+vHsqWu8cQ=="],
 
     "@cloudflare/workers-types": ["@cloudflare/workers-types@5.20260829.1", "", {}, "sha512-SsH4G9+JePvrBmz+b5Dl67LQ9w2/ycoIpAPcAkfg2aEs2SEisQHk7/AY0TymSXEBbDbWgcBqoLe4hNcuY3CxWA=="],
+
+    "@corotum/agent-targets": ["@corotum/agent-targets@workspace:packages/agent-targets"],
+
+    "@corotum/cli": ["@corotum/cli@workspace:apps/cli"],
+
+    "@corotum/core": ["@corotum/core@workspace:packages/core"],
+
+    "@corotum/git-provider": ["@corotum/git-provider@workspace:packages/git-provider"],
+
+    "@corotum/saas-provider": ["@corotum/saas-provider@workspace:packages/saas-provider"],
+
+    "@corotum/shared": ["@corotum/shared@workspace:packages/shared"],
+
+    "@corotum/skills-adapter": ["@corotum/skills-adapter@workspace:packages/skills-adapter"],
+
+    "@corotum/web": ["@corotum/web@workspace:apps/web"],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 
@@ -371,22 +388,6 @@
     "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.3.3", "", { "os": "win32", "cpu": "x64" }, "sha512-yJ0pwIVc/nYeGoV02WtsN8KYyLQv7kyI2wDnkezyJlGGjkd4QLwDGAwl47YpPJeuI0M0ObaXGSPjvWDPeTPggw=="],
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.3", "", { "dependencies": { "@tailwindcss/node": "4.3.3", "@tailwindcss/oxide": "4.3.3", "tailwindcss": "4.3.3" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw=="],
-
-    "@corotum/agent-targets": ["@corotum/agent-targets@workspace:packages/agent-targets"],
-
-    "@corotum/cli": ["@corotum/cli@workspace:apps/cli"],
-
-    "@corotum/core": ["@corotum/core@workspace:packages/core"],
-
-    "@corotum/git-provider": ["@corotum/git-provider@workspace:packages/git-provider"],
-
-    "@corotum/saas-provider": ["@corotum/saas-provider@workspace:packages/saas-provider"],
-
-    "@corotum/shared": ["@corotum/shared@workspace:packages/shared"],
-
-    "@corotum/skills-adapter": ["@corotum/skills-adapter@workspace:packages/skills-adapter"],
-
-    "@corotum/web": ["@corotum/web@workspace:apps/web"],
 
     "@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
@@ -643,6 +644,8 @@
     "playwright": ["playwright@1.56.1", "", { "dependencies": { "playwright-core": "1.56.1" }, "optionalDependencies": { "fsevents": "2.3.2" }, "bin": { "playwright": "cli.js" } }, "sha512-aFi5B0WovBHTEvpM3DzXTUaeN6eN0qWnTkKx4NQaH4Wvcmc153PdaY2UBdSYKaGYw+UyWXSVyxDUg5DoPEttjw=="],
 
     "playwright-core": ["playwright-core@1.56.1", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-hutraynyn31F+Bifme+Ps9Vq59hKuUCz7H1kDOcBs+2oGguKkWTU50bBWrtz34OUWmIwpBTWDxaRPXrIXkgvmQ=="],
+
+    "portless": ["portless@0.15.6", "", { "os": [ "linux", "win32", "darwin", ], "bin": { "portless": "dist/cli.js" } }, "sha512-uOAwWLF32rmyEGFASzSO0VOaqb/AQxFCCzyZbPGd82UNNOfIEvc09zy92nroNibE5HNfzV4oVB0ObKbPXgkM9A=="],
 
     "postcss": ["postcss@8.5.26", "", { "dependencies": { "nanoid": "^3.3.17", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ=="],
 
