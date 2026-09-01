@@ -9,19 +9,25 @@ import { cloudAuthContext } from "./cloud-auth-command";
 import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
 import { createCliV2GitStateProvider } from "./artifact-consent";
+import { LegacyMigrator } from "./legacy-migration";
 import { type MigrationStrategy } from "./migrate";
+import { resolveLegacyPlatformPaths, resolvePlatformPaths } from "./platform";
 import { mergeV2MigrationSnapshots, migrateV2CloudToGit, migrateV2GitToCloud } from "./v2-migration";
 import { MutationLock } from "./mutation-lock";
 
 export function registerMigrateCommand(program: Command, io: CliIo): void {
   program
     .command("migrate <destination> [repository]")
-    .description("move desired state between Corotum Git Sync and Cloud")
+    .description("move desired state between Corotum Git Sync and Cloud, or migrate legacy ToolMirror state")
     .option("--strategy <replace|merge|cancel>", "destination-state handling")
     .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
     .action(async (destination: string, repository: string | undefined, options: { strategy?: MigrationStrategy; origin: string }) => {
+      if (destination === "legacy" || destination === "legacy-cleanup") {
+        await runLegacyMigration(program, io, destination);
+        return;
+      }
       if (destination !== "cloud" && destination !== "git")
-        throw new Error("Migration destination must be cloud or git.");
+        throw new Error("Migration destination must be cloud, git, legacy, or legacy-cleanup.");
       if (destination === "git" && !repository)
         throw new Error("Usage: corotum migrate git <repository>.");
       if (destination === "cloud" && repository)
@@ -74,6 +80,43 @@ export function registerMigrateCommand(program: Command, io: CliIo): void {
         await release();
       }
     });
+}
+
+async function runLegacyMigration(
+  program: Command,
+  io: CliIo,
+  destination: "legacy" | "legacy-cleanup",
+): Promise<void> {
+  const homeDir = homedir();
+  const platform = process.platform as "darwin" | "linux" | "win32";
+  const current = resolvePlatformPaths({ homeDir, platform, env: process.env });
+  const legacy = resolveLegacyPlatformPaths({ homeDir, platform, env: process.env });
+  const release = await new MutationLock(join(current.stateDir, "process.lock")).acquire();
+  try {
+    const migrator = new LegacyMigrator();
+    if (destination === "legacy-cleanup") {
+      const marker = await migrator.cleanup({ current });
+      write(io, program, { outcome: "SUCCESS", status: marker.status }, "Removed verified legacy ToolMirror backup files.\n");
+      return;
+    }
+    const result = await migrator.migrate({ homeDir, current, legacy });
+    const outcome = result.conflicts.length > 0 ? "CONFLICT" : "SUCCESS";
+    write(
+      io,
+      program,
+      {
+        outcome,
+        status: result.marker.status,
+        conflicts: result.conflicts,
+        skills: result.marker.skills.map((skill) => skill.name),
+      },
+      result.conflicts.length > 0
+        ? `Migrated recoverable ToolMirror state with ${result.conflicts.length} LOCAL_CONFLICT report(s). Legacy files remain until corotum migrate legacy-cleanup.\n`
+        : "Migrated recoverable ToolMirror state. Legacy files remain until corotum migrate legacy-cleanup.\n",
+    );
+  } finally {
+    await release();
+  }
 }
 
 function write(io: CliIo, program: Command, payload: Record<string, unknown>, human: string) {

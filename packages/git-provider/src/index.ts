@@ -51,6 +51,7 @@ const transitionFile = "toolmirror.transition.json";
 const pendingPushSuffix = ".pending-push.json";
 const v2PendingPushSuffix = ".v2-pending-push.json";
 const v2ManifestFile = "corotum.yaml";
+const v2LockfileFile = "corotum.lock";
 const v2TransitionsFile = "corotum.transitions.json";
 const artifactsDirectory = "artifacts";
 
@@ -779,16 +780,16 @@ export class V2GitStateProvider {
       const artifacts = input.artifacts ?? {};
       await this.stageArtifacts(staging, state, artifacts);
       await writeFile(join(staging, v2ManifestFile), serializeV2Manifest(state.manifest));
-      await writeFile(join(staging, lockfileFile), serializeV2Lockfile(state.lockfile));
+      await writeFile(join(staging, v2LockfileFile), serializeV2Lockfile(state.lockfile));
       await writeFile(join(staging, v2TransitionsFile), serializeDispositionLedger(input.ledger));
       await this.verifyStaged(staging, state);
 
       await rename(join(staging, v2ManifestFile), join(cache, v2ManifestFile));
-      await rename(join(staging, lockfileFile), join(cache, lockfileFile));
+      await rename(join(staging, v2LockfileFile), join(cache, v2LockfileFile));
       await rename(join(staging, v2TransitionsFile), join(cache, v2TransitionsFile));
       await rm(join(cache, artifactsDirectory), { force: true, recursive: true });
       if (await exists(join(staging, artifactsDirectory))) await rename(join(staging, artifactsDirectory), join(cache, artifactsDirectory));
-      await this.command(cache, ["add", "--", v2ManifestFile, lockfileFile, v2TransitionsFile]);
+      await this.command(cache, ["add", "--", v2ManifestFile, v2LockfileFile, v2TransitionsFile]);
       // Stage removals separately: source locks intentionally have no tree.
       const trackedArtifacts = await this.runGit({ args: ["ls-files", "--error-unmatch", artifactsDirectory], cwd: cache });
       if (trackedArtifacts.exitCode === 0) await this.command(cache, ["add", "-u", "--", artifactsDirectory]);
@@ -872,7 +873,7 @@ export class V2GitStateProvider {
 
   private async verifyStaged(staging: string, expected: V2DesiredState): Promise<void> {
     const manifest = parseV2Manifest(await readFile(join(staging, v2ManifestFile), "utf8"));
-    const lockfile = parseV2Lockfile(await readFile(join(staging, lockfileFile), "utf8"), manifest);
+    const lockfile = parseV2Lockfile(await readFile(join(staging, v2LockfileFile), "utf8"), manifest);
     validateV2DesiredState({ manifest, lockfile });
     await this.verifyArtifactTrees(staging, expected);
   }
@@ -926,7 +927,7 @@ export class V2GitStateProvider {
     await this.command(cache, ["reset", "--hard", upstream]);
     await this.restoreMergedArtifacts(cache, upstream, head, merged.state);
     await this.writeSnapshot(cache, merged.state, merged.ledger);
-    await this.command(cache, ["add", "-A", "--", v2ManifestFile, lockfileFile, v2TransitionsFile]);
+    await this.command(cache, ["add", "-A", "--", v2ManifestFile, v2LockfileFile, v2TransitionsFile]);
     if (await this.gitPathExists(cache, "HEAD", artifactsDirectory)) {
       await this.command(cache, ["add", "-u", "--", artifactsDirectory]);
     }
@@ -940,12 +941,12 @@ export class V2GitStateProvider {
 
   private async readAt(cache: string, revision: string): Promise<Omit<V2GitStateEnvelope, "revisionId">> {
     const manifest = parseV2Manifest(await this.show(cache, revision, v2ManifestFile));
-    const lockfile = parseV2Lockfile(await this.show(cache, revision, lockfileFile), manifest);
+    const lockfile = parseV2Lockfile(await this.show(cache, revision, v2LockfileFile), manifest);
     return { state: validateV2DesiredState({ manifest, lockfile }), ledger: parseDispositionLedger(await this.show(cache, revision, v2TransitionsFile)) };
   }
 
   private async writeSnapshot(cache: string, state: V2DesiredState, ledger: DispositionLedger): Promise<void> {
-    await Promise.all([writeFile(join(cache, v2ManifestFile), serializeV2Manifest(state.manifest)), writeFile(join(cache, lockfileFile), serializeV2Lockfile(state.lockfile)), writeFile(join(cache, v2TransitionsFile), serializeDispositionLedger(ledger))]);
+    await Promise.all([writeFile(join(cache, v2ManifestFile), serializeV2Manifest(state.manifest)), writeFile(join(cache, v2LockfileFile), serializeV2Lockfile(state.lockfile)), writeFile(join(cache, v2TransitionsFile), serializeDispositionLedger(ledger))]);
   }
 
   private async restoreMergedArtifacts(cache: string, remoteRevision: string, localRevision: string, state: V2DesiredState): Promise<void> {
@@ -968,7 +969,7 @@ export class V2GitStateProvider {
 
   private async restoreWorktree(cache: string): Promise<void> {
     await this.command(cache, ["reset", "--hard", "HEAD"]);
-    await this.command(cache, ["clean", "-fd", "--", v2ManifestFile, lockfileFile, v2TransitionsFile, artifactsDirectory]);
+    await this.command(cache, ["clean", "-fd", "--", v2ManifestFile, v2LockfileFile, v2TransitionsFile, artifactsDirectory]);
   }
 
   private async show(cache: string, revision: string, file: string): Promise<string> { return this.output(cache, ["show", `${revision}:${file}`]); }
@@ -977,7 +978,7 @@ export class V2GitStateProvider {
   private async read(cache: string): Promise<V2GitStateEnvelope> {
     const revision = await this.revision(cache);
     const manifest = parseV2Manifest(await readFile(join(cache, v2ManifestFile), "utf8"));
-    const lockfile = parseV2Lockfile(await readFile(join(cache, lockfileFile), "utf8"), manifest);
+    const lockfile = parseV2Lockfile(await readFile(join(cache, v2LockfileFile), "utf8"), manifest);
     const state = validateV2DesiredState({ manifest, lockfile });
     await this.verifyArtifactTrees(cache, state);
     return { revisionId: revision, state, ledger: parseDispositionLedger(await readFile(join(cache, v2TransitionsFile), "utf8")) };

@@ -45,22 +45,22 @@ export function resolvePlatformPaths(
       homeDir,
       "Library",
       "Application Support",
-      "ToolMirror",
+      "Corotum",
     );
     const dataDir = join(
       homeDir,
       "Library",
       "Application Support",
-      "ToolMirror",
+      "Corotum",
     );
     const stateDir = join(
       homeDir,
       "Library",
       "Application Support",
-      "ToolMirror",
+      "Corotum",
       "state",
     );
-    return paths(configDir, dataDir, stateDir, join(stateDir, "runtime"));
+    return paths(configDir, dataDir, stateDir, join(stateDir, "runtime"), homeDir);
   }
 
   if (platform === "win32") {
@@ -75,10 +75,11 @@ export function resolvePlatformPaths(
       join(homeDir, "AppData", "Local"),
     );
     return paths(
-      join(appData, "ToolMirror"),
-      join(localAppData, "ToolMirror"),
-      join(localAppData, "ToolMirror", "state"),
-      join(localAppData, "ToolMirror", "runtime"),
+      join(appData, "Corotum"),
+      join(localAppData, "Corotum"),
+      join(localAppData, "Corotum", "state"),
+      join(localAppData, "Corotum", "runtime"),
+      homeDir,
     );
   }
 
@@ -99,6 +100,46 @@ export function resolvePlatformPaths(
     dataDir,
     stateDir,
     join(valueOr(env, "XDG_RUNTIME_DIR", stateDir), "corotum"),
+    homeDir,
+  );
+}
+
+/** Previous ToolMirror roots kept as a recoverable migration source. */
+export function resolveLegacyPlatformPaths(
+  env: PlatformEnvironment,
+): CorotumPaths {
+  const { homeDir, platform } = env;
+  if (!homeDir) {
+    throw new Error(
+      "A home directory is required to resolve Corotum paths.",
+    );
+  }
+  if (platform === "darwin") {
+    const root = join(homeDir, "Library", "Application Support", "ToolMirror");
+    return paths(root, root, join(root, "state"), join(root, "state", "runtime"), homeDir, join(root, "skills"));
+  }
+  if (platform === "win32") {
+    const appData = valueOr(env, "APPDATA", join(homeDir, "AppData", "Roaming"));
+    const localAppData = valueOr(env, "LOCALAPPDATA", join(homeDir, "AppData", "Local"));
+    return paths(
+      join(appData, "ToolMirror"),
+      join(localAppData, "ToolMirror"),
+      join(localAppData, "ToolMirror", "state"),
+      join(localAppData, "ToolMirror", "runtime"),
+      homeDir,
+      join(localAppData, "ToolMirror", "skills"),
+    );
+  }
+  const configDir = join(valueOr(env, "XDG_CONFIG_HOME", join(homeDir, ".config")), "toolmirror");
+  const dataDir = join(valueOr(env, "XDG_DATA_HOME", join(homeDir, ".local", "share")), "toolmirror");
+  const stateDir = join(valueOr(env, "XDG_STATE_HOME", join(homeDir, ".local", "state")), "toolmirror");
+  return paths(
+    configDir,
+    dataDir,
+    stateDir,
+    join(valueOr(env, "XDG_RUNTIME_DIR", stateDir), "toolmirror"),
+    homeDir,
+    join(dataDir, "skills"),
   );
 }
 
@@ -107,6 +148,8 @@ function paths(
   dataDir: string,
   stateDir: string,
   runtimeDir: string,
+  homeDir: string,
+  skillsDir = join(homeDir, ".agents", "skills"),
 ): CorotumPaths {
   return {
     configDir,
@@ -115,7 +158,7 @@ function paths(
     dataDir,
     gitDir: join(dataDir, "git"),
     runtimeDir,
-    skillsDir: join(dataDir, "skills"),
+    skillsDir,
     stateDir,
   };
 }

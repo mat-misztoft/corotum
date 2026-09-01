@@ -66,8 +66,9 @@ describe("platform paths", () => {
     expect(
       resolvePlatformPaths({ homeDir: "/Users/alex", platform: "darwin" }),
     ).toMatchObject({
-      configDir: "/Users/alex/Library/Application Support/ToolMirror",
-      dataDir: "/Users/alex/Library/Application Support/ToolMirror",
+      configDir: "/Users/alex/Library/Application Support/Corotum",
+      dataDir: "/Users/alex/Library/Application Support/Corotum",
+      skillsDir: "/Users/alex/.agents/skills",
     });
     expect(
       resolvePlatformPaths({
@@ -76,9 +77,10 @@ describe("platform paths", () => {
         env: { APPDATA: "C:\\Roaming", LOCALAPPDATA: "C:\\Local" },
       }),
     ).toMatchObject({
-      configDir: "C:\\Roaming/ToolMirror",
-      dataDir: "C:\\Local/ToolMirror",
-      runtimeDir: "C:\\Local/ToolMirror/runtime",
+      configDir: "C:\\Roaming/Corotum",
+      dataDir: "C:\\Local/Corotum",
+      runtimeDir: "C:\\Local/Corotum/runtime",
+      skillsDir: "C:\\Users\\alex/.agents/skills",
     });
   });
 });
