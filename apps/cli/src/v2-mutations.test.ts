@@ -33,10 +33,41 @@ describe("v2 mutation commands", () => {
   test("artifact adoption keeps optional provenance and null-source update is explicit", async () => {
     const state = provider(empty);
     const service = new V2MutationService(state, resolver);
-    const adopted = await service.adoptArtifact({ name: "local", targets: "all", artifactDirectory: "/staged/local", artifact: { kind: "git-tree", contentHash: hash, integrityHash: hash, locator: "artifacts/sk_x/aaa", sizeBytes: 1 } });
+    const adopted = await service.adoptArtifact({ name: "local", targets: "all", artifactDirectory: "/staged/local", contentHash: hash, integrityHash: hash, sizeBytes: 1 });
     expect(adopted.kind).toBe("success");
     const result = await service.update("local");
     expect(result[0]).toMatchObject({ kind: "source-unavailable" });
+  });
+
+  test("updates an adopted artifact through retained provenance while check remains read-only", async () => {
+    const state = provider(empty);
+    const applied: unknown[] = [];
+    let resolvedRevision = revision;
+    const service = new V2MutationService(
+      state,
+      { resolve: async (source) => ({ ...source, revision: resolvedRevision, contentHash: hash }) },
+      { apply: async (input) => { applied.push(input); } },
+    );
+    const source = { repository: "https://example.test/a.git", path: "alpha", ref: "main" };
+    const adopted = await service.adoptArtifact({
+      name: "alpha", source, targets: "all", artifactDirectory: "/staged/alpha",
+      contentHash: hash, integrityHash: hash, sizeBytes: 1,
+    });
+    expect(adopted.kind).toBe("success");
+    const beforeCheck = state.pushes;
+    expect(await service.check("alpha")).toEqual([
+      { skillId: adopted.skillId, status: "UPDATE_AVAILABLE" },
+    ]);
+    expect(state.pushes).toBe(beforeCheck);
+
+    resolvedRevision = "b".repeat(40);
+    expect(await service.update("alpha")).toEqual([
+      { kind: "success", skillId: adopted.skillId, revision },
+    ]);
+    const saved = await state.pull();
+    expect(saved.state.manifest.skills[0]?.source).toEqual(source);
+    expect(saved.state.lockfile.skills[0]?.materialization).toEqual({ kind: "source", contentHash: hash });
+    expect(applied).toHaveLength(2);
   });
 
   test("keeps a persisted snapshot recoverable when local application fails", async () => {

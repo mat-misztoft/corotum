@@ -4,20 +4,22 @@ import { createInterface } from "node:readline/promises";
 
 import type { Command } from "commander";
 import type { AgentId } from "../../../packages/agent-targets/src/index";
-import { GitStateProvider } from "../../../packages/git-provider/src/index";
+import type { SourceLock } from "../../../packages/core/src/index";
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import {
   GitSkillMaterializer,
   normalizeGitSource,
 } from "../../../packages/skills-adapter/src/git-source";
-import { type AddCandidate, AddService } from "./add";
+import type { AddCandidate } from "./add";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
+import { createCliV2GitStateProvider } from "./artifact-consent";
 import { ConfigStore, effectiveStoragePaths } from "./config";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
-import { LocalReconcileExecutor } from "./reconcile-executor";
+import { V2LocalApplier } from "./v2-local-applier";
+import { V2MutationService } from "./v2-mutations";
 
 /** Registers Git-backed skill addition. Cloud add is intentionally deferred. */
 export function registerAddCommand(program: Command, io: CliIo): void {
@@ -54,46 +56,28 @@ export function registerAddCommand(program: Command, io: CliIo): void {
           const stateStore = new LocalOperationalStateStore(
             join(paths.stateDir, "state.json"),
           );
-          const service = new AddService(
-            new GitStateProvider(storage.gitStoragePath, config.gitRepository),
-            { resolve: (input) => materializer.resolve(input) },
-            new LocalReconcileExecutor(
-              stateStore,
-              new CanonicalSkillStore(storage.skillsStoragePath),
-              materializer,
-            ),
+          const service = new V2MutationService(
+            createCliV2GitStateProvider({ storagePath: storage.gitStoragePath, source: config.gitRepository, options: program.opts(), io }),
+            { resolve: async (metadata): Promise<SourceLock> => {
+              const resolved = await materializer.resolve({ id: "pending-add" as never, source: metadata.repository, skill: candidate.name, ref: metadata.ref, path: metadata.path });
+              return { ...resolved, ref: metadata.ref, contentHash: resolved.contentHash as `sha256:${string}` };
+            } },
+            new V2LocalApplier(stateStore, new CanonicalSkillStore(storage.skillsStoragePath), {
+              storagePath: storage.gitStoragePath, repository: config.gitRepository,
+              enabledAgentIds: Object.entries(config.agents).filter(([, value]) => value.enabled).map(([id]) => id) as AgentId[], homeDir,
+            }),
           );
-          const result = await service.add({
-            source,
-            candidate,
-            ref: options.ref,
-            execution: {
-              enabledAgentIds: Object.entries(config.agents)
-                .filter(([, value]) => value.enabled)
-                .map(([id]) => id) as AgentId[],
-              homeDir,
-              state: (await stateStore.load()) ?? {
-                schemaVersion: 1,
-                lastAppliedRevision: null,
-                skills: {},
-              },
-            },
-          });
+          const result = await service.add({ name: candidate.name, source: { repository: source, path: candidate.path, ref: options.ref } });
           if (result.kind === "refused") throw new Error(result.reason);
           if (result.kind === "duplicate") {
-            writeResult(io, program.opts<{ json?: boolean }>().json === true, {
-              outcome: "SUCCESS",
-              status: "DUPLICATE",
-              skillId: result.skillId,
-            });
+            writeResult(io, program.opts<{ json?: boolean }>().json === true, { outcome: "SUCCESS", status: "DUPLICATE", skillId: result.skillId });
             return;
           }
+          if (result.kind === "source-unavailable") throw new Error(result.reason);
           writeResult(io, program.opts<{ json?: boolean }>().json === true, {
-            outcome: "SUCCESS",
-            status: "ADDED",
-            skill: candidate.name,
-            skillId: result.skillId,
-            revision: result.revision,
+            outcome: result.kind === "persisted-not-applied" ? "PARTIAL_SUCCESS" : "SUCCESS",
+            status: result.kind === "persisted-not-applied" ? "PERSISTED_NOT_APPLIED" : "ADDED",
+            skill: candidate.name, skillId: result.skillId, revision: result.revision,
           });
         } finally {
           await release();

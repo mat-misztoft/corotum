@@ -64,11 +64,18 @@ export class V2MutationService {
   }
 
   /** Explicit adoption can retain update provenance while publishing local exact content as an artifact. */
-  async adoptArtifact(input: Readonly<{ name: string; artifact: ArtifactMetadata; artifactDirectory: string; source?: SourceMetadata; targets: V2DesiredState["manifest"]["skills"][number]["targets"] }>): Promise<V2MutationResult> {
+  async adoptArtifact(input: Readonly<{ name: string; artifactDirectory: string; contentHash: ArtifactMetadata["contentHash"]; integrityHash: ArtifactMetadata["integrityHash"]; sizeBytes: number; source?: SourceMetadata; targets: V2DesiredState["manifest"]["skills"][number]["targets"] }>): Promise<V2MutationResult> {
     const current = await this.provider.pull();
     if (current.state.manifest.skills.some((skill) => skill.name === input.name)) return { kind: "refused", reason: "A managed skill already uses this name." };
     const id = skillId(`sk_${crypto.randomUUID().replaceAll("-", "")}`);
-    const lock: V2LockedSkill = { id, name: input.name, materialization: { kind: "artifact", artifact: input.artifact } };
+    const artifact: ArtifactMetadata = {
+      kind: "git-tree",
+      contentHash: input.contentHash,
+      integrityHash: input.integrityHash,
+      locator: `artifacts/${id}/${input.integrityHash.slice("sha256:".length)}`,
+      sizeBytes: input.sizeBytes,
+    };
+    const lock: V2LockedSkill = { id, name: input.name, materialization: { kind: "artifact", artifact } };
     return this.persistAndApply(current, {
       manifest: { version: 2, skills: [...current.state.manifest.skills, { id, name: input.name, targets: input.targets, source: input.source, resolutionStatus: "RESOLVED" }] },
       lockfile: { version: 2, skills: [...current.state.lockfile.skills, lock] },

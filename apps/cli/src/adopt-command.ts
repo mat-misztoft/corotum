@@ -8,17 +8,18 @@ import {
   type AgentId,
   builtInAgentAdapters,
 } from "../../../packages/agent-targets/src/index";
-import { GitStateProvider } from "../../../packages/git-provider/src/index";
+import type { SourceLock } from "../../../packages/core/src/index";
+import { gitTreeHash } from "../../../packages/git-provider/src/index";
 import {
   CanonicalSkillStore,
   hashSkillDirectory,
 } from "../../../packages/skills-adapter/src/canonical-store";
+import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 import {
   GitSkillMaterializer,
   normalizeGitSource,
 } from "../../../packages/skills-adapter/src/git-source";
 import {
-  AdoptService,
   type LocalAdoptCandidate,
   type RepositoryAdoptCandidate,
 } from "./adopt";
@@ -28,7 +29,9 @@ import { ConfigStore, effectiveStoragePaths } from "./config";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
-import { LocalReconcileExecutor } from "./reconcile-executor";
+import { createCliV2GitStateProvider } from "./artifact-consent";
+import { V2LocalApplier } from "./v2-local-applier";
+import { V2MutationService } from "./v2-mutations";
 
 /** Registers safe adoption of one existing unmanaged copy from a Git source. */
 export function registerAdoptCommand(program: Command, io: CliIo): void {
@@ -60,17 +63,6 @@ export function registerAdoptCommand(program: Command, io: CliIo): void {
           if (config.mode !== "git" || !config.gitRepository)
             throw new Error("Run corotum init before adopting Git skills.");
           const storage = effectiveStoragePaths(config, paths);
-          const provider = new GitStateProvider(
-            storage.gitStoragePath,
-            config.gitRepository,
-          );
-          const current = await provider.pull();
-          if (current.kind !== "success")
-            throw new Error(
-              current.kind === "failure"
-                ? current.error.message
-                : "Desired state is incomplete.",
-            );
           const nonInteractive =
             program.opts<{ nonInteractive?: boolean }>().nonInteractive ===
               true || !io.stdinIsTTY;
@@ -85,53 +77,73 @@ export function registerAdoptCommand(program: Command, io: CliIo): void {
             options.skill ?? name,
             nonInteractive,
           );
-          const resolved = await materializer.resolve({
-            id: "pending-adopt" as never,
-            source,
-            skill: repository.name,
-            ref: options.ref,
-            path: repository.path,
-          });
-          const replaceLocalMismatch =
-            resolved.contentHash === local.contentHash ||
-            (nonInteractive
-              ? false
-              : await confirm(
-                  `Repository content for ${name} differs. Replace this local copy with the locked repository version? [y/N] `,
-                ));
+          const scanned = await scanNormalizedContent(local.path);
           const stateStore = new LocalOperationalStateStore(
             join(paths.stateDir, "state.json"),
           );
-          const result = await new AdoptService(
-            provider,
-            new LocalReconcileExecutor(
-              stateStore,
-              new CanonicalSkillStore(storage.skillsStoragePath),
-              materializer,
-            ),
-          ).adopt({
-            source,
-            local,
-            repository,
-            ref: options.ref,
-            resolved,
-            replaceLocalMismatch,
-            execution: {
-              enabledAgentIds: Object.entries(config.agents)
-                .filter(([, value]) => value.enabled)
-                .map(([id]) => id) as AgentId[],
-              homeDir,
-              state: (await stateStore.load()) ?? {
-                schemaVersion: 1,
-                lastAppliedRevision: null,
-                skills: {},
+          const result = await new V2MutationService(
+            createCliV2GitStateProvider({
+              storagePath: storage.gitStoragePath,
+              source: config.gitRepository,
+              options: program.opts(),
+              io,
+            }),
+            {
+              resolve: async (metadata): Promise<SourceLock> => {
+                const resolved = await materializer.resolve({
+                  id: "pending-adopt" as never,
+                  source: metadata.repository,
+                  skill: metadata.path,
+                  ref: metadata.ref,
+                  path: metadata.path,
+                });
+                return {
+                  ...resolved,
+                  ref: metadata.ref,
+                  contentHash: resolved.contentHash as `sha256:${string}`,
+                };
               },
             },
+            new V2LocalApplier(
+              stateStore,
+              new CanonicalSkillStore(storage.skillsStoragePath),
+              {
+                storagePath: storage.gitStoragePath,
+                repository: config.gitRepository,
+                enabledAgentIds: Object.entries(config.agents)
+                  .filter(([, value]) => value.enabled)
+                  .map(([id]) => id) as AgentId[],
+                homeDir,
+              },
+            ),
+          ).adoptArtifact({
+            name: repository.name,
+            artifactDirectory: local.path,
+            contentHash: scanned.contentHash,
+            integrityHash: await gitTreeHash(local.path),
+            sizeBytes: scanned.files.reduce((size, file) => size + file.content.length, 0),
+            source: { repository: source, path: repository.path, ref: options.ref },
+            targets: [local.agentId],
           });
-          if (result.kind === "refused") throw new Error(result.reason);
+          if (
+            result.kind === "refused" ||
+            result.kind === "source-unavailable" ||
+            result.kind === "duplicate"
+          )
+            throw new Error(
+              result.kind === "duplicate"
+                ? "A managed skill already uses this name."
+                : result.reason,
+            );
           const output = {
-            outcome: "SUCCESS",
-            status: "ADOPTED",
+            outcome:
+              result.kind === "persisted-not-applied"
+                ? "PARTIAL_SUCCESS"
+                : "SUCCESS",
+            status:
+              result.kind === "persisted-not-applied"
+                ? "PERSISTED_NOT_APPLIED"
+                : "ADOPTED",
             skill: repository.name,
             skillId: result.skillId,
             revision: result.revision,
@@ -209,18 +221,6 @@ async function selectCandidate<T>(
     if (!Number.isInteger(index) || !candidates[index])
       throw new Error("A valid skill selection is required.");
     return candidates[index];
-  } finally {
-    prompt.close();
-  }
-}
-
-async function confirm(question: string): Promise<boolean> {
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    return /^(y|yes)$/i.test((await prompt.question(question)).trim());
   } finally {
     prompt.close();
   }

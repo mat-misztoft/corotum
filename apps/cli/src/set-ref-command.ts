@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import type { Command } from "commander";
 import type { AgentId } from "../../../packages/agent-targets/src/index";
-import { GitStateProvider } from "../../../packages/git-provider/src/index";
+import type { SourceLock } from "../../../packages/core/src/index";
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
 import type { CliIo } from "./cli";
@@ -12,8 +12,9 @@ import { ConfigStore, effectiveStoragePaths } from "./config";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
-import { LocalReconcileExecutor } from "./reconcile-executor";
-import { SetRefService } from "./set-ref";
+import { createCliV2GitStateProvider } from "./artifact-consent";
+import { V2LocalApplier } from "./v2-local-applier";
+import { V2MutationService } from "./v2-mutations";
 
 /** Registers an explicit Git ref change that resolves before desired-state mutation. */
 export function registerSetRefCommand(program: Command, io: CliIo): void {
@@ -41,33 +42,61 @@ export function registerSetRefCommand(program: Command, io: CliIo): void {
           join(paths.stateDir, "state.json"),
         );
         const materializer = new GitSkillMaterializer();
-        const result = await new SetRefService(
-          new GitStateProvider(storage.gitStoragePath, config.gitRepository),
-          { resolve: (input) => materializer.resolve(input) },
-          new LocalReconcileExecutor(
-            stateStore,
-            new CanonicalSkillStore(storage.skillsStoragePath),
-            materializer,
-          ),
-        ).setRef({
-          name: skill,
-          ref,
-          execution: {
-            enabledAgentIds: Object.entries(config.agents)
-              .filter(([, value]) => value.enabled)
-              .map(([id]) => id) as AgentId[],
-            homeDir,
-            state: (await stateStore.load()) ?? {
-              schemaVersion: 1,
-              lastAppliedRevision: null,
-              skills: {},
+        const result = await new V2MutationService(
+          createCliV2GitStateProvider({
+            storagePath: storage.gitStoragePath,
+            source: config.gitRepository,
+            options: program.opts(),
+            io,
+          }),
+          {
+            resolve: async (metadata): Promise<SourceLock> => {
+              const resolved = await materializer.resolve({
+                id: "pending-set-ref" as never,
+                source: metadata.repository,
+                skill: metadata.path,
+                ref: metadata.ref,
+                path: metadata.path,
+              });
+              return {
+                ...resolved,
+                ref: metadata.ref,
+                contentHash: resolved.contentHash as `sha256:${string}`,
+              };
             },
           },
-        });
-        if (result.kind === "refused") throw new Error(result.reason);
+          new V2LocalApplier(
+            stateStore,
+            new CanonicalSkillStore(storage.skillsStoragePath),
+            {
+              storagePath: storage.gitStoragePath,
+              repository: config.gitRepository,
+              enabledAgentIds: Object.entries(config.agents)
+                .filter(([, value]) => value.enabled)
+                .map(([id]) => id) as AgentId[],
+              homeDir,
+            },
+          ),
+        ).setRef(skill, ref);
+        if (
+          result.kind === "refused" ||
+          result.kind === "source-unavailable" ||
+          result.kind === "duplicate"
+        )
+          throw new Error(
+            result.kind === "duplicate"
+              ? "A managed skill already uses this name."
+              : result.reason,
+          );
         const output = {
-          outcome: "SUCCESS",
-          status: "SET_REF",
+          outcome:
+            result.kind === "persisted-not-applied"
+              ? "PARTIAL_SUCCESS"
+              : "SUCCESS",
+          status:
+            result.kind === "persisted-not-applied"
+              ? "PERSISTED_NOT_APPLIED"
+              : "SET_REF",
           skillId: result.skillId,
           ref,
           revision: result.revision,
