@@ -24,8 +24,11 @@ import {
   type RevisionId,
   type SkillId,
   skillId,
+  type V2DesiredState,
+  type V2LockedSkill,
 } from "../../../packages/core/src/index";
 import { hashSkillDirectory } from "../../../packages/skills-adapter/src/canonical-store";
+import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 
 const targetModeSchema = z.enum(["symlink", "copy"]);
 const targetSchema = z
@@ -218,6 +221,91 @@ export async function recoverLocalOperationalState(
   };
 }
 
+export type RecoverV2LocalOperationalStateInput = Readonly<{
+  desired: V2DesiredState;
+  lastAppliedRevision: RevisionId | null;
+  skillsStoragePath: string;
+  homeDir: string;
+  enabledAgentIds: readonly AgentId[];
+  previousState?: LocalOperationalState | null;
+}>;
+
+/** Recovers only named canonical copies and targets whose v2 lock hash matches. */
+export async function recoverV2LocalOperationalState(
+  input: RecoverV2LocalOperationalStateInput,
+  adapters: readonly AgentAdapter[] = builtInAgentAdapters,
+): Promise<LocalOperationalState> {
+  const skills: Record<SkillId, LocalSkillState> = {} as Record<
+    SkillId,
+    LocalSkillState
+  >;
+
+  for (const locked of input.desired.lockfile.skills) {
+    const expected = expectedV2Hash(locked);
+    const canonicalPath = join(input.skillsStoragePath, locked.name);
+    if (!(await matchesNormalizedHash(canonicalPath, expected))) continue;
+
+    const targets: Record<string, LocalTargetState> = {};
+    for (const agentId of applicableAgentIds(
+      input.desired.manifest.skills.find((skill) => skill.id === locked.id)
+        ?.targets ?? [],
+      input.enabledAgentIds,
+    )) {
+      const adapter = adapters.find((candidate) => candidate.id === agentId);
+      if (!adapter) continue;
+      for (const parent of adapter.globalSkillPaths(input.homeDir)) {
+        const path = join(parent, locked.name);
+        if (await isSymlinkTo(path, canonicalPath)) {
+          targets[targetKey(agentId, path)] = {
+            agentId,
+            mode: "symlink",
+            path,
+            expectedHash: expected,
+          };
+          continue;
+        }
+        const previous =
+          input.previousState?.skills[locked.id]?.targets[
+            targetKey(agentId, path)
+          ];
+        if (
+          previous?.mode === "copy" &&
+          previous.path === path &&
+          previous.expectedHash === expected &&
+          (await matchesNormalizedHash(path, expected))
+        ) {
+          targets[targetKey(agentId, path)] = {
+            agentId,
+            mode: "copy",
+            path,
+            expectedHash: expected,
+          };
+        }
+      }
+    }
+
+    skills[locked.id] = {
+      name: locked.name,
+      canonicalPath,
+      contentHash: expected,
+      ownership: "recovered",
+      targets,
+    };
+  }
+
+  return {
+    schemaVersion: 2,
+    lastAppliedRevision: input.lastAppliedRevision,
+    skills,
+  };
+}
+
+export function expectedV2Hash(lock: V2LockedSkill): `sha256:${string}` {
+  return lock.materialization.kind === "source"
+    ? lock.materialization.contentHash
+    : lock.materialization.artifact.contentHash;
+}
+
 /** Converts persisted target records to the target manager's ownership model. */
 export function managedTargetsFromState(
   state: LocalOperationalState,
@@ -279,6 +367,17 @@ async function matchesHash(
 ): Promise<boolean> {
   try {
     return (await hashSkillDirectory(path)) === expectedHash;
+  } catch {
+    return false;
+  }
+}
+
+async function matchesNormalizedHash(
+  path: string,
+  expectedHash: string,
+): Promise<boolean> {
+  try {
+    return (await scanNormalizedContent(path)).contentHash === expectedHash;
   } catch {
     return false;
   }

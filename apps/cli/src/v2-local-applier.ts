@@ -11,7 +11,10 @@ import {
   CanonicalSkillStore,
   hashSkillDirectory,
 } from "../../../packages/skills-adapter/src/canonical-store";
-import { ExactContentMaterializer } from "../../../packages/skills-adapter/src/exact-materializer";
+import {
+  type ArtifactReader,
+  ExactContentMaterializer,
+} from "../../../packages/skills-adapter/src/exact-materializer";
 import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 import type { V2LocalApplier as V2LocalApplierContract } from "./v2-mutations";
 import {
@@ -40,6 +43,7 @@ export class V2LocalApplier implements V2LocalApplierContract {
       repository: string;
       enabledAgentIds: readonly AgentId[];
       homeDir: string;
+      artifactReader?: ArtifactReader;
     }>,
     private readonly targets = new AgentTargetManager(),
   ) {}
@@ -48,6 +52,7 @@ export class V2LocalApplier implements V2LocalApplierContract {
     state: V2DesiredState;
     revisionId: string;
     skillIds: readonly SkillId[];
+    advanceRevision?: boolean;
   }>): Promise<void> {
     const saved = (await this.stateStore.load()) ?? {
       schemaVersion: 2 as const,
@@ -60,15 +65,68 @@ export class V2LocalApplier implements V2LocalApplierContract {
       const lock = input.state.lockfile.skills.find((skill) => skill.id === id);
       const manifest = input.state.manifest.skills.find((skill) => skill.id === id);
       if (!lock || !manifest) throw new Error("Persisted skill is incomplete.");
-      const staged = await this.materializer().stage(lock);
-      try {
-        const expected = lock.materialization.kind === "source"
-          ? lock.materialization.contentHash
-          : lock.materialization.artifact.contentHash;
-        const prior = skills[id];
-        if (prior && (await scanNormalizedContent(prior.canonicalPath)).contentHash !== prior.contentHash) {
+      const expected = lock.materialization.kind === "source"
+        ? lock.materialization.contentHash
+        : lock.materialization.artifact.contentHash;
+      const canonicalPath = this.canonicalStore.pathFor(lock.name);
+      let prior = skills[id];
+      if (!prior && (await pathExists(canonicalPath))) {
+        let existingHash: string;
+        try {
+          existingHash = (await scanNormalizedContent(canonicalPath)).contentHash;
+        } catch {
+          throw new V2LocalApplyError(
+            "Unmanaged or unreadable named canonical skill blocked install.",
+            "LOCAL_CONFLICT",
+          );
+        }
+        if (existingHash !== expected) {
+          throw new V2LocalApplyError(
+            "Unmanaged named canonical skill differs from the locked hash.",
+            "LOCAL_CONFLICT",
+          );
+        }
+        prior = {
+          name: lock.name,
+          canonicalPath,
+          contentHash: expected,
+          ownership: "verified",
+          targets: {},
+        };
+      }
+      if (prior && (await pathExists(prior.canonicalPath))) {
+        const priorHash = (await scanNormalizedContent(prior.canonicalPath)).contentHash;
+        if (priorHash !== prior.contentHash && priorHash !== expected) {
           throw new Error("Canonical content differs from the last verified copy.");
         }
+        if (priorHash === expected) {
+          const exposed = await this.targets.expose({
+            skillId: id,
+            skillName: lock.name,
+            canonicalPath,
+            targets: manifest.targets,
+            enabledAgentIds: this.input.enabledAgentIds,
+            homeDir: this.input.homeDir,
+            ownership,
+            expectedContentHash: expected,
+          });
+          this.assertTargetSuccess(exposed.outcomes);
+          ownership = exposed.ownership;
+          skills[id] = {
+            name: lock.name,
+            canonicalPath,
+            contentHash: expected,
+            ownership: "verified",
+            targets: Object.fromEntries(exposed.ownership.filter((target) => target.skillId === id).map((target) => [
+              `${target.agentId}\0${target.path}`,
+              { agentId: target.agentId, mode: target.mode, path: target.path, expectedHash: target.expectedHash },
+            ])),
+          };
+          continue;
+        }
+      }
+      const staged = await this.materializer().stage(lock);
+      try {
         await this.canonicalStore.replaceFromDirectory(
           id,
           lock.name,
@@ -76,7 +134,6 @@ export class V2LocalApplier implements V2LocalApplierContract {
           await hashSkillDirectory(staged.directory),
           prior ? { skillId: id, contentHash: prior.contentHash, allowDrift: true } : undefined,
         );
-        const canonicalPath = this.canonicalStore.pathFor(lock.name);
         if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
           throw new Error("Canonical skill content did not match the persisted lock.");
         }
@@ -115,7 +172,13 @@ export class V2LocalApplier implements V2LocalApplierContract {
         await staged.cleanup();
       }
     }
-    await this.stateStore.save({ schemaVersion: 2, lastAppliedRevision: input.revisionId as never, skills });
+    await this.stateStore.save({
+      schemaVersion: 2,
+      lastAppliedRevision: (input.advanceRevision === false
+        ? saved.lastAppliedRevision
+        : input.revisionId) as never,
+      skills,
+    });
   }
 
   /** Deletes only hash-verified canonical and target ownership. */
@@ -282,8 +345,15 @@ export class V2LocalApplier implements V2LocalApplierContract {
   }
 
   private materializer(): ExactContentMaterializer {
-    return new ExactContentMaterializer(undefined, async (locator) =>
-      new Uint8Array(await readFile(join(this.input.storagePath, sourceKey(this.input.repository), locator))),
+    return new ExactContentMaterializer(
+      undefined,
+      this.input.artifactReader ??
+        (async (locator) =>
+          new Uint8Array(
+            await readFile(
+              join(this.input.storagePath, sourceKey(this.input.repository), locator),
+            ),
+          )),
     );
   }
 }

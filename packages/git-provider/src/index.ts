@@ -725,6 +725,20 @@ export class V2GitStateProvider {
     return this.read(cache);
   }
 
+  /** Reads the committed snapshot without retrying PENDING_PUSH or fetching. */
+  async pullReadOnly(): Promise<V2GitStateEnvelope> {
+    return this.read(await this.cache());
+  }
+
+  /** True when a previous local commit still needs a successful push. */
+  async peekPendingPush(): Promise<boolean> {
+    try {
+      return (await this.readV2Pending()) !== null;
+    } catch {
+      return true;
+    }
+  }
+
   /** Empty remotes have HEAD but no v2 snapshot; init uses that as the base. */
   async pullAllowEmpty(): Promise<V2GitStateEnvelope> {
     const cache = await this.cache();
