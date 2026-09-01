@@ -107,6 +107,26 @@ export const runSystemGit: GitCommandRunner = async ({ args, cwd }) => {
   return { exitCode, stderr, stdout };
 };
 
+/** Reads the remote default branch name so init can lock an immutable SHA instead of HEAD. */
+export async function resolveGitDefaultRef(
+  sourceInput: string,
+  runGit: GitCommandRunner = runSystemGit,
+): Promise<string> {
+  const source = normalizeGitSource(sourceInput);
+  const result = await runGit({ args: ["ls-remote", "--symref", source, "HEAD"] });
+  if (result.exitCode !== 0) throw gitFailure(result.stderr);
+  const match = new TextDecoder()
+    .decode(result.stdout)
+    .match(/^ref:\s+refs\/heads\/(\S+)\s+HEAD/m);
+  if (!match) {
+    throw new GitSourceError(
+      "SOURCE_UNAVAILABLE",
+      "Could not determine the source default branch.",
+    );
+  }
+  return match[1];
+}
+
 /** Resolves and materializes exact Git content using only system Git and local temporary state. */
 export class GitSkillMaterializer {
   constructor(private readonly runGit: GitCommandRunner = runSystemGit) {}
@@ -139,23 +159,15 @@ export class GitSkillMaterializer {
   }
 
   async resolve(input: ResolveGitSkillInput): Promise<ResolvedGitSkill> {
-    const source = normalizeGitSource(input.source);
-    const path = normalizeSkillPath(input.path ?? input.skill);
-    const checkout = await this.clone(source);
+    return this.resolveWithHash(input, hashSkillDirectory);
+  }
 
-    try {
-      const revision = await this.commit(checkout, input.ref);
-      await this.assertDirectory(checkout, revision, path);
-      const archive = await this.archive(checkout, revision, path);
-      return {
-        repository: source,
-        revision,
-        path,
-        contentHash: await this.hashArchive(archive, path),
-      };
-    } finally {
-      await rm(checkout, { force: true, recursive: true });
-    }
+  /** Resolves follow-ref content using the sanitized normalized hash. */
+  async resolveNormalized(input: ResolveGitSkillInput): Promise<ResolvedGitSkill> {
+    return this.resolveWithHash(
+      input,
+      async (directory) => (await scanNormalizedContent(directory)).contentHash,
+    );
   }
 
   /** Writes only verified locked content, replacing the destination atomically. */
@@ -168,6 +180,29 @@ export class GitSkillMaterializer {
     return this.materializeSource(lock, destination, async (directory) =>
       (await scanNormalizedContent(directory)).contentHash,
     );
+  }
+
+  private async resolveWithHash(
+    input: ResolveGitSkillInput,
+    contentHash: (directory: string) => Promise<string>,
+  ): Promise<ResolvedGitSkill> {
+    const source = normalizeGitSource(input.source);
+    const path = normalizeSkillPath(input.path ?? input.skill);
+    const checkout = await this.clone(source);
+
+    try {
+      const revision = await this.commit(checkout, input.ref);
+      await this.assertDirectory(checkout, revision, path);
+      const archive = await this.archive(checkout, revision, path);
+      return {
+        repository: source,
+        revision,
+        path,
+        contentHash: await this.hashArchive(archive, path, contentHash),
+      };
+    } finally {
+      await rm(checkout, { force: true, recursive: true });
+    }
   }
 
   private async materializeSource(
@@ -272,6 +307,7 @@ export class GitSkillMaterializer {
   private async hashArchive(
     archive: Uint8Array,
     path: string,
+    contentHash: (directory: string) => Promise<string> = hashSkillDirectory,
   ): Promise<string> {
     const temporary = await mkdtemp(join(tmpdir(), "corotum-git-hash-"));
     try {
@@ -279,7 +315,7 @@ export class GitSkillMaterializer {
       await writeFile(file, archive);
       await this.extract(file, temporary, path);
       await rm(file, { force: true });
-      return await hashSkillDirectory(temporary);
+      return await contentHash(temporary);
     } finally {
       await rm(temporary, { force: true, recursive: true });
     }
