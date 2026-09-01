@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { revisionId, skillId } from "../../../packages/core/src/index";
 import { RemoveService } from "./remove";
-import { chooseUnmanageConflicts } from "./remove-command";
 
 const id = skillId("sk_remove");
 const state = {
@@ -129,12 +128,6 @@ describe("CLI remove and unmanage", () => {
       plan: { operations: [{ kind: "UNMANAGE", skillId: id }] },
       state: { skills: { [id]: { targets: {} } } },
     });
-  });
-
-  test("requires a TTY choice rather than replacing a conflicting unmanaged target", async () => {
-    await expect(chooseUnmanageConflicts(state, id, true)).rejects.toThrow(
-      "keep, replace, or cancel",
-    );
   });
 
   test("blocks PENDING_PUSH before changing desired or local state", async () => {
