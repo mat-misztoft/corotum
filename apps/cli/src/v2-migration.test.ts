@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { skillId, type V2DesiredState } from "../../../packages/core/src/index";
 import { createArtifactArchive } from "../../../packages/skills-adapter/src/artifact-archive";
-import { cloudState, migrateV2GitToCloud } from "./v2-migration";
+import { cloudState, migrateV2CloudToGit, migrateV2GitToCloud } from "./v2-migration";
 
 const hash = `sha256:${"a".repeat(64)}` as const;
 
@@ -45,6 +45,38 @@ test("Git-to-Cloud migration archives only artifact locks and retains the full l
     const migrated = pushed!.state.lockfile.skills;
     expect(migrated.find((lock) => lock.id === sourceId)).toEqual(state.lockfile.skills[1]);
     expect(migrated.find((lock) => lock.id === artifactId)?.materialization).toEqual({ kind: "artifact", artifact: { kind: "r2-tar-zst", contentHash: archive.contentHash, integrityHash: archive.integrityHash, sizeBytes: archive.sizeBytes, locator: `workspaces/ws_1/artifacts/${artifactId}/${archive.integrityHash}.tar.zst` } });
+  } finally { await rm(root, { force: true, recursive: true }); }
+});
+
+test("Cloud-to-Git verifies an archive before one Git snapshot commit", async () => {
+  const root = await mkdtemp(join(tmpdir(), "corotum-v2-cloud-migration-"));
+  try {
+    const source = join(root, "source");
+    await mkdir(source);
+    await writeFile(join(source, "SKILL.md"), "# adopted\n");
+    const archive = await createArtifactArchive(source);
+    const id = skillId("sk_artifact");
+    const state: V2DesiredState = {
+      manifest: { version: 2, skills: [{ id, name: "adopted", targets: "all", resolutionStatus: "RESOLVED" }] },
+      lockfile: { version: 2, skills: [{ id, name: "adopted", materialization: { kind: "artifact", artifact: { kind: "r2-tar-zst", locator: `workspaces/ws_1/artifacts/${id}/${archive.integrityHash}.tar.zst`, ...archive } } }] },
+    };
+    let pushed = 0;
+    const revision = await migrateV2CloudToGit({
+      source: { state, ledger: { version: 2, activeDispositions: {} } },
+      artifacts: { downloadArtifact: async () => archive.bytes },
+      destination: {
+        pull: async () => ({ revisionId: "git-before", state, ledger: { version: 2, activeDispositions: {} } }),
+        push: async (input) => {
+          pushed++;
+          expect(input.baseRevision).toBe("git-before");
+          expect(await readFile(join(input.artifacts[id], "SKILL.md"), "utf8")).toBe("# adopted\n");
+          expect(input.state.lockfile.skills[0]?.materialization).toMatchObject({ kind: "artifact", artifact: { kind: "git-tree", contentHash: archive.contentHash } });
+          return { revisionId: "git-after" };
+        },
+      },
+    });
+    expect(revision).toBe("git-after");
+    expect(pushed).toBe(1);
   } finally { await rm(root, { force: true, recursive: true }); }
 });
 
