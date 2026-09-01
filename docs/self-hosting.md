@@ -8,7 +8,7 @@ There is no daemon and no remote forced sync. Devices pair in a browser and appl
 
 The `apps/web` Cloudflare Worker (vinext / Next.js on workerd) plus one D1 database. The same process serves the landing page, dashboard, WebMCP, and `/api/v1/` Cloud API.
 
-Leave `TOOLMIRROR_HOSTED` unset or set it to `false`. Only `true` or `1` turns on hosted corotum.com billing. Self-hosted Cloud paths do not check Creem entitlement.
+Leave `COROTUM_HOSTED` unset or set it to `false`. Only `true` or `1` turns on hosted corotum.com billing. Self-hosted Cloud paths do not check Creem entitlement.
 
 ## Prerequisites
 
@@ -54,7 +54,7 @@ bun run db:migrate
 | `DB` | D1 `corotum` | Auth, workspaces, revisions, devices, reports, artifact metadata |
 | `ARTIFACTS` | R2 `corotum-artifacts` | Artifact-backed skill archives only |
 | `ASSETS` | `dist/client` | Built web assets |
-| `TOOLMIRROR_TELEMETRY` | Analytics Engine dataset `toolmirror_telemetry` | Optional anonymous CLI telemetry ingest |
+| `COROTUM_TELEMETRY` | Analytics Engine dataset `corotum_telemetry` | Optional anonymous CLI telemetry ingest |
 
 Create the R2 bucket named `corotum-artifacts` (or change `bucket_name` to a bucket you own) before serving artifact-backed skills. D1 stores no archive bytes. Retention keeps the current artifact plus one previous artifact per skill; GC deletes an object only when it is absent from both references. See [skills.md](./skills.md).
 
@@ -62,7 +62,7 @@ You do not need a Creem webhook route configuration for self-hosting. Hosted bil
 
 ## Auth and OAuth
 
-Production (anything other than `TOOLMIRROR_ENVIRONMENT=development`) requires:
+Production (anything other than `COROTUM_ENVIRONMENT=development`) requires:
 
 - `BETTER_AUTH_SECRET` at least 32 characters
 - `BETTER_AUTH_URL` equal to the public origin, for example `https://cloud.example.com`
@@ -92,8 +92,8 @@ Required for a production self-host:
 | `BETTER_AUTH_URL` | `vars` in `wrangler.jsonc` | Public origin, no trailing path |
 | `GITHUB_CLIENT_ID` | `vars` | |
 | `GOOGLE_CLIENT_ID` | `vars` | |
-| `TOOLMIRROR_ENVIRONMENT` | `vars` | `production` |
-| `TOOLMIRROR_HOSTED` | `vars` | `false` or omit |
+| `COROTUM_ENVIRONMENT` | `vars` | `production` |
+| `COROTUM_HOSTED` | `vars` | `false` or omit |
 | `AUTH_EMAIL_FROM` | `.dev.vars` locally; Worker environment in production | Sender address from your own sending domain |
 
 Example `vars` (do not put secrets here):
@@ -103,8 +103,8 @@ Example `vars` (do not put secrets here):
   "BETTER_AUTH_URL": "https://cloud.example.com",
   "GITHUB_CLIENT_ID": "your-github-client-id",
   "GOOGLE_CLIENT_ID": "your-google-client-id",
-  "TOOLMIRROR_ENVIRONMENT": "production",
-  "TOOLMIRROR_HOSTED": "false"
+  "COROTUM_ENVIRONMENT": "production",
+  "COROTUM_HOSTED": "false"
 }
 ```
 
@@ -130,8 +130,8 @@ Optional CLI-side variables, used on devices rather than the Worker:
 
 | Name | Purpose |
 | --- | --- |
-| `TOOLMIRROR_CLOUD_ORIGIN` | Cloud origin for `login`, `init cloud`, and `migrate` |
-| `TOOLMIRROR_RELEASE_BASE` | CLI release origin for installers and `cli-update` |
+| `COROTUM_CLOUD_ORIGIN` | Cloud origin for `login`, `init cloud`, and `migrate` |
+| `COROTUM_RELEASE_BASE` | CLI release origin for installers and `cli-update` |
 
 ## Deploy
 

@@ -66,7 +66,7 @@ export function cloudAuthContext(
   service: CloudAuthService;
 } {
   const origin = cloudOriginFrom(
-    process.env.TOOLMIRROR_CLOUD_ORIGIN?.trim() || originOption,
+    process.env.COROTUM_CLOUD_ORIGIN?.trim() || originOption,
   );
   const paths = resolvePlatformPaths({
     homeDir: homedir(),

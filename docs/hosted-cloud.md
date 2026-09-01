@@ -40,7 +40,7 @@ These variables are for the corotum.com deployment only:
 
 | Name | Purpose |
 | --- | --- |
-| `TOOLMIRROR_HOSTED` | `true` or `1` |
+| `COROTUM_HOSTED` | `true` or `1` |
 | `CREEM_API_KEY` | Creem API key |
 | `CREEM_WEBHOOK_SECRET` | Webhook HMAC secret |
 | `CREEM_PRODUCT_MONTHLY` | Monthly product id |

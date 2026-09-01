@@ -12,10 +12,10 @@ function Write-InstallerError {
 }
 
 function Get-ReleaseTarget {
-  if ($env:TOOLMIRROR_OS -and $env:TOOLMIRROR_OS -ne "windows") {
+  if ($env:COROTUM_OS -and $env:COROTUM_OS -ne "windows") {
     throw "Use the official Unix installer: curl -fsSL https://corotum.com/install.sh | sh"
   }
-  $arch = $env:TOOLMIRROR_ARCH
+  $arch = $env:COROTUM_ARCH
   if (-not $arch) {
     if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64") {
       throw "Windows arm64 is not supported in Corotum v0.1."
@@ -56,13 +56,13 @@ Write-Output "Manual binary download is not an officially supported installation
 Write-Output "v0.1 binaries are unsigned."
 
 $target = Get-ReleaseTarget
-$releaseBase = $env:TOOLMIRROR_RELEASE_BASE
+$releaseBase = $env:COROTUM_RELEASE_BASE
 if ([string]::IsNullOrEmpty($releaseBase)) {
   $releaseBase = "https://releases.corotum.com"
 }
 $releaseBase = $releaseBase.TrimEnd("/")
 
-$binDir = $env:TOOLMIRROR_BIN_DIR
+$binDir = $env:COROTUM_BIN_DIR
 if ([string]::IsNullOrEmpty($binDir)) {
   $binDir = Join-Path $env:LOCALAPPDATA "ToolMirror\bin"
 }

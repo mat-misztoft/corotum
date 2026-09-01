@@ -104,7 +104,7 @@ jobs:
           AUTH_EMAIL_FROM: ${{ secrets.AUTH_EMAIL_FROM }}
       - run: bun run release:smoke-endpoints
         env:
-          TOOLMIRROR_SMOKE_ORIGIN: ${{ secrets.TOOLMIRROR_SMOKE_ORIGIN }}
+          COROTUM_SMOKE_ORIGIN: ${{ secrets.COROTUM_SMOKE_ORIGIN }}
           RELEASE_REQUIRE_AUTH_SMOKE: "1"
 
   publish:

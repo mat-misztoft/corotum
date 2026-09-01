@@ -96,13 +96,13 @@ export async function smokeReleaseManifest(
   return errors;
 }
 
-const origin = process.env.TOOLMIRROR_SMOKE_ORIGIN;
-const releaseBase = process.env.TOOLMIRROR_RELEASE_BASE;
+const origin = process.env.COROTUM_SMOKE_ORIGIN;
+const releaseBase = process.env.COROTUM_RELEASE_BASE;
 const isMain = import.meta.main;
 
 if (isMain) {
   if (!origin) {
-    console.error("TOOLMIRROR_SMOKE_ORIGIN is required");
+    console.error("COROTUM_SMOKE_ORIGIN is required");
     process.exitCode = 1;
   } else {
     const errors = [

@@ -24,7 +24,7 @@ export type CloudflareEmailBinding = Readonly<{
 export type EmailEnvironment = Readonly<{
   AUTH_EMAIL_FROM?: string;
   EMAIL?: CloudflareEmailBinding;
-  TOOLMIRROR_HOSTED?: string;
+  COROTUM_HOSTED?: string;
 }>;
 
 /** Safe for user-facing auth responses: never include configuration or message data. */
@@ -71,8 +71,8 @@ function senderFrom(env: EmailEnvironment) {
   return from;
 }
 
-function isHosted(env: Pick<EmailEnvironment, "TOOLMIRROR_HOSTED">) {
-  return env.TOOLMIRROR_HOSTED === "true" || env.TOOLMIRROR_HOSTED === "1";
+function isHosted(env: Pick<EmailEnvironment, "COROTUM_HOSTED">) {
+  return env.COROTUM_HOSTED === "true" || env.COROTUM_HOSTED === "1";
 }
 
 function isCorotumSender(address: string) {

@@ -39,13 +39,13 @@ const migrationsDirectory = fileURLToPath(
 export const installSh = join(root, "apps/web/public/install.sh");
 export const webhookSecret = "whsec_e2e";
 export const hostedEnv: BillingEnvironment = {
-  TOOLMIRROR_HOSTED: "true",
+  COROTUM_HOSTED: "true",
   CREEM_API_KEY: "ck_e2e",
   CREEM_WEBHOOK_SECRET: webhookSecret,
   CREEM_PRODUCT_MONTHLY: "prod_month",
   CREEM_PRODUCT_ANNUAL: "prod_year",
 };
-export const selfHostedEnv: BillingEnvironment = { TOOLMIRROR_HOSTED: "false" };
+export const selfHostedEnv: BillingEnvironment = { COROTUM_HOSTED: "false" };
 export const user = { id: "user_1", email: "ada@example.com", name: "Ada" };
 
 export function sha256(bytes: Uint8Array): string {
@@ -137,9 +137,9 @@ export async function runInstallSh(
       ...process.env,
       HOME: home,
       SHELL: "/bin/zsh",
-      TOOLMIRROR_RELEASE_BASE: origin,
-      TOOLMIRROR_OS: os,
-      TOOLMIRROR_ARCH: arch,
+      COROTUM_RELEASE_BASE: origin,
+      COROTUM_OS: os,
+      COROTUM_ARCH: arch,
     },
     stdout: "pipe",
     stderr: "pipe",

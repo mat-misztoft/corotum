@@ -33,13 +33,13 @@ const migrationFiles = readdirSync(migrationsDirectory)
   .sort();
 const webhookSecret = "whsec_test";
 const hostedEnv: BillingEnvironment = {
-  TOOLMIRROR_HOSTED: "true",
+  COROTUM_HOSTED: "true",
   CREEM_API_KEY: "ck_test",
   CREEM_WEBHOOK_SECRET: webhookSecret,
   CREEM_PRODUCT_MONTHLY: "prod_month",
   CREEM_PRODUCT_ANNUAL: "prod_year",
 };
-const selfHostedEnv: BillingEnvironment = { TOOLMIRROR_HOSTED: "false" };
+const selfHostedEnv: BillingEnvironment = { COROTUM_HOSTED: "false" };
 const device = {
   name: "studio",
   platform: "darwin",

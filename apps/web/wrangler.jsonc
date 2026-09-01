@@ -31,8 +31,8 @@
   ],
   "analytics_engine_datasets": [
     {
-      "binding": "TOOLMIRROR_TELEMETRY",
-      "dataset": "toolmirror_telemetry"
+      "binding": "COROTUM_TELEMETRY",
+      "dataset": "corotum_telemetry"
     }
   ]
 }

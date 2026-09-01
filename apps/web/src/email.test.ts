@@ -37,7 +37,7 @@ test("an authentication email test double needs no Cloudflare binding details", 
 test("hosted authentication email dispatches through the EMAIL binding", async () => {
   const messages: unknown[] = [];
   const service = createCloudflareEmailService({
-    TOOLMIRROR_HOSTED: "true",
+    COROTUM_HOSTED: "true",
     AUTH_EMAIL_FROM: "auth@corotum.com",
     EMAIL: binding(messages),
   });
@@ -59,26 +59,26 @@ test("delivery configuration fails before sending when the sender or EMAIL bindi
   const messages: unknown[] = [];
   expect(() =>
     createCloudflareEmailService({
-      TOOLMIRROR_HOSTED: "true",
+      COROTUM_HOSTED: "true",
       EMAIL: binding(messages),
     }),
   ).toThrow(EmailDeliveryError);
   expect(() =>
     createCloudflareEmailService({
-      TOOLMIRROR_HOSTED: "true",
+      COROTUM_HOSTED: "true",
       AUTH_EMAIL_FROM: "auth@corotum.com",
     }),
   ).toThrow(EmailDeliveryError);
   expect(() =>
     createCloudflareEmailService({
-      TOOLMIRROR_HOSTED: "true",
+      COROTUM_HOSTED: "true",
       AUTH_EMAIL_FROM: "auth@corotum.com",
       EMAIL: {} as CloudflareEmailBinding,
     }),
   ).toThrow(EmailDeliveryError);
   expect(() =>
     createCloudflareEmailService({
-      TOOLMIRROR_HOSTED: "true",
+      COROTUM_HOSTED: "true",
       AUTH_EMAIL_FROM: "not-an-email",
       EMAIL: binding(messages),
     }),
@@ -89,7 +89,7 @@ test("delivery configuration fails before sending when the sender or EMAIL bindi
 test("hosted delivery only accepts a Corotum-domain sender", () => {
   expect(() =>
     createCloudflareEmailService({
-      TOOLMIRROR_HOSTED: "true",
+      COROTUM_HOSTED: "true",
       AUTH_EMAIL_FROM: "auth@selfhost.example",
       EMAIL: binding([]),
     }),
@@ -98,7 +98,7 @@ test("hosted delivery only accepts a Corotum-domain sender", () => {
 
 test("provider failures expose neither message tokens nor binding details", async () => {
   const service = createCloudflareEmailService({
-    TOOLMIRROR_HOSTED: "true",
+    COROTUM_HOSTED: "true",
     AUTH_EMAIL_FROM: "auth@corotum.com",
     EMAIL: binding([], true),
   });
@@ -111,7 +111,7 @@ test("provider failures expose neither message tokens nor binding details", asyn
 test("self-hosted deployments supply their own sender and EMAIL binding without hosted billing configuration", async () => {
   const messages: unknown[] = [];
   const service = createCloudflareEmailService({
-    TOOLMIRROR_HOSTED: "false",
+    COROTUM_HOSTED: "false",
     AUTH_EMAIL_FROM: "login@selfhost.example",
     EMAIL: binding(messages),
   });

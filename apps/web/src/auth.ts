@@ -14,8 +14,8 @@ export type AuthEnvironment = EmailEnvironment & {
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
-  TOOLMIRROR_HOSTED?: string;
-  TOOLMIRROR_ENVIRONMENT?: "development" | "production";
+  COROTUM_HOSTED?: string;
+  COROTUM_ENVIRONMENT?: "development" | "production";
 };
 
 type OAuthProvider = { clientId: string; clientSecret: string };
@@ -36,7 +36,7 @@ function configuredProvider(
 function authSecret(env: AuthEnvironment) {
   if (env.BETTER_AUTH_SECRET && env.BETTER_AUTH_SECRET.length >= 32)
     return env.BETTER_AUTH_SECRET;
-  if (env.TOOLMIRROR_ENVIRONMENT === "development")
+  if (env.COROTUM_ENVIRONMENT === "development")
     return "development-only-secret-change-before-deploy";
   throw new Error(
     "BETTER_AUTH_SECRET must be at least 32 characters outside local development",
@@ -57,7 +57,7 @@ export function validateAuthConfiguration(env: Omit<AuthEnvironment, "DB">) {
   );
   const secret = authSecret(env as AuthEnvironment);
 
-  if (env.TOOLMIRROR_ENVIRONMENT !== "development") {
+  if (env.COROTUM_ENVIRONMENT !== "development") {
     if (!env.BETTER_AUTH_URL)
       throw new Error("BETTER_AUTH_URL is required outside local development");
     if (!github || !google)

@@ -8,7 +8,7 @@ export type BillingInterval = "month" | "year";
 export type BillingDatabase = WorkspaceDatabase;
 
 export type BillingEnvironment = {
-  TOOLMIRROR_HOSTED?: string;
+  COROTUM_HOSTED?: string;
   CREEM_API_KEY?: string;
   CREEM_WEBHOOK_SECRET?: string;
   CREEM_PRODUCT_MONTHLY?: string;
@@ -98,8 +98,8 @@ export class CreemProviderError extends Error {
   }
 }
 
-export function isHostedCloud(env: { TOOLMIRROR_HOSTED?: string }) {
-  return env.TOOLMIRROR_HOSTED === "true" || env.TOOLMIRROR_HOSTED === "1";
+export function isHostedCloud(env: { COROTUM_HOSTED?: string }) {
+  return env.COROTUM_HOSTED === "true" || env.COROTUM_HOSTED === "1";
 }
 
 export function hostedPriceCents(interval: BillingInterval) {

@@ -171,7 +171,7 @@ export function createCliUpdateDeps(input: {
     arch,
     executablePath: resolveExecutablePath(platform, homeDir, env),
     pendingDir: join(paths.dataDir, "pending-update"),
-    releaseBase: (env.TOOLMIRROR_RELEASE_BASE ?? DEFAULT_RELEASE_BASE).replace(
+    releaseBase: (env.COROTUM_RELEASE_BASE ?? DEFAULT_RELEASE_BASE).replace(
       /\/$/,
       "",
     ),
@@ -293,8 +293,8 @@ function resolveExecutablePath(
   homeDir: string,
   env: Readonly<Record<string, string | undefined>>,
 ): string {
-  if (env.TOOLMIRROR_EXECUTABLE && env.TOOLMIRROR_EXECUTABLE.length > 0) {
-    return env.TOOLMIRROR_EXECUTABLE;
+  if (env.COROTUM_EXECUTABLE && env.COROTUM_EXECUTABLE.length > 0) {
+    return env.COROTUM_EXECUTABLE;
   }
   const current = process.execPath;
   const name = current.replace(/\\/g, "/").split("/").pop()?.toLowerCase();

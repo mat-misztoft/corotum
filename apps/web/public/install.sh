@@ -95,8 +95,8 @@ print_banner
 command -v curl >/dev/null 2>&1 || die "Need curl to download the official Corotum release."
 command -v tar >/dev/null 2>&1 || die "Need tar to unpack the official Corotum release."
 
-os=${TOOLMIRROR_OS:-}
-arch=${TOOLMIRROR_ARCH:-}
+os=${COROTUM_OS:-}
+arch=${COROTUM_ARCH:-}
 
 if [ -z "$os" ]; then
   sys=$(uname -s)
@@ -127,9 +127,9 @@ case "$os-$arch" in
   *) die "Unsupported OS/arch: $os-$arch" ;;
 esac
 
-RELEASE_BASE=${TOOLMIRROR_RELEASE_BASE:-https://releases.corotum.com}
+RELEASE_BASE=${COROTUM_RELEASE_BASE:-https://releases.corotum.com}
 RELEASE_BASE=${RELEASE_BASE%/}
-BIN_DIR="${TOOLMIRROR_BIN_DIR:-$HOME/.local/bin}"
+BIN_DIR="${COROTUM_BIN_DIR:-$HOME/.local/bin}"
 DEST="$BIN_DIR/corotum"
 filename="corotum-$target.tar.gz"
 

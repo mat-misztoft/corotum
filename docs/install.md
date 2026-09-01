@@ -39,9 +39,9 @@ Installer overrides (optional):
 
 | Variable | Purpose |
 | --- | --- |
-| `TOOLMIRROR_RELEASE_BASE` | Alternate release origin. Default `https://releases.corotum.com` |
-| `TOOLMIRROR_BIN_DIR` | Unix install directory. Default `~/.local/bin` |
-| `TOOLMIRROR_OS` / `TOOLMIRROR_ARCH` | Test overrides. Do not use these to install an unsupported target |
+| `COROTUM_RELEASE_BASE` | Alternate release origin. Default `https://releases.corotum.com` |
+| `COROTUM_BIN_DIR` | Unix install directory. Default `~/.local/bin` |
+| `COROTUM_OS` / `COROTUM_ARCH` | Test overrides. Do not use these to install an unsupported target |
 
 ## Update the CLI
 
@@ -59,7 +59,7 @@ corotum cli-update
 
 Another mutating Corotum process blocks replacement. `--check` does not replace the binary.
 
-`TOOLMIRROR_RELEASE_BASE` selects the release origin for `cli-update` as well.
+`COROTUM_RELEASE_BASE` selects the release origin for `cli-update` as well.
 
 ## Verify
 

@@ -185,10 +185,10 @@ export async function checkDocs(
       });
     }
   }
-  if (/TOOLMIRROR_HOSTED["']?\s*[:=]\s*["']true["']/.test(selfHost)) {
+  if (/COROTUM_HOSTED["']?\s*[:=]\s*["']true["']/.test(selfHost)) {
     findings.push({
       file: "docs/self-hosting.md",
-      message: "Self-hosting docs must not set TOOLMIRROR_HOSTED to true.",
+      message: "Self-hosting docs must not set COROTUM_HOSTED to true.",
     });
   }
 

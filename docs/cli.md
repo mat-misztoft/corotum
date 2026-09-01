@@ -108,7 +108,7 @@ Default locations:
 
 ## Cloud origin
 
-Default Cloud origin is `https://corotum.com`. Override with `--origin` or `TOOLMIRROR_CLOUD_ORIGIN`. Origins must be `http` or `https` and must not include credentials.
+Default Cloud origin is `https://corotum.com`. Override with `--origin` or `COROTUM_CLOUD_ORIGIN`. Origins must be `http` or `https` and must not include credentials.
 
 ## Supported agents
 

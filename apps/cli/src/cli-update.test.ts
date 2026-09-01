@@ -429,10 +429,10 @@ describe("cli-update", () => {
 
   test("cli-update --json --check uses schema version 1", async () => {
     const harness = await createHarness();
-    const previousBase = process.env.TOOLMIRROR_RELEASE_BASE;
-    const previousExe = process.env.TOOLMIRROR_EXECUTABLE;
-    process.env.TOOLMIRROR_RELEASE_BASE = harness.deps.releaseBase;
-    process.env.TOOLMIRROR_EXECUTABLE = harness.executablePath;
+    const previousBase = process.env.COROTUM_RELEASE_BASE;
+    const previousExe = process.env.COROTUM_EXECUTABLE;
+    process.env.COROTUM_RELEASE_BASE = harness.deps.releaseBase;
+    process.env.COROTUM_EXECUTABLE = harness.executablePath;
     try {
       const { io, output, errors } = fixtureIo();
       // Command uses process.platform; --check still must not rewrite the exe.
@@ -447,10 +447,10 @@ describe("cli-update", () => {
       expect(await readFile(harness.executablePath)).toEqual(harness.original);
     } finally {
       if (previousBase === undefined)
-        delete process.env.TOOLMIRROR_RELEASE_BASE;
-      else process.env.TOOLMIRROR_RELEASE_BASE = previousBase;
-      if (previousExe === undefined) delete process.env.TOOLMIRROR_EXECUTABLE;
-      else process.env.TOOLMIRROR_EXECUTABLE = previousExe;
+        delete process.env.COROTUM_RELEASE_BASE;
+      else process.env.COROTUM_RELEASE_BASE = previousBase;
+      if (previousExe === undefined) delete process.env.COROTUM_EXECUTABLE;
+      else process.env.COROTUM_EXECUTABLE = previousExe;
       harness.stop();
     }
   });

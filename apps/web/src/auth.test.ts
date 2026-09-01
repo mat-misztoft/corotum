@@ -13,7 +13,7 @@ const productionConfig = {
   GITHUB_CLIENT_SECRET: "github-secret",
   GOOGLE_CLIENT_ID: "google-id",
   GOOGLE_CLIENT_SECRET: "google-secret",
-  TOOLMIRROR_ENVIRONMENT: "production" as const,
+  COROTUM_ENVIRONMENT: "production" as const,
 };
 
 test("hosted and self-hosted production require a secret, URL, and both OAuth providers", () => {
@@ -43,7 +43,7 @@ test("hosted and self-hosted production require a secret, URL, and both OAuth pr
 
 test("local development can use an ephemeral development-only auth secret", () => {
   expect(
-    validateAuthConfiguration({ TOOLMIRROR_ENVIRONMENT: "development" }),
+    validateAuthConfiguration({ COROTUM_ENVIRONMENT: "development" }),
   ).toMatchObject({
     github: undefined,
     google: undefined,
