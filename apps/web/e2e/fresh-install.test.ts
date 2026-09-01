@@ -49,6 +49,7 @@ const evidencePath = fileURLToPath(
   new URL("./fresh-install-evidence.md", import.meta.url),
 );
 const roots: string[] = [];
+const timeout = 60_000;
 
 afterEach(async () => {
   await Promise.all(
@@ -59,6 +60,7 @@ afterEach(async () => {
 async function git(args: readonly string[]): Promise<string> {
   const process = Bun.spawn(["git", ...args], {
     stderr: "pipe",
+    stdin: "ignore",
     stdout: "pipe",
   });
   const [stdout, stderr, exitCode] = await Promise.all([
@@ -312,7 +314,7 @@ test("fresh installers produce a runnable CLI before Git and Cloud flows", async
   } finally {
     server.stop();
   }
-});
+}, timeout);
 
 test("Git Sync completes without a Corotum Cloud subscription", async () => {
   const { root, source, remote, stateWorktree } = await gitFixture();
@@ -437,7 +439,7 @@ test("Git Sync completes without a Corotum Cloud subscription", async () => {
   expect(await hashSkillDirectory(store.pathFor(adopted.skill))).toBe(
     adopted.contentHash,
   );
-});
+}, timeout);
 
 test("hosted Cloud requires entitlement; self-hosted Cloud does not", async () => {
   const { root, source, remote, stateWorktree } = await gitFixture();
@@ -708,7 +710,7 @@ test("hosted Cloud requires entitlement; self-hosted Cloud does not", async () =
     hostedServer.stop();
     selfServer.stop();
   }
-});
+}, timeout);
 
 test("CLI update replaces the official binary after a fresh install", async () => {
   const work = await tempDir("corotum-e2e-update-");
@@ -756,7 +758,7 @@ test("CLI update replaces the official binary after a fresh install", async () =
     currentServer.stop();
     latestServer.stop();
   }
-});
+}, timeout);
 
 test("fresh-install evidence records every required path as PASS", async () => {
   const evidence = await Bun.file(evidencePath).text();

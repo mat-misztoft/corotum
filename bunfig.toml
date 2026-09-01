@@ -1,0 +1,2 @@
+[test]
+preload = ["./tooling/test-git-env.ts"]
