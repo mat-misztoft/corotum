@@ -7,12 +7,12 @@ Cloud mode does not require Git unless a skill source is a Git repository.
 ## Initialize
 
 ```bash
-corotum init git@github.com:example/corotum-state.git --source owner/skills
+corotum init git@github.com:example/corotum-state.git
 ```
 
-`<repository>` is the desired-state Git remote Corotum owns as a local clone. `--source` is the Git repository that contains the local skills being adopted. Init detects agents, discovers global skills, and adopts only the skills you select. Source-unknown local skills stay visible and unmanaged. Adoption is never all-or-nothing.
+`<repository>` is the desired-state Git remote Corotum owns as a local clone. Init discovers `~/.agents/skills`, classifies each skill from its own provenance, and adopts only the skills you select. Source-unknown local skills stay visible and unmanaged unless you pass `--adopt-artifact`. Adoption is never all-or-nothing.
 
-Non-interactive init requires `--skill` names when you want a subset, refuses divergent local copies, and never enables undetected or unconfigured agents.
+Non-interactive init applies only exact `--replace`, `--keep`, and `--adopt-artifact` choices, and never enables undetected or unconfigured agents.
 
 ## Add, adopt, update, restore
 

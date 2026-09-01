@@ -73,6 +73,16 @@ describe("v2 desired-state contracts", () => {
     expect(serializeDispositionLedger(afterUnrelatedRevision)).toBe(serialized);
     expect(validateV2DesiredState({ manifest, lockfile }).manifest.skills).toEqual([expect.objectContaining({ id, name: "review" })]);
     expect(afterUnrelatedRevision.activeDispositions[id]).toEqual(ledger.activeDispositions[id]);
+    const withAudit = {
+      ...ledger,
+      audit: [
+        { type: "ADOPT" as const, skillId: id, metadata: {} },
+        { type: "ADOPT" as const, skillId: skillId("sk_02V2"), metadata: { origin: "init" } },
+      ],
+    };
+    expect(parseDispositionLedger(serializeDispositionLedger(withAudit)).audit?.map((entry) => entry.skillId)).toEqual(
+      ["sk_01V2", "sk_02V2"],
+    );
   });
 
   test("publishes every v2 materialization failure code", () => {

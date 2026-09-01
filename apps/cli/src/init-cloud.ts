@@ -1,16 +1,5 @@
 import type { CredentialsStore, CorotumConfig } from "./config";
-import {
-  type InitCandidate,
-  type InitResolver,
-  type InitSelection,
-  InitService,
-  type InitStateProvider,
-} from "./init";
-import type { LocalOperationalState } from "./local-state";
-import type {
-  ExecuteReconcileInput,
-  LocalReconcileExecutor,
-} from "./reconcile-executor";
+import { V2SaaSProvider, V2CloudProviderError } from "../../../packages/saas-provider/src/index";
 
 export class CloudInitError extends Error {
   constructor(message: string) {
@@ -32,29 +21,17 @@ export type CloudInitDependencies = Readonly<{
   provider: (input: {
     deviceToken: string;
     workspaceId: string;
-  }) => InitStateProvider;
-  resolver: InitResolver;
-  executor: Pick<LocalReconcileExecutor, "execute">;
+  }) => V2SaaSProvider;
 }>;
 
-/** Coordinates Cloud authentication and access before reusing safe local adoption. */
+/** Coordinates Cloud authentication and access before local adoption. */
 export class CloudInitService {
   constructor(private readonly deps: CloudInitDependencies) {}
 
-  async initialize(input: {
-    candidates: readonly InitCandidate[];
-    selected: readonly InitSelection[];
-    nonInteractive: boolean;
-    execution: Omit<
-      ExecuteReconcileInput,
-      "desired" | "plan" | "revision" | "state"
-    > & { state: LocalOperationalState };
-  }) {
+  async connect(): Promise<{ provider: V2SaaSProvider; workspaceId: string }> {
     const config = await this.deps.config.load();
     if (config.mode && config.mode !== "cloud") {
-      throw new CloudInitError(
-        "Corotum is already configured for Git Sync.",
-      );
+      throw new CloudInitError("Corotum is already configured for Git Sync.");
     }
 
     let token = (await this.deps.credentials.load()).cloudDeviceToken;
@@ -72,27 +49,21 @@ export class CloudInitService {
     }
 
     const provider = this.deps.provider({ deviceToken: token, workspaceId });
-    // This checks both workspace access and hosted entitlement before resolving,
-    // saving desired state, or taking ownership of any local skill.
-    const access = await provider.pull();
-    if (access.kind !== "success") {
+    try {
+      await provider.pull();
+    } catch (error) {
       const message =
-        access.kind === "failure"
-          ? access.error.message
-          : (access.errors[0]?.message ??
-            "Cloud desired state could not be loaded completely.");
-      if (message === "Hosted Cloud subscription required") {
+        error instanceof Error ? error.message : "Cloud desired state could not be loaded completely.";
+      if (
+        message === "Hosted Cloud subscription required" ||
+        (error instanceof V2CloudProviderError && message.includes("subscription required"))
+      ) {
         throw new CloudInitError(
           "Hosted Cloud subscription required. Pairing succeeded; start a subscription before initializing Cloud Sync.",
         );
       }
       throw new CloudInitError(message);
     }
-
-    return new InitService(
-      provider,
-      this.deps.resolver,
-      this.deps.executor,
-    ).initialize(input);
+    return { provider, workspaceId };
   }
 }

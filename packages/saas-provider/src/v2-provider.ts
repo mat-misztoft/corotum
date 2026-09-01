@@ -37,6 +37,7 @@ export type V2CloudPushInput = Readonly<{
   artifacts?: Readonly<Record<string, Uint8Array>>;
   idempotencyKey?: string;
   transition?: RevisionTransition;
+  transitions?: readonly RevisionTransition[];
 }>;
 
 export class V2CloudProviderError extends Error {
@@ -109,7 +110,11 @@ export class V2SaaSProvider {
           state,
           baseRevision: input.baseRevision,
           idempotencyKey,
-          transition: input.transition ?? synthesizedTransition(state, ledger),
+          transition:
+            input.transition ??
+            input.transitions?.[0] ??
+            synthesizedTransition(state, ledger),
+          transitions: input.transitions,
           dispositionLedger: ledger,
         }),
       }),

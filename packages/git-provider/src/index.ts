@@ -725,6 +725,25 @@ export class V2GitStateProvider {
     return this.read(cache);
   }
 
+  /** Empty remotes have HEAD but no v2 snapshot; init uses that as the base. */
+  async pullAllowEmpty(): Promise<V2GitStateEnvelope> {
+    const cache = await this.cache();
+    const pending = await this.retryPendingPush(cache);
+    if (pending.kind === "pending" || pending.kind === "conflict") {
+      throw new Error("A previous v2 desired-state change is waiting to be pushed.");
+    }
+    await this.command(cache, ["fetch", "--quiet", "origin"]);
+    await this.command(cache, ["merge", "--ff-only", "@{upstream}"]);
+    if (!(await exists(join(cache, v2ManifestFile)))) {
+      return {
+        revisionId: await this.revision(cache),
+        state: { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } },
+        ledger: { version: 2, activeDispositions: {} },
+      };
+    }
+    return this.read(cache);
+  }
+
   async resolvePendingPush(): Promise<V2PendingPushStatus> {
     return this.retryPendingPush(await this.cache());
   }

@@ -20,8 +20,8 @@ corotum --non-interactive <command>
 
 | Command | What it does |
 | --- | --- |
-| `corotum init <repository> --source <source>` | Initialize Git Sync and adopt selected local skills |
-| `corotum init cloud --source <source> [--origin <url>]` | Pair with Cloud if needed, then adopt selected local skills into Cloud |
+| `corotum init <repository> [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Initialize Git Sync and adopt selected local skills |
+| `corotum init cloud [--origin <url>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Pair with Cloud if needed, then adopt selected local skills into Cloud |
 | `corotum login [--origin <url>]` | Pair this device in a browser |
 | `corotum logout [--origin <url>]` | Revoke this device token and delete local Cloud credentials |
 | `corotum add <source> [--skill <name>] [--ref <ref>]` | Add one Git-backed skill (Git Sync) |

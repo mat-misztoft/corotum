@@ -386,9 +386,16 @@ export type TombstoneDisposition = Readonly<{
   effectiveSequence: number;
 }>;
 
+export type DispositionAuditEntry = Readonly<{
+  type: "ADD" | "REMOVE" | "UNMANAGE" | "UPDATE" | "SET_REF" | "ADOPT";
+  skillId: SkillId;
+  metadata: Readonly<Record<string, string>>;
+}>;
+
 export type DispositionLedger = Readonly<{
   version: 2;
   activeDispositions: Readonly<Record<SkillId, TombstoneDisposition>>;
+  audit?: readonly DispositionAuditEntry[];
 }>;
 
 const sha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -554,6 +561,24 @@ const dispositionLedgerSchema = z
         })
         .strict(),
     ),
+    audit: z
+      .array(
+        z
+          .object({
+            type: z.enum([
+              "ADD",
+              "REMOVE",
+              "UNMANAGE",
+              "UPDATE",
+              "SET_REF",
+              "ADOPT",
+            ]),
+            skillId: nonEmptyString,
+            metadata: z.record(nonEmptyString, z.string()).default({}),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
 
@@ -571,9 +596,23 @@ function normalizeDispositionLedger(input: unknown): DispositionLedger {
     })
     .sort(([left], [right]) => left.localeCompare(right));
 
+  const audit = (parsed.data.audit ?? []).map((entry) => ({
+    type: entry.type,
+    skillId: skillId(entry.skillId),
+    metadata: Object.fromEntries(
+      Object.entries(entry.metadata).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      ),
+    ),
+  }));
+  audit.sort(
+    (left, right) =>
+      left.skillId.localeCompare(right.skillId) || left.type.localeCompare(right.type),
+  );
   return {
     version: 2,
     activeDispositions: Object.fromEntries(entries) as DispositionLedger["activeDispositions"],
+    ...(audit.length > 0 ? { audit } : {}),
   };
 }
 

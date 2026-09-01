@@ -80,7 +80,7 @@ AUTH_EMAIL_FROM=auth@corotum.com
 ```bash
 curl -fsSL https://corotum.com/install.sh | sh
 corotum login
-corotum init cloud --source owner/skills
+corotum init cloud
 ```
 
 Default origin is `https://corotum.com`. After checkout and a verified webhook, Cloud init can write desired state. Device pairing and authentication without a subscription do not grant Cloud Sync.

@@ -161,7 +161,7 @@ corotum login --origin https://cloud.example.com
 Or initialize Cloud and adopt selected local skills in one step:
 
 ```bash
-corotum init cloud --source owner/skills --origin https://cloud.example.com
+corotum init cloud --origin https://cloud.example.com
 ```
 
 `init cloud` opens the pairing browser flow when the device is not already logged in. Hosted entitlement is not required.

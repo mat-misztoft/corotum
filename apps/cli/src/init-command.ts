@@ -1,4 +1,3 @@
-import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -6,31 +5,38 @@ import { createInterface } from "node:readline/promises";
 import type { Command } from "commander";
 import {
   type AgentId,
-  builtInAgentAdapters,
   detectAgents,
   localAgentFileSystem,
 } from "../../../packages/agent-targets/src/index";
-import { GitStateProvider } from "../../../packages/git-provider/src/index";
-import { SaaSProvider } from "../../../packages/saas-provider/src/index";
-import {
-  CanonicalSkillStore,
-  hashSkillDirectory,
-} from "../../../packages/skills-adapter/src/canonical-store";
+import { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
+import { createArtifactArchive } from "../../../packages/skills-adapter/src/artifact-archive";
+import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
+import { createCliV2GitStateProvider } from "./artifact-consent";
 import type { CliIo } from "./cli";
 import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
 import { cloudAuthContext } from "./cloud-auth-command";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
 import {
-  coalesceInitCandidates,
-  divergentCandidates,
-  InitService,
-} from "./init";
+  adoptArtifactChoices,
+  decideInitAdoptions,
+  type InitAdoptionChoice,
+  type InitAdoptionPrompt,
+} from "./init-adoption";
 import { CloudInitService } from "./init-cloud";
+import { discoverInitProvenance } from "./init-provenance";
+import {
+  InitRecoveryStore,
+  InitTransactionService,
+  type InitV2Provider,
+} from "./init-transaction";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
-import { LocalReconcileExecutor } from "./reconcile-executor";
+import {
+  coalesceInitCandidates,
+  divergentCandidates,
+} from "./init";
 
 export function registerInitCommand(program: Command, io: CliIo): void {
   program
@@ -38,16 +44,24 @@ export function registerInitCommand(program: Command, io: CliIo): void {
     .description(
       "initialize Git Sync or Corotum Cloud and safely adopt selected local skills",
     )
-    .requiredOption(
-      "--source <repository>",
-      "Git source for the local skills being adopted",
+    .option("--skill <name...>", "only consider these discovered skill names")
+    .option("--replace <name...>", "non-interactive source-backed replace for these skills")
+    .option("--keep <name...>", "non-interactive keep-local artifact adoption for these skills")
+    .option(
+      "--adopt-artifact <name...>",
+      "non-interactive artifact adoption for unknown-provenance skills",
     )
-    .option("--skill <name...>", "adopt only these discovered skill names")
     .option("--origin <url>", "Cloud origin")
     .action(
       async (
         repository: string,
-        options: { source: string; skill?: string[]; origin?: string },
+        options: {
+          skill?: string[];
+          replace?: string[];
+          keep?: string[];
+          adoptArtifact?: string[];
+          origin?: string;
+        },
       ) => {
         const homeDir = homedir();
         const paths = resolvePlatformPaths({
@@ -88,93 +102,96 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             );
           }
 
-          const candidates = await discoverCandidates(
-            homeDir,
-            enabledAgentIds,
-            options.source,
-          );
+          const discovered = await discoverInitProvenance(homeDir);
           const filtered = options.skill?.length
-            ? candidates.filter((candidate) =>
-                options.skill?.includes(candidate.name),
-              )
-            : candidates;
+            ? discovered.filter((candidate) => options.skill?.includes(candidate.name))
+            : discovered;
           const nonInteractive =
-            program.opts<{ nonInteractive?: boolean }>().nonInteractive ===
-              true || !io.stdinIsTTY;
-          const selected = await selectInitCandidates(filtered, nonInteractive);
-          const storage = effectiveStoragePaths(config, paths);
-          const materializer = new GitSkillMaterializer();
-          const executor = new LocalReconcileExecutor(
-            new LocalOperationalStateStore(join(paths.stateDir, "state.json")),
-            new CanonicalSkillStore(storage.skillsStoragePath),
-            materializer,
-          );
-          const initialization = {
-            candidates,
-            selected,
+            program.opts<{ nonInteractive?: boolean }>().nonInteractive === true ||
+            !io.stdinIsTTY;
+          const outcomes = await decideInitAdoptions({
+            candidates: filtered,
             nonInteractive,
-            execution: {
-              enabledAgentIds,
-              homeDir,
-              state: (await new LocalOperationalStateStore(
-                join(paths.stateDir, "state.json"),
-              ).load()) ?? {
-                schemaVersion: 1 as const,
-                lastAppliedRevision: null,
-                skills: {},
-              },
-            },
-          };
-          const resolver = {
-            resolve: ({
-              id,
-              source,
-              skill,
-            }: {
-              id: Parameters<GitSkillMaterializer["resolve"]>[0]["id"];
-              source: string;
-              skill: string;
-            }) => materializer.resolve({ id, source, skill, ref: "HEAD" }),
-          };
-          const result = cloud
-            ? await initializeCloud(
-                program,
-                io,
-                paths,
-                configStore,
-                options.origin,
-                resolver,
-                executor,
-                initialization,
-              )
-            : await new InitService(
-                new GitStateProvider(storage.gitStoragePath, repository),
-                resolver,
-                executor,
-              ).initialize(initialization);
-          if (result.kind === "refused" || result.kind === "selection-required")
-            throw new Error(
-              result.kind === "refused"
-                ? result.reason
-                : "Divergent local skills require an explicit interactive selection.",
-            );
-          await configStore.set("agents", {
-            ...config.agents,
-            ...Object.fromEntries(
-              enabledAgentIds.map((id) => [id, { enabled: true }]),
-            ),
+            choices: [
+              ...namedChoices(options.replace, "replace"),
+              ...namedChoices(options.keep, "keep"),
+              ...adoptArtifactChoices(options.adoptArtifact ?? []),
+            ],
+            prompt: nonInteractive ? undefined : adoptionPrompt(io),
+            materializer: new GitSkillMaterializer(),
           });
-          if (cloud) {
-            await configStore.set("mode", "cloud");
-            io.writeOutput(
-              `Initialized Corotum Cloud at revision ${result.revision}.\n`,
-            );
-          } else {
-            await configStore.set("gitRepository", repository);
-            await configStore.set("mode", "git");
-            io.writeOutput(
-              `Initialized Git Sync at revision ${result.revision}.\n`,
-            );
+
+          const storage = effectiveStoragePaths(config, paths);
+          const stateStore = new LocalOperationalStateStore(
+            join(paths.stateDir, "state.json"),
+          );
+          const persistConfig = async () => {
+            await configStore.set("agents", {
+              ...config.agents,
+              ...Object.fromEntries(
+                enabledAgentIds.map((id) => [id, { enabled: true }]),
+              ),
+            });
+            if (cloud) {
+              await configStore.set("mode", "cloud");
+            } else {
+              await configStore.set("gitRepository", repository);
+              await configStore.set("mode", "git");
+            }
+          };
+
+          const cloudConnection = cloud
+            ? await connectCloud(program, io, paths, configStore, options.origin)
+            : null;
+          const result = cloudConnection
+            ? await new InitTransactionService({
+                provider: cloudConnection.provider,
+                recovery: new InitRecoveryStore(join(paths.stateDir, "init-transaction.json")),
+                persistConfig,
+                backend: {
+                  kind: "cloud",
+                  workspaceId: cloudConnection.workspaceId,
+                },
+                stateStore,
+                canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
+                enabledAgentIds,
+                homeDir,
+              }).run({ outcomes })
+            : await new InitTransactionService({
+                provider: gitProvider(
+                  createCliV2GitStateProvider({
+                    storagePath: storage.gitStoragePath,
+                    source: repository,
+                    options: program.opts(),
+                    io,
+                  }),
+                ),
+                recovery: new InitRecoveryStore(join(paths.stateDir, "init-transaction.json")),
+                persistConfig,
+                backend: { kind: "git" },
+                stateStore,
+                canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
+                enabledAgentIds,
+                homeDir,
+                gitRepository: repository,
+                gitStoragePath: storage.gitStoragePath,
+              }).run({ outcomes });
+
+          if (result.kind === "refused") throw new Error(result.reason);
+          const unmanaged = result.outcomes.filter((outcome) => outcome.kind === "unmanaged");
+          if (result.kind === "partial") {
+            io.writeError(`${result.reason}\n`);
+          }
+          for (const outcome of unmanaged) {
+            io.writeError(`${outcome.name}: ${outcome.reason}\n`);
+          }
+          io.writeOutput(
+            cloud
+              ? `Initialized Corotum Cloud at revision ${result.revision}.\n`
+              : `Initialized Git Sync at revision ${result.revision}.\n`,
+          );
+          if (result.kind === "partial") {
+            throw new Error(result.reason);
           }
         } finally {
           await release();
@@ -183,39 +200,137 @@ export function registerInitCommand(program: Command, io: CliIo): void {
     );
 }
 
-async function initializeCloud(
+function namedChoices(
+  names: readonly string[] | undefined,
+  action: Exclude<InitAdoptionChoice["action"], "adopt-artifact">,
+): readonly InitAdoptionChoice[] {
+  return (names ?? []).map((name) => ({ name, action }));
+}
+
+function gitProvider(
+  git: ReturnType<typeof createCliV2GitStateProvider>,
+): InitV2Provider {
+  return {
+    pull: () => git.pullAllowEmpty(),
+    push: (input) =>
+      git.push({
+        state: input.state,
+        ledger: input.ledger,
+        baseRevision: input.baseRevision ?? "",
+        artifacts: input.artifacts,
+      }),
+  };
+}
+
+async function connectCloud(
   program: Command,
   io: CliIo,
   paths: ReturnType<typeof resolvePlatformPaths>,
   config: ConfigStore,
   originOption: string | undefined,
-  resolver: ConstructorParameters<typeof InitService>[1],
-  executor: ConstructorParameters<typeof InitService>[2],
-  input: Parameters<InitService["initialize"]>[0],
-) {
+): Promise<{ provider: InitV2Provider; workspaceId: string }> {
   const { origin, service } = cloudAuthContext(
     program,
     io,
     originOption ?? DEFAULT_CLOUD_ORIGIN,
   );
-  return new CloudInitService({
+  const connected = await new CloudInitService({
     config,
     credentials: new CredentialsStore(paths),
     auth: service,
     provider: ({ deviceToken, workspaceId }) =>
-      new SaaSProvider({ origin, deviceToken, workspaceId }),
-    resolver,
-    executor,
-  }).initialize(input);
+      new V2SaaSProvider({ origin, deviceToken, workspaceId }),
+  }).connect();
+  return {
+    workspaceId: connected.workspaceId,
+    provider: {
+      pull: async () => {
+        const snapshot = await connected.provider.pull();
+        return {
+          revisionId: snapshot.revisionId,
+          state: snapshot.state,
+          ledger: snapshot.ledger,
+        };
+      },
+      push: async (input) => {
+        const artifacts: Record<string, Uint8Array> = {};
+        for (const [id, directory] of Object.entries(input.artifacts)) {
+          artifacts[id] = (await createArtifactArchive(directory)).bytes;
+        }
+        const snapshot = await connected.provider.push({
+          state: input.state,
+          ledger: input.ledger,
+          baseRevision: input.baseRevision,
+          artifacts,
+          transitions: input.ledger.audit ?? [],
+        });
+        if (!snapshot.revisionId) {
+          throw new Error("Cloud did not return a revision.");
+        }
+        return {
+          revisionId: snapshot.revisionId,
+          state: snapshot.state,
+          ledger: snapshot.ledger,
+        };
+      },
+    },
+  };
+}
+
+function adoptionPrompt(io: CliIo): InitAdoptionPrompt {
+  return {
+    notice: (message) => {
+      io.writeError(`${message}\n`);
+    },
+    chooseModified: async (name) => {
+      const answer = await confirmChoice(
+        `Local skill ${name} differs from upstream. [R]eplace latest, [K]eep local, [D]o not manage? `,
+      );
+      if (/^k/i.test(answer)) return "keep";
+      if (/^d/i.test(answer)) return "do-not-manage";
+      return "replace";
+    },
+    chooseUnavailable: async (name, code) => {
+      const answer = await confirmChoice(
+        `${name} source is ${code === "AUTH_REQUIRED" ? "private" : "unavailable"}. [K]eep local as artifact, [D]o not manage? `,
+      );
+      return /^k/i.test(answer) ? "keep" : "do-not-manage";
+    },
+    chooseUnknown: async (name) => {
+      const answer = await confirmChoice(
+        `${name} has no trusted source. [A]dopt as artifact, [D]o not manage? `,
+      );
+      return /^a/i.test(answer) ? "adopt-artifact" : "do-not-manage";
+    },
+    chooseDuplicate: async (name, candidates) => {
+      const lines = candidates
+        .map((candidate, index) => `${index + 1}) ${candidate.path}`)
+        .join("\n");
+      const answer = (
+        await confirmChoice(
+          `Choose one ${name} candidate:\n${lines}\n[1-${candidates.length}, or Enter to leave unmanaged] `,
+        )
+      ).trim();
+      if (answer === "") return "do-not-manage";
+      const choice = Number.parseInt(answer, 10) - 1;
+      return Number.isInteger(choice) && choice >= 0 && choice < candidates.length
+        ? candidates[choice]!.name
+        : "do-not-manage";
+    },
+  };
 }
 
 async function confirm(question: string): Promise<boolean> {
+  return !/^(n|no)$/i.test((await confirmChoice(question)).trim());
+}
+
+async function confirmChoice(question: string): Promise<string> {
   const prompt = createInterface({
     input: process.stdin,
     output: process.stderr,
   });
   try {
-    return !/^(n|no)$/i.test((await prompt.question(question)).trim());
+    return await prompt.question(question);
   } finally {
     prompt.close();
   }
@@ -239,14 +354,13 @@ export async function selectInitCandidates(
       path: string;
       source: string;
     }[],
-  ) => Promise<number> = selectCanonicalCopy,
+  ) => Promise<number> = async () => 0,
 ) {
   const grouped = coalesceInitCandidates(candidates);
   const divergentNames = new Set(
     divergentCandidates(candidates).map((candidate) => candidate.name),
   );
   if (nonInteractive && divergentNames.size > 0) return grouped;
-
   const selected = grouped.filter(
     (selection) => !divergentNames.has(selection.name),
   );
@@ -254,80 +368,7 @@ export async function selectInitCandidates(
     const copies = candidates.filter((candidate) => candidate.name === name);
     const choices = coalesceInitCandidates(copies);
     const choice = await select(name, copies);
-    if (choice >= 0 && choice < choices.length) selected.push(choices[choice]);
+    if (choice >= 0 && choice < choices.length) selected.push(choices[choice]!);
   }
   return selected;
-}
-
-async function selectCanonicalCopy(
-  name: string,
-  copies: readonly {
-    agentId: AgentId;
-    contentHash: string;
-    name: string;
-    path: string;
-    source: string;
-  }[],
-): Promise<number> {
-  const choices = coalesceInitCandidates(copies);
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    const lines = choices
-      .map(
-        (choice, index) =>
-          `${index + 1}) ${choice.contentHash} (${choice.targets.join(", ")})`,
-      )
-      .join("\n");
-    const answer = (
-      await prompt.question(
-        `Choose the canonical copy for ${name}:\n${lines}\n[1-${choices.length}, or Enter to leave unmanaged] `,
-      )
-    ).trim();
-    if (answer === "") return -1;
-    const choice = Number.parseInt(answer, 10) - 1;
-    return Number.isInteger(choice) ? choice : -1;
-  } finally {
-    prompt.close();
-  }
-}
-
-async function discoverCandidates(
-  homeDir: string,
-  agentIds: readonly AgentId[],
-  source: string,
-) {
-  const candidates = [] as {
-    agentId: AgentId;
-    contentHash: string;
-    name: string;
-    path: string;
-    source: string;
-  }[];
-  for (const agentId of agentIds) {
-    const adapter = builtInAgentAdapters.find((item) => item.id === agentId);
-    if (!adapter) continue;
-    for (const directory of adapter.globalSkillPaths(homeDir)) {
-      try {
-        const entries = await readdir(directory, {
-          encoding: "utf8",
-          withFileTypes: true,
-        });
-        for (const entry of entries) {
-          if (!entry.isDirectory()) continue;
-          const path = join(directory, entry.name);
-          candidates.push({
-            agentId,
-            name: entry.name,
-            path,
-            source,
-            contentHash: await hashSkillDirectory(path),
-          });
-        }
-      } catch {}
-    }
-  }
-  return candidates;
 }

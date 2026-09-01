@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentId } from "../../../packages/agent-targets/src/index";
-import { revisionId, type StateProvider } from "../../../packages/core/src/index";
+import { revisionId } from "../../../packages/core/src/index";
+import { createCli } from "./cli";
 import { coalesceInitCandidates, divergentCandidates, InitService, type InitCandidate, type InitStateProvider } from "./init";
 import { selectInitCandidates } from "./init-command";
 
@@ -156,5 +157,18 @@ describe("CLI init adoption", () => {
     expect(await blocked.initialize({ candidates, selected: coalesceInitCandidates(candidates), nonInteractive: false, execution })).toMatchObject({ kind: "refused", reason: expect.stringContaining("PENDING_PUSH") });
     expect(calls).toEqual([]);
     void service;
+  });
+
+  test("removes global init --source from normal CLI help parsing", () => {
+    const output: string[] = [];
+    const program = createCli({
+      stdinIsTTY: true,
+      writeError: () => undefined,
+      writeOutput: (message) => output.push(message),
+    });
+    const help = program.commands.find((command) => command.name() === "init")?.helpInformation() ?? "";
+    expect(help).toContain("init");
+    expect(help).not.toMatch(/--source <repository>/);
+    expect(help).toContain("--adopt-artifact");
   });
 });
