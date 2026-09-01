@@ -156,6 +156,19 @@ describe("V2GitStateProvider", () => {
     await expect(provider.pull()).rejects.toThrow("readback verification failed");
   });
 
+  test("exports only a verified artifact tree as a deterministic archive", async () => {
+    const source = await fixture(); const root = await mkdtemp(join(tmpdir(), "corotum-git-export-")); temporaryDirectories.push(root);
+    await writeFile(join(root, "SKILL.md"), "# Exported\n");
+    const { scanNormalizedContent } = await import("../../skills-adapter/src/normalized-content"); const contentHash = (await scanNormalizedContent(root)).contentHash; const integrityHash = await gitTreeHash(root);
+    const provider = new V2GitStateProvider(join(source.worktree, "v2-cache"), source.bare, undefined, async () => undefined);
+    const pushed = await provider.push({ state: v2State("artifact", contentHash, integrityHash), ledger: { version: 2, activeDispositions: {} }, baseRevision: (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(), artifacts: { [skillId("sk_gitV2")]: root } });
+    const lock = pushed.state.lockfile.skills[0]!;
+    const archive = await provider.readArtifact(lock);
+    expect(archive.contentHash).toBe(contentHash);
+    expect(archive.integrityHash).toMatch(/^sha256:/);
+    await expect(provider.readArtifact({ ...lock, materialization: { ...lock.materialization, artifact: { ...lock.materialization.artifact, contentHash: `sha256:${"b".repeat(64)}` } } })).rejects.toThrow("does not match");
+  });
+
   test("replays a pending change and preserves an unrelated UNMANAGE tombstone", async () => {
     const source = await fixture(); const hash = `sha256:${"b".repeat(64)}` as const;
     const local = new V2GitStateProvider(join(source.worktree, "v2-a"), source.bare);

@@ -21,6 +21,7 @@ import {
   serializeV2Lockfile,
   serializeV2Manifest,
   type V2DesiredState,
+  type V2LockedSkill,
   validateV2DesiredState,
   type DesiredStateMergeConflict,
   mergeDesiredStates,
@@ -36,6 +37,7 @@ import {
   serializeRevisionTransition,
   validateDesiredState,
 } from "../../core/src/index";
+import { createArtifactArchive, type ArtifactArchive } from "../../skills-adapter/src/artifact-archive";
 import { scanNormalizedContent } from "../../skills-adapter/src/normalized-content";
 import {
   type GitCommandRunner,
@@ -724,6 +726,25 @@ export class V2GitStateProvider {
 
   async resolvePendingPush(): Promise<V2PendingPushStatus> {
     return this.retryPendingPush(await this.cache());
+  }
+
+  /** Exports a verified Git artifact tree as a deterministic Cloud archive. */
+  async readArtifact(lock: V2LockedSkill): Promise<ArtifactArchive> {
+    if (lock.materialization.kind !== "artifact") {
+      throw new Error(`Source-backed skill ${lock.id} has no artifact.`);
+    }
+    const snapshot = await this.pull();
+    const current = snapshot.state.lockfile.skills.find((skill) => skill.id === lock.id);
+    if (current?.materialization.kind !== "artifact" ||
+      current.materialization.artifact.integrityHash !== lock.materialization.artifact.integrityHash ||
+      current.materialization.artifact.contentHash !== lock.materialization.artifact.contentHash) {
+      throw new Error(`Artifact ${lock.id} does not match the verified Git state.`);
+    }
+    const archive = await createArtifactArchive(join(await this.cache(), this.artifactLocator(current)));
+    if (archive.contentHash !== current.materialization.artifact.contentHash) {
+      throw new Error(`Artifact ${lock.id} content hash does not match its Git lock.`);
+    }
+    return archive;
   }
 
   /** Atomically stages metadata and every artifact tree in one Git commit. */
