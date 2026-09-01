@@ -48,14 +48,25 @@ bun run lint
 bun run docs:check
 ```
 
-Build and verify the macOS arm64 standalone binary:
+Build a standalone CLI binary:
 
 ```bash
-bun run build:cli
+bun run build:cli:darwin-arm64
+bun run build:cli:darwin-x64
+bun run build:cli:linux-arm64
+bun run build:cli:linux-x64
+bun run build:cli:windows-x64
+```
+
+`bun run build:cli` is darwin-arm64. `bun run build:cli:linux` is linux-x64.
+
+Verify (example, macOS arm64):
+
+```bash
 ./scripts/verify-cli.sh dist/corotum-darwin-arm64
 ```
 
-Linux x64 is built and run in [the compile proof workflow](./.github/workflows/cli-compile.yml).
+Linux x64 is also built and run in [the compile proof workflow](./.github/workflows/cli-compile.yml).
 
 ## License
 

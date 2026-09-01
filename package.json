@@ -11,7 +11,12 @@
   ],
   "scripts": {
     "build:cli": "./scripts/build-cli.sh bun-darwin-arm64",
+    "build:cli:darwin-arm64": "./scripts/build-cli.sh bun-darwin-arm64",
+    "build:cli:darwin-x64": "./scripts/build-cli.sh bun-darwin-x64",
     "build:cli:linux": "./scripts/build-cli.sh bun-linux-x64",
+    "build:cli:linux-arm64": "./scripts/build-cli.sh bun-linux-arm64",
+    "build:cli:linux-x64": "./scripts/build-cli.sh bun-linux-x64",
+    "build:cli:windows-x64": "./scripts/build-cli.sh bun-windows-x64",
     "release:build": "bun ./tooling/release-build.ts",
     "release:upload": "bun ./tooling/release-upload.ts",
     "release:verify": "bun ./tooling/release-verify.ts",
