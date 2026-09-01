@@ -200,7 +200,7 @@ export class V2SaaSProvider {
       return {
         revisionId: payload.revisionId ?? null,
         revisionSequence: payload.revisionSequence ?? 0,
-        state: validateV2DesiredState(payload.state as V2DesiredState),
+        state: uninitializedEmptyV2State(payload) ?? validateV2DesiredState(payload.state as V2DesiredState),
         ledger: parseDispositionLedger(JSON.stringify(ledgerSource)),
       };
     } catch (error) {
@@ -224,6 +224,33 @@ export class V2SaaSProvider {
     if (response.status === 400) return new V2CloudProviderError("VALIDATION_ERROR", message);
     return new V2CloudProviderError("NETWORK_ERROR", message);
   }
+}
+
+const emptyV2State: V2DesiredState = {
+  manifest: { version: 2, skills: [] },
+  lockfile: { version: 2, skills: [] },
+};
+
+/** An uninitialized workspace still serializes the v1 empty snapshot. */
+function uninitializedEmptyV2State(payload: {
+  revisionId?: string | null;
+  state?: unknown;
+}): V2DesiredState | null {
+  if (payload.revisionId != null) return null;
+  const state = payload.state as {
+    manifest?: { version?: unknown; skills?: unknown };
+    lockfile?: { skills?: unknown };
+  } | null;
+  if (!state || (state.manifest?.version !== 1 && state.manifest?.version !== 2)) {
+    return null;
+  }
+  if (!Array.isArray(state.manifest?.skills) || state.manifest.skills.length > 0) {
+    return null;
+  }
+  if (!Array.isArray(state.lockfile?.skills) || state.lockfile.skills.length > 0) {
+    return null;
+  }
+  return emptyV2State;
 }
 
 function artifactTransfer(workspaceId: string, lock: V2LockedSkill) {
