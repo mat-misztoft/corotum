@@ -2,14 +2,15 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Command } from "commander";
-import { GitStateProvider } from "../../../packages/git-provider/src/index";
-import { SaaSProvider } from "../../../packages/saas-provider/src/index";
+import { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { cloudAuthContext } from "./cloud-auth-command";
 import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
-import { MigrationService, type MigrationStrategy } from "./migrate";
+import { createCliV2GitStateProvider } from "./artifact-consent";
+import { type MigrationStrategy } from "./migrate";
+import { mergeV2MigrationSnapshots, migrateV2CloudToGit, migrateV2GitToCloud } from "./v2-migration";
 import { MutationLock } from "./mutation-lock";
 
 export function registerMigrateCommand(program: Command, io: CliIo): void {
@@ -36,31 +37,39 @@ export function registerMigrateCommand(program: Command, io: CliIo): void {
         if (!strategy)
           throw new Error("Choose --strategy replace, merge, or cancel; destination state is never changed implicitly.");
         const storage = effectiveStoragePaths(config, paths);
-        const cloudProvider = async () => {
-          const credentials = await new CredentialsStore(paths).load();
-          if (!credentials.cloudDeviceToken || !config.workspaceId)
-            throw new Error("Run corotum login before migrating to or from Cloud.");
-          return new SaaSProvider({ origin, deviceToken: credentials.cloudDeviceToken, workspaceId: config.workspaceId });
-        };
-        const source = config.mode === "git"
-          ? new GitStateProvider(storage.gitStoragePath, config.gitRepository as string)
-          : await cloudProvider();
-        const target = destination === "git"
-          ? new GitStateProvider(storage.gitStoragePath, repository as string)
-          : await cloudProvider();
-        const result = await new MigrationService(source, target).migrate(strategy);
-        if (result.kind === "refused") throw new Error(result.reason);
-        if (result.kind === "conflict") {
-          write(io, program, { outcome: "CONFLICT", status: "CONFLICT", skills: result.skills }, `Migration conflict: ${result.skills.join(", ")}. Both providers are unchanged.\n`);
-          return;
-        }
-        if (result.kind === "cancelled") {
+        if (strategy === "cancel") {
           write(io, program, { outcome: "SUCCESS", status: "CANCELLED" }, "Migration cancelled. Both providers are unchanged.\n");
           return;
         }
+        const credentials = await new CredentialsStore(paths).load();
+        if (!credentials.cloudDeviceToken || !config.workspaceId)
+          throw new Error("Run corotum login before migrating to or from Cloud.");
+        const cloud = new V2SaaSProvider({ origin, deviceToken: credentials.cloudDeviceToken, workspaceId: config.workspaceId });
+        const git = createCliV2GitStateProvider({
+          storagePath: storage.gitStoragePath,
+          source: destination === "git" ? repository as string : config.gitRepository as string,
+          options: program.opts(),
+          io,
+        });
+        const source = await (config.mode === "git" ? git : cloud).pull();
+        const existing = await (destination === "git" ? git : cloud).pull();
+        const merged = strategy === "merge"
+          ? mergeV2MigrationSnapshots(source, existing)
+          : { kind: "merged" as const, state: source.state, ledger: source.ledger };
+        if (merged.kind === "conflict") {
+          write(io, program, { outcome: "CONFLICT", status: "CONFLICT", skills: merged.skills }, `Migration conflict: ${merged.skills.join(", ")}. Both providers are unchanged.\n`);
+          return;
+        }
+        const revision = config.mode === "git"
+          ? await migrateV2GitToCloud({
+              source: merged, artifacts: git, destination: cloud, workspaceId: config.workspaceId,
+            })
+          : await migrateV2CloudToGit({
+              source: merged, artifacts: cloud, destination: git,
+            });
         if (destination === "git") await configStore.set("gitRepository", repository as string);
         await configStore.set("mode", destination);
-        write(io, program, { outcome: "SUCCESS", status: "MIGRATED", revision: result.revision, strategy: result.strategy }, `Migrated desired state to ${destination === "cloud" ? "Corotum Cloud" : "Git Sync"}.\n`);
+        write(io, program, { outcome: "SUCCESS", status: "MIGRATED", revision, strategy }, `Migrated desired state to ${destination === "cloud" ? "Corotum Cloud" : "Git Sync"}.\n`);
       } finally {
         await release();
       }
