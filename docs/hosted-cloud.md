@@ -75,6 +75,10 @@ AUTH_EMAIL_FROM=auth@corotum.com
 
 `EMAIL` is a Cloudflare Worker `send_email` binding, not a `.dev.vars` secret or variable. Hosted Worker delivery uses that binding and needs no email API key.
 
+## Cloud Sync behavior
+
+After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/skills` using the same provenance rules as Git init. Devices apply exact locked revisions with `corotum sync`. Source-backed skills are fetched with system Git on that device. Artifact-backed skills download from authenticated R2. Retention keeps the current artifact plus one previous artifact per skill. Sync never uses upstream `HEAD`. Details: [skills.md](./skills.md).
+
 ## CLI against hosted Cloud
 
 ```bash

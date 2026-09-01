@@ -7,7 +7,9 @@ import {
   checkDocs,
   cliCommandsFromSource,
   documentedToolmirrorCommands,
+  recommendsGlobalInitSource,
   REQUIRED_DOC_FILES,
+  withoutUpgradeSection,
 } from "./docs-check";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -36,6 +38,30 @@ describe("docs-check", () => {
 
   test("the product docs pass the public documentation gate", async () => {
     expect(await checkDocs(root)).toEqual([]);
+  });
+
+  test("new-format docs do not recommend legacy write formats or global init --source", () => {
+    expect(recommendsGlobalInitSource("`corotum init --source owner/skills`")).toBe(
+      true,
+    );
+    expect(
+      recommendsGlobalInitSource(
+        "`corotum adopt review --source owner/skills`",
+      ),
+    ).toBe(false);
+    const upgradeOnly = `
+# Migration
+Use corotum.yaml.
+
+## Upgrade from ToolMirror
+
+Old toolmirror.yaml and toolmirror.lock remain readable.
+
+## Next
+Done.
+`;
+    expect(withoutUpgradeSection(upgradeOnly)).not.toContain("toolmirror.yaml");
+    expect(withoutUpgradeSection(upgradeOnly)).toContain("corotum.yaml");
   });
 
   test("rejects invented CLI commands and self-host Creem requirements", async () => {
@@ -92,6 +118,18 @@ describe("docs-check", () => {
     );
     expect(
       findings.some((finding) => finding.message.includes("CREEM_API_KEY")),
+    ).toBe(true);
+
+    await writeFile(
+      join(fixture, "docs/cli.md"),
+      `${await readFile(join(root, "docs/cli.md"))}\nWrite toolmirror.yaml\n\n\`corotum init --source owner/skills\`\n`,
+    );
+    const legacy = await checkDocs(fixture);
+    expect(
+      legacy.some((finding) => finding.message.includes("toolmirror.yaml")),
+    ).toBe(true);
+    expect(
+      legacy.some((finding) => finding.message.includes("init --source")),
     ).toBe(true);
   });
 });

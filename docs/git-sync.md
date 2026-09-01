@@ -2,6 +2,17 @@
 
 Git Sync is the free backend. No Corotum account is required. System Git must be installed. If Git is missing, Corotum stops before partial mutation and tells you to install Git.
 
+Desired state in the sync repository is v2:
+
+```text
+corotum.yaml
+corotum.lock
+corotum.transitions.json
+artifacts/
+```
+
+Source-backed locks store metadata only. Artifact-backed skills store sanitized files under `artifacts/`. See [skills.md](./skills.md) for source-versus-artifact rules, denylist, and `--allow-artifacts`.
+
 Cloud mode does not require Git unless a skill source is a Git repository.
 
 ## Initialize
@@ -10,7 +21,7 @@ Cloud mode does not require Git unless a skill source is a Git repository.
 corotum init git@github.com:example/corotum-state.git
 ```
 
-`<repository>` is the desired-state Git remote Corotum owns as a local clone. Init discovers `~/.agents/skills`, classifies each skill from its own provenance, and adopts only the skills you select. Source-unknown local skills stay visible and unmanaged unless you pass `--adopt-artifact`. Adoption is never all-or-nothing.
+`<repository>` is the desired-state Git remote Corotum owns as a local clone. Init discovers `~/.agents/skills`, classifies each skill from its own provenance (including `~/.agents/.skill-lock.json` as a hint, not a commit proof), and adopts only the skills you select. Source-unknown local skills stay visible and unmanaged unless you pass `--adopt-artifact`. Adoption is never all-or-nothing.
 
 Non-interactive init applies only exact `--replace`, `--keep`, and `--adopt-artifact` choices, and never enables undetected or unconfigured agents.
 
@@ -24,16 +35,17 @@ corotum update
 corotum update review
 corotum set-ref review v1.2.3
 corotum restore review
-corotum restore --all
 ```
 
 `owner/skills` is GitHub shorthand for `https://github.com/owner/skills.git`. HTTPS, SSH, GitLab, Codeberg, self-hosted Git, and other normal Git remotes also work. URLs with embedded credentials or tokens are rejected. Git credentials stay with system Git.
 
 One managed entry is allowed per `source + skill`. Repeating `add` for the same identity does not change its ref; use `set-ref`.
 
-Default `--ref` is `HEAD`. Manifest `ref` is what later updates follow. The lockfile stores the exact commit installed during sync.
+Default `--ref` is `HEAD` as the manifest follow ref. The lockfile stores the exact commit SHA resolved at add/update/set-ref time. `sync` installs that SHA. It never walks `HEAD` at reconcile time.
 
-`status` never performs upstream checks. `update --check` reports `UP_TO_DATE`, `UPDATE_AVAILABLE`, `UNKNOWN`, `AUTH_REQUIRED`, or `CHECK_FAILED` without changing state.
+A skill with `source: null` remains syncable from its artifact. `update` reports `SOURCE_UNAVAILABLE` for it.
+
+`status` never performs upstream checks. `update --check` reports `UP_TO_DATE`, `UPDATE_AVAILABLE`, `SOURCE_UNAVAILABLE`, `UNKNOWN`, `AUTH_REQUIRED`, or `CHECK_FAILED` without changing state.
 
 ## Remove versus unmanage
 
@@ -42,7 +54,7 @@ corotum remove review
 corotum unmanage review
 ```
 
-`remove` deletes the skill from desired state and reconciled agent targets. `unmanage` stops managing the skill and preserves local copies.
+`remove` deletes the skill from desired state and reconciled agent targets. `unmanage` stops managing the skill and preserves local copies. Offline REMOVE/UNMANAGE stay typed; unmanaged content is not overwritten.
 
 ## Reconcile
 
@@ -52,7 +64,7 @@ corotum diff
 corotum sync
 ```
 
-`sync` applies the exact locked revisions to enabled agent targets. Prefer symlink exposure; Corotum falls back to a normal copy when a symlink cannot be used. One failing target does not roll back unrelated successful targets.
+`sync` applies the exact locked revisions to enabled agent targets. Prefer symlink exposure; Corotum falls back to a normal copy when a symlink cannot be used. One failing target does not roll back unrelated successful targets. Applied revision advances only after verification. Absent or corrupt operational state is recovered only from proven ownership.
 
 There is no daemon, watch mode, scheduled update, or remote forced sync. A device reconciles only when you run `corotum sync` on that device.
 
@@ -68,4 +80,4 @@ Git mutations pull first. If a previous desired-state push is still pending, mut
 corotum sync
 ```
 
-Do not re-run init against the existing repository. `corotum config set` does not write `mode` or `gitRepository`; those keys are set by init on the first machine or by editing `config.json` directly. Each machine has its own canonical store and Git clone.
+Do not re-run init against the existing repository. `corotum config set` does not write `mode` or `gitRepository`; those keys are set by init on the first machine or by editing `config.json` directly. Each machine materializes into `~/.agents/skills` and keeps its own Git clone.

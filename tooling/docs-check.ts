@@ -6,11 +6,17 @@ export const REQUIRED_DOC_FILES = [
   "docs/README.md",
   "docs/install.md",
   "docs/cli.md",
+  "docs/skills.md",
   "docs/git-sync.md",
   "docs/self-hosting.md",
   "docs/hosted-cloud.md",
   "docs/dashboard-and-webmcp.md",
   "docs/migration.md",
+] as const;
+
+const LEGACY_WRITE_FORMATS = [
+  "toolmirror.yaml",
+  "toolmirror.lock",
 ] as const;
 
 const SELF_HOST_FORBIDDEN_ENV = [
@@ -56,6 +62,21 @@ function markdownCode(markdown: string): string {
   return [...markdown.matchAll(/```[\s\S]*?```|`[^`]+`/g)]
     .map((match) => match[0])
     .join("\n");
+}
+
+/** Drops the ToolMirror upgrade section so legacy filenames may appear only there. */
+export function withoutUpgradeSection(markdown: string): string {
+  return markdown.replace(
+    /## Upgrade from ToolMirror[\s\S]*?(?=\n## |$)/,
+    "",
+  );
+}
+
+/** True when docs show init with a global `--source` flag. */
+export function recommendsGlobalInitSource(markdown: string): boolean {
+  return /(?:^|\s)(?:corotum\s+)?init\b[^\n`]*--source\b/m.test(
+    markdownCode(markdown),
+  );
 }
 
 export function documentedToolmirrorCommands(
@@ -251,11 +272,52 @@ export async function checkDocs(
     "corotum migrate cloud",
     "corotum migrate git",
     "--strategy",
+    "corotum migrate legacy",
+    "corotum migrate legacy-cleanup",
   ])) {
     findings.push({
       file: "docs/migration.md",
       message: `Missing migration coverage: ${missing}.`,
     });
+  }
+
+  const skills = files.get("docs/skills.md") ?? "";
+  for (const missing of includesAll(skills, [
+    "~/.agents/skills",
+    ".skill-lock.json",
+    "source: null",
+    "--allow-artifacts",
+    ".corotumignore",
+    "CONFIRMATION_REQUIRED",
+    "DENYLISTED_PATH",
+    "corotum.yaml",
+    "corotum.lock",
+  ])) {
+    findings.push({
+      file: "docs/skills.md",
+      message: `Missing v2 contract coverage: ${missing}.`,
+    });
+  }
+
+  for (const [relative, markdown] of files) {
+    const searchable =
+      relative === "docs/migration.md"
+        ? withoutUpgradeSection(markdown)
+        : markdown;
+    for (const phrase of LEGACY_WRITE_FORMATS) {
+      if (searchable.includes(phrase)) {
+        findings.push({
+          file: relative,
+          message: `New-format docs must not recommend ${phrase}.`,
+        });
+      }
+    }
+    if (recommendsGlobalInitSource(searchable)) {
+      findings.push({
+        file: relative,
+        message: "New-format docs must not recommend global init --source.",
+      });
+    }
   }
 
   for (const [relative, markdown] of files) {

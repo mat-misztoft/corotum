@@ -51,9 +51,12 @@ bun run db:migrate
 
 | Binding | Name | Purpose |
 | --- | --- | --- |
-| `DB` | D1 `corotum` | Auth, workspaces, revisions, devices, reports |
+| `DB` | D1 `corotum` | Auth, workspaces, revisions, devices, reports, artifact metadata |
+| `ARTIFACTS` | R2 `corotum-artifacts` | Artifact-backed skill archives only |
 | `ASSETS` | `dist/client` | Built web assets |
 | `TOOLMIRROR_TELEMETRY` | Analytics Engine dataset `toolmirror_telemetry` | Optional anonymous CLI telemetry ingest |
+
+Create the R2 bucket named `corotum-artifacts` (or change `bucket_name` to a bucket you own) before serving artifact-backed skills. D1 stores no archive bytes. Retention keeps the current artifact plus one previous artifact per skill; GC deletes an object only when it is absent from both references. See [skills.md](./skills.md).
 
 You do not need a Creem webhook route configuration for self-hosting. Hosted billing routes return that billing is unavailable when the deployment is not hosted.
 

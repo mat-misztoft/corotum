@@ -30,7 +30,10 @@ corotum cli-update
 ## Docs
 
 - [Public documentation](./docs/README.md)
+- [CLI](./docs/cli.md)
+- [Skills and v2 contracts](./docs/skills.md)
 - [Git Sync](./docs/git-sync.md)
+- [Migration](./docs/migration.md)
 - [Self-hosted Cloud](./docs/self-hosting.md) — Creem is not required
 - [Hosted corotum.com](./docs/hosted-cloud.md)
 
