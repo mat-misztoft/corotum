@@ -1,4 +1,4 @@
-import { type DesiredState, type RevisionTransition, skillId } from "../../../packages/core/src/index";
+import { type DesiredState, type RevisionTransition, skillId, type V2DesiredState } from "../../../packages/core/src/index";
 import { requireHostedCloudAccess } from "./billing";
 import { isV2CloudState, loadCurrentDesiredState, mutateDesiredState, type CloudDesiredState, type CloudRevision } from "./revisions";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
@@ -31,12 +31,82 @@ type TargetRow = Readonly<{
   updatedAt: number;
 }>;
 
+export const DASHBOARD_SKILL_MATERIALIZATIONS = [
+  "source-backed",
+  "artifact-backed-with-provenance",
+  "artifact-backed-without-source",
+  "pending-resolution",
+] as const;
+
+export type DashboardSkillMaterialization = (typeof DASHBOARD_SKILL_MATERIALIZATIONS)[number];
+
+/** Semantic skill row for dashboard/WebMCP. Locators, bytes and local paths stay off this contract. */
+export type DashboardSkill = Readonly<{
+  id: string;
+  skill: string;
+  ref: string;
+  targets: CloudDesiredState["manifest"]["skills"][number]["targets"];
+  resolutionStatus: string;
+  locked: boolean;
+  materialization: DashboardSkillMaterialization;
+}>;
+
 export type DashboardView = Readonly<{
   workspace: { id: string; name: string };
   revision: { id: string | null; sequence: number };
-  skills: readonly (CloudDesiredState["manifest"]["skills"][number] & { locked: boolean })[];
+  skills: readonly DashboardSkill[];
   devices: readonly (DeviceRow & { targets: readonly TargetRow[] })[];
 }>;
+
+function sanitizeReportedText(value: string | null) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/[/\\]/.test(trimmed) || /token|secret|password|\.corotumignore|credentials/i.test(trimmed)) {
+    return "A local target failed.";
+  }
+  return trimmed.slice(0, 200);
+}
+
+function v2Materialization(
+  skill: V2DesiredState["manifest"]["skills"][number],
+  lock: V2DesiredState["lockfile"]["skills"][number] | undefined,
+): DashboardSkillMaterialization {
+  if (skill.resolutionStatus === "PENDING_RESOLUTION" || !lock) return "pending-resolution";
+  if (lock.materialization.kind === "source") return "source-backed";
+  return skill.source ? "artifact-backed-with-provenance" : "artifact-backed-without-source";
+}
+
+/** Projects D1 desired state into dashboard fields; never copies lock locators or source paths. */
+export function projectDashboardSkills(state: CloudDesiredState): readonly DashboardSkill[] {
+  if (isV2CloudState(state)) {
+    return state.manifest.skills.map((skill) => {
+      const lock = state.lockfile.skills.find((candidate) => candidate.id === skill.id);
+      return {
+        id: skill.id,
+        skill: skill.name,
+        ref: skill.source?.ref ?? "",
+        targets: skill.targets,
+        resolutionStatus: skill.resolutionStatus,
+        locked: Boolean(lock),
+        materialization: v2Materialization(skill, lock),
+      };
+    });
+  }
+  return state.manifest.skills.map((skill) => {
+    const lock = state.lockfile.skills.find((candidate) => candidate.id === skill.id);
+    const pending = skill.resolutionStatus === "PENDING_RESOLUTION" || !lock;
+    return {
+      id: skill.id,
+      skill: skill.skill,
+      ref: skill.ref,
+      targets: skill.targets,
+      resolutionStatus: skill.resolutionStatus,
+      locked: Boolean(lock),
+      materialization: pending ? "pending-resolution" : "source-backed",
+    };
+  });
+}
 
 /** Read model shared by dashboard and future WebMCP entry points. */
 export async function readDashboard(
@@ -65,17 +135,20 @@ export async function readDashboard(
     )
     .bind(workspace.id)
     .all<TargetRow>();
-  const targetRows = targets.results ?? [];
+  const targetRows = (targets.results ?? []).map((target) => ({
+    ...target,
+    errorCode: sanitizeReportedText(target.errorCode),
+    errorMessage: sanitizeReportedText(target.errorMessage),
+  }));
   return {
     workspace,
     revision: { id: current.id, sequence: current.sequence },
-    skills: current.state.manifest.skills.map((entry) => ({
-      ...entry,
-      locked: current.state.lockfile.skills.some((locked) => locked.id === entry.id),
-    })),
+    skills: projectDashboardSkills(current.state),
     // syncStatus/appliedRevisionSequence are device reports, never inferred from desired state.
     devices: (deviceRows.results ?? []).map((device) => ({
       ...device,
+      lastErrorCode: sanitizeReportedText(device.lastErrorCode),
+      lastErrorMessage: sanitizeReportedText(device.lastErrorMessage),
       targets: targetRows.filter((target) => target.deviceId === device.id),
     })),
   };
