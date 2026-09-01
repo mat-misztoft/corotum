@@ -24,6 +24,7 @@
     "web:build": "bun run --cwd apps/web build",
     "web:smoke": "bun run --cwd apps/web smoke",
     "check:boundaries": "bun ./scripts/check-architecture-boundaries.mjs",
+    "check:skills-security": "bun ./scripts/check-skills-refactor-security.mjs",
     "lint": "bun run check:boundaries && bunx biome check .",
     "docs:check": "bun ./tooling/docs-check.ts",
     "test:e2e": "bun ./tooling/test-e2e.ts",

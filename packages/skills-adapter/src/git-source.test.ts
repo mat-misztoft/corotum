@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -143,6 +143,45 @@ describe("GitSkillMaterializer", () => {
         destination,
       ),
     ).rejects.toMatchObject({ code: "HASH_MISMATCH" });
+  });
+
+  test("materializeLockedSource refuses HEAD and does not substitute the current tip", async () => {
+    const source = await fixture();
+    const destination = join(source.directory, "materialized-head");
+    const materializer = new GitSkillMaterializer();
+    await expect(
+      materializer.materializeLockedSource(
+        {
+          repository: source.directory,
+          path: "skills/example",
+          revision: "HEAD",
+          contentHash: `sha256:${"0".repeat(64)}`,
+        },
+        destination,
+      ),
+    ).rejects.toMatchObject({ code: "SOURCE_UNAVAILABLE" });
+    await expect(access(destination)).rejects.toThrow();
+  });
+
+  test("rejects a Git skill archive that contains a symlink", async () => {
+    const source = await fixture();
+    await symlink("SKILL.md", join(source.directory, "skills", "example", "linked.md"));
+    await git(["-C", source.directory, "add", "."]);
+    await git(["-C", source.directory, "commit", "-m", "symlink"]);
+    const revision = (await git(["-C", source.directory, "rev-parse", "HEAD"])).trim();
+    const destination = join(source.directory, "materialized-link");
+    await expect(
+      new GitSkillMaterializer().materializeLockedSource(
+        {
+          repository: source.directory,
+          path: "skills/example",
+          revision,
+          contentHash: `sha256:${"0".repeat(64)}`,
+        },
+        destination,
+      ),
+    ).rejects.toMatchObject({ code: "SOURCE_UNAVAILABLE" });
+    await expect(access(destination)).rejects.toThrow();
   });
 
   test("rejects credential-bearing URLs before invoking Git", async () => {

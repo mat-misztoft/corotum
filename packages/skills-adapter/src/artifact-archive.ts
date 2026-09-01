@@ -45,7 +45,6 @@ export async function createArtifactArchive(directory: string): Promise<Artifact
   };
 }
 
-/**
 /** Validates an archive and returns an unpublished verified staging directory. */
 export async function stageArtifactArchive(
   bytes: Uint8Array,
@@ -87,6 +86,11 @@ export async function extractArtifactArchive(
 
 type TarEntry = Readonly<{ path: string; content: Uint8Array }>;
 
+/** Parses a raw TAR and returns only regular files with validated relative paths. */
+export function validatedTarFiles(tar: Uint8Array): readonly TarEntry[] {
+  return parseTar(tar);
+}
+
 function parseTar(tar: Uint8Array): TarEntry[] {
   if (tar.length < BLOCK * 2 || tar.length % BLOCK !== 0) throw unavailable("Artifact TAR is malformed.");
   const entries: TarEntry[] = [];
@@ -101,22 +105,32 @@ function parseTar(tar: Uint8Array): TarEntry[] {
     }
     if (offset + BLOCK > tar.length || !validChecksum(header)) throw unavailable("Artifact TAR header is invalid.");
     const type = String.fromCharCode(header[156]!);
-    if (type !== "\0" && type !== "0") throw unavailable("Artifact TAR contains a non-regular entry.");
     const name = readString(header, 0, 100);
     const prefix = readString(header, 345, 155);
     const path = prefix ? `${prefix}/${name}` : name;
-    assertArchivePath(path);
-    if (paths.has(path)) throw unavailable("Artifact TAR contains duplicate paths.");
-    paths.add(path);
     const size = readOctal(header, 124, 12);
     if (!Number.isSafeInteger(size) || size < 0 || size > MAX_EXPANDED_BYTES) throw unavailable("Artifact TAR entry size is invalid.");
-    expanded += size;
-    if (entries.length >= MAX_ENTRIES || expanded > MAX_EXPANDED_BYTES) throw unavailable("Artifact exceeds extraction limits.");
     const start = offset + BLOCK;
     const end = start + size;
     if (end > tar.length) throw unavailable("Artifact TAR is truncated.");
-    entries.push({ path, content: tar.slice(start, end) });
     offset = end + padding(size);
+    if (type === "g" || type === "x") {
+      expanded += size;
+      if (expanded > MAX_EXPANDED_BYTES) throw unavailable("Artifact exceeds extraction limits.");
+      continue;
+    }
+    if (type === "5") {
+      if (size !== 0) throw unavailable("Artifact TAR directory entry has a payload.");
+      assertArchivePath(path.replace(/\/+$/, ""));
+      continue;
+    }
+    assertArchivePath(path);
+    if (type !== "\0" && type !== "0") throw unavailable("Artifact TAR contains a non-regular entry.");
+    if (paths.has(path)) throw unavailable("Artifact TAR contains duplicate paths.");
+    paths.add(path);
+    expanded += size;
+    if (entries.length >= MAX_ENTRIES || expanded > MAX_EXPANDED_BYTES) throw unavailable("Artifact exceeds extraction limits.");
+    entries.push({ path, content: tar.slice(start, end) });
   }
   throw unavailable("Artifact TAR has no end marker.");
 }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type { LockedSkill } from "../../core/src/index";
+import { ArtifactArchiveError, validatedTarFiles } from "./artifact-archive";
 import { hashSkillDirectory } from "./canonical-store";
 import { scanNormalizedContent } from "./normalized-content";
 
@@ -225,9 +226,7 @@ export class GitSkillMaterializer {
       }
       const archive = await this.archive(checkout, revision, path);
       await mkdir(staging, { recursive: true });
-      await writeFile(join(staging, "skill.tar"), archive);
-      await this.extract(join(staging, "skill.tar"), staging, path);
-      await rm(join(staging, "skill.tar"), { force: true });
+      await this.extract(archive, staging, path);
       if ((await contentHash(staging)) !== lock.contentHash) {
         throw new GitSourceError(
           "HASH_MISMATCH",
@@ -311,10 +310,7 @@ export class GitSkillMaterializer {
   ): Promise<string> {
     const temporary = await mkdtemp(join(tmpdir(), "corotum-git-hash-"));
     try {
-      const file = join(temporary, "skill.tar");
-      await writeFile(file, archive);
-      await this.extract(file, temporary, path);
-      await rm(file, { force: true });
+      await this.extract(archive, temporary, path);
       return await contentHash(temporary);
     } finally {
       await rm(temporary, { force: true, recursive: true });
@@ -322,33 +318,36 @@ export class GitSkillMaterializer {
   }
 
   private async extract(
-    archive: string,
+    archive: Uint8Array,
     destination: string,
     path: string,
   ): Promise<void> {
-    const process = Bun.spawn(
-      [
-        "tar",
-        "-xf",
-        archive,
-        "-C",
-        destination,
-        `--strip-components=${path.split("/").length}`,
-      ],
-      {
-        stderr: "pipe",
-        stdout: "pipe",
-      },
-    );
-    const [stderr, exitCode] = await Promise.all([
-      new Response(process.stderr).text(),
-      process.exited,
-    ]);
-    if (exitCode !== 0)
+    const prefix = `${path.replace(/\/+$/, "")}/`;
+    try {
+      for (const file of validatedTarFiles(archive)) {
+        if (file.path !== path && !file.path.startsWith(prefix)) {
+          throw new GitSourceError(
+            "SOURCE_UNAVAILABLE",
+            "Locked Git archive contained a path outside the skill directory.",
+          );
+        }
+        const relative = file.path.startsWith(prefix)
+          ? file.path.slice(prefix.length)
+          : "";
+        if (!relative) continue;
+        const target = join(destination, ...relative.split("/"));
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, file.content, { mode: 0o644 });
+      }
+    } catch (error) {
+      if (error instanceof GitSourceError) throw error;
       throw new GitSourceError(
         "SOURCE_UNAVAILABLE",
-        `Could not extract locked skill content: ${stderr.trim()}`,
+        error instanceof ArtifactArchiveError
+          ? error.message
+          : "Could not extract locked skill content.",
       );
+    }
   }
 }
 
