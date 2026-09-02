@@ -173,10 +173,12 @@ async function writeFakeGit(bin: string, stderr: string): Promise<void> {
   await writeFile(
     join(bin, "git"),
     `#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "git version 2.45.0"
-  exit 0
-fi
+for arg in "$@"; do
+  if [ "$arg" = "--version" ]; then
+    echo "git version 2.45.0"
+    exit 0
+  fi
+done
 echo ${JSON.stringify(stderr)} >&2
 exit 128
 `,
