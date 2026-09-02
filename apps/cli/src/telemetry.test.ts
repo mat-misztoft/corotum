@@ -137,4 +137,25 @@ describe("CLI telemetry consent", () => {
     ).toBeNull();
     expect(subject.events).toEqual([]);
   });
+
+  test("does not prompt or mutate on help and version paths", async () => {
+    const subject = fixture();
+    for (const argv of [
+      ["--help"],
+      ["--version"],
+      ["-h"],
+      ["-V"],
+      ["init", "--help"],
+      ["login", "--help"],
+      ["add", "-h"],
+      ["status", "--version"],
+      ["agents", "enable", "--help"],
+    ] as const) {
+      expect(await subject.telemetry.begin(argv, true)).toBeNull();
+    }
+    expect(subject.promptCount()).toBe(0);
+    expect(subject.events).toEqual([]);
+    expect(subject.config().telemetry).toBeNull();
+    expect(subject.config().installationId).toBeNull();
+  });
 });

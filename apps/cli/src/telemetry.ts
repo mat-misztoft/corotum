@@ -117,7 +117,15 @@ export class CliTelemetry {
   }
 }
 
+/** Help and version paths never start telemetry or first-run consent. */
+export function isHelpOrVersionArgv(argv: readonly string[]): boolean {
+  return argv.some((argument) =>
+    ["--help", "-h", "--version", "-V"].includes(argument),
+  );
+}
+
 function commandFrom(argv: readonly string[]): TelemetryCommandName | null {
+  if (isHelpOrVersionArgv(argv)) return null;
   for (const argument of argv) {
     if (argument.startsWith("-")) continue;
     return (telemetryCommandNames as readonly string[]).includes(argument)

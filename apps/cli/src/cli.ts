@@ -20,7 +20,7 @@ import { registerRemoveCommands } from "./remove-command";
 import { registerRestoreCommand } from "./restore-command";
 import { registerSetRefCommand } from "./set-ref-command";
 import { registerSyncCommands } from "./sync-command";
-import type { CliTelemetry } from "./telemetry";
+import { isHelpOrVersionArgv, type CliTelemetry } from "./telemetry";
 import { registerUpdateCommand } from "./update-command";
 import {
   collectWelcomeSnapshot,
@@ -123,19 +123,22 @@ export async function runCli(
   welcome?: WelcomeDeps,
 ): Promise<ExitCode> {
   const json = argv.includes("--json");
-  if (json && isCommanderDisplayRequest(argv)) {
+  const displayOnly = isHelpOrVersionArgv(argv);
+  if (json && displayOnly) {
     io.writeOutput(`${JSON.stringify(jsonEnvelope({ outcome: "SUCCESS" }))}\n`);
     return ExitCode.SUCCESS;
   }
 
-  const pending = await telemetry?.begin(
-    argv,
-    !json &&
-      !isNonInteractive(
-        { nonInteractive: argv.includes("--non-interactive") },
-        io.stdinIsTTY,
-      ),
-  );
+  const pending = displayOnly
+    ? null
+    : await telemetry?.begin(
+        argv,
+        !json &&
+          !isNonInteractive(
+            { nonInteractive: argv.includes("--non-interactive") },
+            io.stdinIsTTY,
+          ),
+      );
   const program = createCli(
     io,
     json,
@@ -179,12 +182,6 @@ function outcomeFor(error: unknown): CliOutcome {
   if (error instanceof InitError) return error.outcome;
   if (error instanceof GitCliError) return error.outcome;
   return "GENERAL_ERROR";
-}
-
-function isCommanderDisplayRequest(argv: readonly string[]): boolean {
-  return argv.some((argument) =>
-    ["--help", "-h", "--version", "-V"].includes(argument),
-  );
 }
 
 function errorMessage(error: unknown): string {

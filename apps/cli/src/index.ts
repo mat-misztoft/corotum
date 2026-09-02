@@ -5,7 +5,11 @@ import { CLI_VERSION, runCli } from "./cli";
 import { applyPendingCliUpdate, createCliUpdateDeps } from "./cli-update";
 import { ConfigStore } from "./config";
 import { resolvePlatformPaths } from "./platform";
-import { CliTelemetry, noOpTelemetryEmitter } from "./telemetry";
+import {
+  CliTelemetry,
+  isHelpOrVersionArgv,
+  noOpTelemetryEmitter,
+} from "./telemetry";
 
 const paths = resolvePlatformPaths({
   homeDir: homedir(),
@@ -34,7 +38,9 @@ const telemetry = new CliTelemetry(
   { version: CLI_VERSION, os: process.platform, architecture: process.arch },
 );
 
-if (process.platform === "win32") {
+const argv = Bun.argv.slice(2);
+
+if (process.platform === "win32" && !isHelpOrVersionArgv(argv)) {
   try {
     const pending = await applyPendingCliUpdate(
       createCliUpdateDeps({
@@ -55,5 +61,5 @@ if (process.platform === "win32") {
   }
 }
 
-const exitCode = await runCli(Bun.argv.slice(2), undefined, telemetry);
+const exitCode = await runCli(argv, undefined, telemetry);
 if (exitCode !== 0) process.exitCode = exitCode;
