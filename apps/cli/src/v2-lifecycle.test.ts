@@ -222,6 +222,19 @@ describe("v2 remove/unmanage/restore lifecycle", () => {
     expect(await readFile(join(other, "SKILL.md"), "utf8")).toBe("# Hands off\n");
   });
 
+  test("remove of drifted canonical content is refused before desired-state mutation", async () => {
+    const path = await root();
+    const { id, desired, applier, state, recovery } = await install(path, "review");
+    await writeFile(join(path, "canonical", "review", "SKILL.md"), "# Drifted\n");
+    const provider = memoryProvider(desired);
+    const service = new V2LifecycleService(provider, applier, state, recovery);
+    expect(await service.remove("review")).toMatchObject({ kind: "drifted" });
+    expect(provider.snapshot().state.manifest.skills).toHaveLength(1);
+    expect(provider.snapshot().ledger.activeDispositions[id]).toBeUndefined();
+    expect(await readFile(join(path, "canonical", "review", "SKILL.md"), "utf8")).toBe("# Drifted\n");
+    expect(await recovery.load()).toBeNull();
+  });
+
   test("desired-state success then local failure leaves a recovery marker and no synced revision", async () => {
     const path = await root();
     const { id, desired, state, recovery } = await install(path, "review");

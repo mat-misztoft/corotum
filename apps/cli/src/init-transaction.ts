@@ -174,6 +174,38 @@ export class InitTransactionService {
       current.state.manifest.skills.length > 0 &&
       !sameAdoption(current.state, marker.skillIds)
     ) {
+      if (marker.skillIds.length === 0) {
+        if (!current.revisionId) {
+          return {
+            kind: "refused",
+            reason: "Existing desired state is missing a revision.",
+            outcomes,
+          };
+        }
+        const revision = current.revisionId;
+        try {
+          await this.deps.persistConfig();
+        } catch (error) {
+          return {
+            kind: "partial",
+            revision,
+            skillIds: [],
+            reason:
+              error instanceof Error
+                ? error.message
+                : "Local configuration could not be saved.",
+            phase: "locally-verified",
+            outcomes,
+          };
+        }
+        await this.deps.recovery.clear();
+        return {
+          kind: "initialized",
+          revision,
+          skillIds: [],
+          outcomes,
+        };
+      }
       return {
         kind: "refused",
         reason: `Corotum is already initialized for this ${this.deps.backend.kind === "cloud" ? "Cloud workspace" : "Git repository"}.`,

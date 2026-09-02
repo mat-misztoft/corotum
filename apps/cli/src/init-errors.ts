@@ -275,7 +275,7 @@ function isMissingGit(error: unknown): boolean {
     const code = (error as { code?: unknown }).code;
     if (code === "ENOENT" || code === "ENOTFOUND") return true;
   }
-  return /not found|enoent|git: command not found|spawn git/i.test(
+  return /git: command not found|spawn git|enoent/i.test(
     errorMessage(error),
   );
 }

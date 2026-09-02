@@ -147,5 +147,13 @@ describe("git init error classification", () => {
         ),
       ),
     ).toMatchObject({ code: "INVALID_GIT_REPOSITORY" });
+    const unknownSkill = classifyGitInitError(
+      new Error("Managed skill was not found or is ambiguous."),
+    );
+    expect(unknownSkill).toBeInstanceOf(Error);
+    expect(unknownSkill).not.toMatchObject({ code: "GIT_MISSING" });
+    expect(unknownSkill.message).toBe(
+      "Managed skill was not found or is ambiguous.",
+    );
   });
 });

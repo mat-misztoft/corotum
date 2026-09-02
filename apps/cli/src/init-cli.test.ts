@@ -297,7 +297,7 @@ describe("real corotum init CLI", () => {
   );
 
   test(
-    "already initialized Git desired state is a typed error and does not require agents",
+    "a second home joins existing Git desired state without agents and refuses a clobbering adoption",
     async () => {
       const root = await temp("remote-initialized");
       const remote = await stateRemote(root);
@@ -320,15 +320,38 @@ describe("real corotum init CLI", () => {
           ])
         ).code,
       ).toBe(0);
-      const retry = await run(second, [
+      const joined = await run(second, [
         "--json",
         "--non-interactive",
         "init",
         "repository",
         remote,
       ]);
-      expect(retry.code).toBe(ExitCode.CONFLICT);
-      expect(String(retry.json?.error ?? retry.stderr)).toMatch(/already initialized/i);
+      expect(joined.code).toBe(0);
+      expect(joined.json?.outcome ?? "SUCCESS").toBe("SUCCESS");
+
+      const clobberHome = join(root, "clobber");
+      await mkdir(join(clobberHome, ".agents", "skills", "extra"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(clobberHome, ".agents", "skills", "extra", "SKILL.md"),
+        "# Extra\n",
+      );
+      const clobber = await run(clobberHome, [
+        "--json",
+        "--non-interactive",
+        "--allow-artifacts",
+        "init",
+        "repository",
+        remote,
+        "--adopt-artifact",
+        "extra",
+      ]);
+      expect(clobber.code).toBe(ExitCode.CONFLICT);
+      expect(String(clobber.json?.error ?? clobber.stderr)).toMatch(
+        /already initialized/i,
+      );
     },
     timeout,
   );

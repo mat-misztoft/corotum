@@ -247,6 +247,19 @@ export class V2LocalApplier implements V2LocalApplierContract {
     return outcomes;
   }
 
+  /** Verifies recorded ownership before a REMOVE/UNMANAGE desired-state push. */
+  async assertDestructiveSafe(skillId: SkillId): Promise<void> {
+    const saved = await this.loadState();
+    const skill = saved.skills[skillId];
+    if (!skill) return;
+    const ownership = managedTargetsFromState(saved);
+    await this.assertSafeDestructiveTargets(
+      skill.canonicalPath,
+      skill.contentHash,
+      ownership.filter((target) => target.skillId === skillId),
+    );
+  }
+
   /** Deletes only hash-verified canonical and target ownership. */
   async applyRemove(skillId: SkillId): Promise<LocalOperationalState> {
     const saved = await this.loadState();

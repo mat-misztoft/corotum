@@ -189,6 +189,95 @@ describe("init transaction", () => {
     expect(applies).toBe(1);
     expect(configs).toBe(2);
   });
+
+  test("joining an existing Git desired state with no local adoptions persists config only", async () => {
+    const root = await tempDir("corotum-init-join-");
+    const existing: V2DesiredState = {
+      manifest: {
+        version: 2,
+        skills: [{
+          id: skillId("sk_remote"),
+          name: "notes",
+          targets: "all",
+          source: {
+            repository: "https://example.test/skills.git",
+            path: "notes",
+            ref: "main",
+          },
+          resolutionStatus: "RESOLVED",
+        }],
+      },
+      lockfile: {
+        version: 2,
+        skills: [{
+          id: skillId("sk_remote"),
+          name: "notes",
+          source: {
+            repository: "https://example.test/skills.git",
+            path: "notes",
+            ref: "main",
+            revision,
+            contentHash: hash,
+          },
+          materialization: { kind: "source", contentHash: hash },
+        }],
+      },
+    };
+    const provider = memoryProvider({ existing });
+    let configured = 0;
+    const service = new InitTransactionService({
+      provider,
+      recovery: new InitRecoveryStore(join(root, "init.json")),
+      persistConfig: async () => {
+        configured += 1;
+      },
+      backend: { kind: "git" },
+      apply: async () => {
+        throw new Error("join must not apply remote skills");
+      },
+    });
+    const result = await service.run({
+      outcomes: [unmanaged("keep-me", "/tmp/keep")],
+    });
+    expect(result).toMatchObject({ kind: "initialized", revision: "base", skillIds: [] });
+    expect(provider.pushes).toBe(0);
+    expect(configured).toBe(1);
+  });
+
+  test("refuses to publish a new adoption set over an already initialized Git repository", async () => {
+    const root = await tempDir("corotum-init-clobber-");
+    const existing: V2DesiredState = {
+      manifest: {
+        version: 2,
+        skills: [{
+          id: skillId("sk_remote"),
+          name: "notes",
+          targets: "all",
+          resolutionStatus: "RESOLVED",
+        }],
+      },
+      lockfile: {
+        version: 2,
+        skills: [{
+          id: skillId("sk_remote"),
+          name: "notes",
+          materialization: { kind: "source", contentHash: hash },
+        }],
+      },
+    };
+    const provider = memoryProvider({ existing });
+    const service = new InitTransactionService({
+      provider,
+      recovery: new InitRecoveryStore(join(root, "init.json")),
+      persistConfig: async () => undefined,
+      backend: { kind: "git" },
+    });
+    expect(await service.run({ outcomes: [sourceOutcome("alpha", "/tmp/alpha")] })).toMatchObject({
+      kind: "refused",
+      reason: "Corotum is already initialized for this Git repository.",
+    });
+    expect(provider.pushes).toBe(0);
+  });
 });
 
 describe("Git init artifacts and consent", () => {

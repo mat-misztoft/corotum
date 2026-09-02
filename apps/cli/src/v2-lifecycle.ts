@@ -60,7 +60,11 @@ export class LifecycleRecoveryStore {
   }
 }
 
-type LifecycleApplier = Pick<V2LocalApplier, "applyRemove" | "applyUnmanage" | "applyRestore">;
+type LifecycleApplier = Pick<
+  V2LocalApplier,
+  "applyRemove" | "applyUnmanage" | "applyRestore"
+> &
+  Partial<Pick<V2LocalApplier, "assertDestructiveSafe">>;
 
 /**
  * Remove/unmanage persist a ledger tombstone before touching local files.
@@ -119,6 +123,17 @@ export class V2LifecycleService {
       let revision = marker?.revision ?? current.revisionId;
       let persistedState = current.state;
       if (marker?.phase !== "desired-persisted" && marker?.phase !== "locally-applied") {
+        try {
+          await this.applier.assertDestructiveSafe?.(id);
+        } catch (error) {
+          if (error instanceof V2LocalApplyError && error.code === "LOCAL_CONFLICT") {
+            return { kind: "local-conflict", skillId: id, reason: error.message };
+          }
+          if (error instanceof V2LocalApplyError && error.code === "DRIFTED") {
+            return { kind: "drifted", skillId: id, reason: error.message };
+          }
+          throw error;
+        }
         const nextState = withoutSkill(current.state, id);
         const ledger = withTombstone(current.ledger, { id, name }, operation);
         const persisted = await this.provider.push({
