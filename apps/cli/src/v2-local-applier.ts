@@ -5,8 +5,9 @@ import type { AgentId } from "../../../packages/agent-targets/src/index";
 import {
   AgentTargetManager,
   type ManagedTarget,
+  type TargetOutcome,
 } from "../../../packages/agent-targets/src/targets";
-import type { SkillId, V2DesiredState } from "../../../packages/core/src/index";
+import { skillId, type SkillId, type V2DesiredState } from "../../../packages/core/src/index";
 import {
   CanonicalSkillStore,
   hashSkillDirectory,
@@ -20,6 +21,7 @@ import type { V2LocalApplier as V2LocalApplierContract } from "./v2-mutations";
 import {
   type LocalOperationalState,
   type LocalOperationalStateStore,
+  type LocalTargetState,
   managedTargetsFromState,
 } from "./local-state";
 
@@ -179,6 +181,70 @@ export class V2LocalApplier implements V2LocalApplierContract {
         : input.revisionId) as never,
       skills,
     });
+  }
+
+  /** Exposes managed canonical skills to currently enabled agents. Desired state is unchanged. */
+  async applyEnableAgent(desired?: V2DesiredState): Promise<readonly TargetOutcome[]> {
+    const saved = await this.loadState();
+    let ownership = managedTargetsFromState(saved);
+    const skills = { ...saved.skills };
+    const outcomes: TargetOutcome[] = [];
+    for (const [id, skill] of Object.entries(skills)) {
+      const currentId = skillId(id);
+      const targets =
+        desired?.manifest.skills.find((entry) => entry.id === currentId)
+          ?.targets ?? "all";
+      const exposed = await this.targets.expose({
+        skillId: currentId,
+        skillName: skill.name,
+        canonicalPath: skill.canonicalPath,
+        targets,
+        enabledAgentIds: this.input.enabledAgentIds,
+        homeDir: this.input.homeDir,
+        ownership,
+        expectedContentHash: skill.contentHash,
+      });
+      this.assertTargetSuccess(exposed.outcomes);
+      ownership = exposed.ownership;
+      outcomes.push(...exposed.outcomes);
+      skills[currentId] = {
+        ...skill,
+        targets: targetsFromOwnership(currentId, ownership),
+      };
+    }
+    await this.stateStore.save({
+      schemaVersion: 2,
+      lastAppliedRevision: saved.lastAppliedRevision,
+      skills,
+    });
+    return outcomes;
+  }
+
+  /** Removes one agent's recorded exposure without deleting global managed skills. */
+  async applyDisableAgent(agentId: AgentId): Promise<readonly TargetOutcome[]> {
+    const saved = await this.loadState();
+    let ownership = managedTargetsFromState(saved);
+    const skills = { ...saved.skills };
+    const outcomes: TargetOutcome[] = [];
+    for (const id of Object.keys(skills)) {
+      const currentId = skillId(id);
+      const disabled = await this.targets.disable(currentId, agentId, ownership);
+      this.assertTargetSuccess(disabled.outcomes);
+      ownership = disabled.ownership;
+      outcomes.push(...disabled.outcomes);
+      const skill = skills[currentId];
+      if (!skill) continue;
+      skills[currentId] = {
+        ...skill,
+        targets: targetsFromOwnership(currentId, ownership),
+      };
+    }
+    await this.stateStore.save({
+      schemaVersion: 2,
+      lastAppliedRevision: saved.lastAppliedRevision,
+      skills,
+    });
+    return outcomes;
   }
 
   /** Deletes only hash-verified canonical and target ownership. */
@@ -354,6 +420,25 @@ export class V2LocalApplier implements V2LocalApplierContract {
       async (locator) => treePath(locator),
     );
   }
+}
+
+function targetsFromOwnership(
+  id: SkillId,
+  ownership: readonly ManagedTarget[],
+): Record<string, LocalTargetState> {
+  return Object.fromEntries(
+    ownership
+      .filter((target) => target.skillId === id)
+      .map((target) => [
+        `${target.agentId}\0${target.path}`,
+        {
+          agentId: target.agentId,
+          mode: target.mode,
+          path: target.path,
+          expectedHash: target.expectedHash,
+        },
+      ]),
+  );
 }
 
 function sourceKey(source: string): string {

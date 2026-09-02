@@ -1,6 +1,7 @@
 import { Command, CommanderError } from "commander";
 import { V2ArtifactConsentRequiredError } from "../../../packages/git-provider/src/index";
 import { registerAddCommand } from "./add-command";
+import { registerAgentsCommand } from "./agents-command";
 import { registerAdoptCommand } from "./adopt-command";
 import {
   type CliOutcome,
@@ -90,6 +91,7 @@ export function createCli(
   registerCliUpdateCommand(program, io, CLI_VERSION);
   registerSetRefCommand(program, io);
   registerSyncCommands(program, io);
+  registerAgentsCommand(program, io);
   registerConfigCommand(program, io);
   registerCloudAuthCommands(program, io);
   registerMigrateCommand(program, io);
