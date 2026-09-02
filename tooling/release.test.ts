@@ -185,6 +185,42 @@ describe("final release layout", () => {
     ).toEqual(["AUTH_EMAIL_FROM must be a valid email address."]);
   });
 
+  test("official CLI scripts and compile proof keep linux-arm64 with existing targets", () => {
+    const pkg = JSON.parse(
+      readFileSync(join(root, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    const buildCli = readFileSync(join(root, "scripts/build-cli.sh"), "utf8");
+    const compileProof = readFileSync(
+      join(root, ".github/workflows/cli-compile.yml"),
+      "utf8",
+    );
+    const expectedIds = [
+      "darwin-arm64",
+      "darwin-x64",
+      "linux-arm64",
+      "linux-x64",
+      "windows-x64",
+    ] as const;
+
+    expect(RELEASE_TARGETS.map((target) => target.id)).toEqual([
+      ...expectedIds,
+    ]);
+    for (const id of expectedIds) {
+      expect(pkg.scripts[`build:cli:${id}`]).toBe(
+        `./scripts/build-cli.sh bun-${id}`,
+      );
+      expect(buildCli).toContain(`bun-${id}`);
+    }
+    expect(pkg.scripts["build:cli:linux"]).toBe(
+      "./scripts/build-cli.sh bun-linux-x64",
+    );
+    expect(compileProof).toContain("bun run build:cli:linux");
+    expect(compileProof).toContain("bun run verify:cli dist/corotum-linux-x64");
+    expect(compileProof).toContain("bun run build:cli:linux-arm64");
+    expect(compileProof).toContain("test -s dist/corotum-linux-arm64");
+    expect(compileProof).not.toContain("verify:cli dist/corotum-linux-arm64");
+  });
+
   test("GitHub Actions rebuilds every target from final source and gates publication", () => {
     const workflow = readFileSync(
       join(root, ".github/workflows/release.yml"),

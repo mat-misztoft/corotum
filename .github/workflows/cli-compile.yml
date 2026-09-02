@@ -16,3 +16,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build:cli:linux
       - run: bun run verify:cli dist/corotum-linux-x64
+
+  linux-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run build:cli:linux-arm64
+      - name: Confirm linux-arm64 standalone artifact
+        run: test -s dist/corotum-linux-arm64
