@@ -21,6 +21,12 @@ import { registerSetRefCommand } from "./set-ref-command";
 import { registerSyncCommands } from "./sync-command";
 import type { CliTelemetry } from "./telemetry";
 import { registerUpdateCommand } from "./update-command";
+import {
+  collectWelcomeSnapshot,
+  defaultWelcomeDeps,
+  formatWelcomeScreen,
+  type WelcomeDeps,
+} from "./welcome";
 
 export const CLI_VERSION = "0.1.0";
 
@@ -54,6 +60,7 @@ export function isNonInteractive(
 export function createCli(
   io: CliIo = processIo(),
   suppressErrorOutput = false,
+  welcome: WelcomeDeps = defaultWelcomeDeps(CLI_VERSION),
 ): Command {
   const program = new Command();
   program
@@ -87,7 +94,7 @@ export function createCli(
   registerCloudAuthCommands(program, io);
   registerMigrateCommand(program, io);
 
-  program.action(() => {
+  program.action(async () => {
     const options = program.opts<CliOptions>();
     if (options.json) {
       io.writeOutput(
@@ -95,7 +102,9 @@ export function createCli(
       );
       return;
     }
-    io.writeOutput("Run corotum --help to see available commands.\n");
+    io.writeOutput(
+      formatWelcomeScreen(await collectWelcomeSnapshot(welcome)),
+    );
   });
 
   return program;
@@ -109,6 +118,7 @@ export async function runCli(
   argv: readonly string[],
   io: CliIo = processIo(),
   telemetry?: CliTelemetry,
+  welcome?: WelcomeDeps,
 ): Promise<ExitCode> {
   const json = argv.includes("--json");
   if (json && isCommanderDisplayRequest(argv)) {
@@ -124,7 +134,11 @@ export async function runCli(
         io.stdinIsTTY,
       ),
   );
-  const program = createCli(io, json);
+  const program = createCli(
+    io,
+    json,
+    welcome ?? defaultWelcomeDeps(CLI_VERSION),
+  );
   let outcome: CliOutcome = "SUCCESS";
   try {
     await program.parseAsync([...argv], { from: "user" });

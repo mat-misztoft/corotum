@@ -13,6 +13,7 @@ import { createArtifactArchive } from "../../../packages/skills-adapter/src/arti
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
 import { createCliV2GitStateProvider } from "./artifact-consent";
+import { formatCorotumBanner } from "./banner";
 import { CLI_VERSION, type CliIo } from "./cli";
 import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
 import { cloudAuthContext } from "./cloud-auth-command";
@@ -43,19 +44,6 @@ import {
   coalesceInitCandidates,
   divergentCandidates,
 } from "./init";
-
-const INIT_BANNER = [
-  ",-----.                       ,--.                     ",
-  "'  .--./ ,---. ,--.--. ,---. ,-'  '-.,--.,--.,--,--,--. ",
-  "|  |    | .-. ||  .--'| .-. |'-.  .-'|  ||  ||        | ",
-  "'  '--'\\' '-' '|  |   ' '-' '  |  |  '  ''  '|  |  |  | ",
-  " `-----' `---' `--'    `---'   `--'   `----' `--`--`--' ",
-];
-
-function initBanner(version: string): string {
-  const width = Math.max(...INIT_BANNER.map((line) => line.length));
-  return `${INIT_BANNER.join("\n")}\n${`v${version}`.padStart(width)}\n`;
-}
 
 export function registerInitCommand(program: Command, io: CliIo): void {
   program
@@ -105,7 +93,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             );
           }
           if (!opts.json && !nonInteractive) {
-            io.writeOutput(initBanner(CLI_VERSION));
+            io.writeOutput(formatCorotumBanner(CLI_VERSION));
           }
           const selection = await resolveInitProvider({
             provider,
