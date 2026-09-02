@@ -15,6 +15,11 @@ import type { CliIo } from "./cli";
 import { isNonInteractive } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import {
+  assertGitAvailable,
+  notInitializedError,
+  withGitCliErrors,
+} from "./init-errors";
+import {
   CloudSyncReportService,
   deviceSyncAggregateFrom,
 } from "./cloud-sync-report";
@@ -58,6 +63,7 @@ async function inspectCommand(
   program: Command,
   io: CliIo,
 ): Promise<void> {
+  await withGitCliErrors(async () => {
   const runtime = await createRuntime(program, io, false);
   const result = await runtime.service.inspect();
   const payload: Record<string, unknown> = {
@@ -74,9 +80,11 @@ async function inspectCommand(
         : `${result.snapshot.plan.operations.length} operations planned.\n`
       : `${String(payload.status)}: ${"reason" in result ? result.reason : ""}\n`;
   write(io, program, payload, human);
+  });
 }
 
 async function syncCommand(program: Command, io: CliIo): Promise<void> {
+  await withGitCliErrors(async () => {
   const homeDir = homedir();
   const paths = resolvePlatformPaths({
     homeDir,
@@ -128,6 +136,7 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
   } finally {
     await release();
   }
+  });
 }
 
 async function createRuntime(
@@ -144,8 +153,9 @@ async function createRuntime(
   });
   const config = loaded ?? (await new ConfigStore(paths).load());
   if (config.mode !== "git" && config.mode !== "cloud") {
-    throw new Error("Run corotum init before using status, diff, or sync.");
+    throw notInitializedError("using status, diff, or sync");
   }
+  if (config.mode === "git") await assertGitAvailable();
   const storage = effectiveStoragePaths(config, paths);
   const enabledAgentIds = Object.entries(config.agents)
     .filter(([, value]) => value.enabled)
@@ -240,7 +250,7 @@ async function createProvider(
 > {
   if (config.mode === "git") {
     if (!config.gitRepository) {
-      throw new Error("Run corotum init before using Git Sync.");
+      throw notInitializedError("using Git Sync");
     }
     const git = createCliV2GitStateProvider({
       storagePath: storage.gitStoragePath,

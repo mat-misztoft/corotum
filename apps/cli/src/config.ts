@@ -30,6 +30,18 @@ const credentialsSchema = z
 export type CorotumConfig = z.infer<typeof configSchema>;
 export type Credentials = z.infer<typeof credentialsSchema>;
 export type ConfigKey = Exclude<keyof CorotumConfig, "schemaVersion">;
+export const CONFIG_KEYS = [
+  "mode",
+  "workspaceId",
+  "deviceId",
+  "skillsStoragePath",
+  "gitStoragePath",
+  "gitRepository",
+  "telemetry",
+  "installationId",
+  "agents",
+] as const satisfies readonly ConfigKey[];
+export const SETTABLE_CONFIG_KEYS = ["telemetry"] as const satisfies readonly ConfigKey[];
 
 export const defaultConfig = (): CorotumConfig => ({
   schemaVersion: 1,

@@ -56,7 +56,7 @@ describe("v2 mutation commands", () => {
     expect(adopted.kind).toBe("success");
     const beforeCheck = state.pushes;
     expect(await service.check("alpha")).toEqual([
-      { skillId: adopted.skillId, status: "UPDATE_AVAILABLE" },
+      { skillId: adopted.skillId, name: "alpha", status: "UPDATE_AVAILABLE" },
     ]);
     expect(state.pushes).toBe(beforeCheck);
 
@@ -126,7 +126,7 @@ describe("v2 mutation commands", () => {
     const service = new V2MutationService(state, resolver);
     await service.add({ name: "alpha", source: { repository: "https://example.test/a.git", path: "alpha", ref: "main" } });
     const before = state.pushes;
-    expect(await service.check("alpha")).toEqual([{ skillId: (await state.pull()).state.manifest.skills[0]?.id, status: "UP_TO_DATE" }]);
+    expect(await service.check("alpha")).toEqual([{ skillId: (await state.pull()).state.manifest.skills[0]?.id, name: "alpha", status: "UP_TO_DATE" }]);
     expect(state.pushes).toBe(before);
     await service.setRef("alpha", "v1");
     expect((await state.pull()).state.manifest.skills[0]?.source?.ref).toBe("v1");

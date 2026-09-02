@@ -27,6 +27,26 @@ export class InitError extends Error {
   }
 }
 
+export type GitCliErrorCode =
+  | "GIT_MISSING"
+  | "INVALID_GIT_REPOSITORY"
+  | "REMOTE_UNAVAILABLE"
+  | "AUTH_REQUIRED"
+  | "NOT_INITIALIZED";
+
+/** Typed Git Sync failures shared by init and later Git commands. */
+export class GitCliError extends Error {
+  readonly name = "GitCliError";
+
+  constructor(
+    message: string,
+    readonly code: GitCliErrorCode,
+    readonly outcome: CliOutcome = outcomeForGitCode(code),
+  ) {
+    super(message);
+  }
+}
+
 export type InitProviderSelection =
   | Readonly<{ kind: "cloud" }>
   | Readonly<{ kind: "git"; repository: string }>;
@@ -86,7 +106,7 @@ export async function assertGitAvailable(
     const result = await runGit({ args: ["--version"] });
     if (result.exitCode === 0) return;
   } catch (error) {
-    if (error instanceof InitError) throw error;
+    if (error instanceof InitError || error instanceof GitCliError) throw error;
     throw missingGitError(error);
   }
   throw missingGitError();
@@ -97,38 +117,54 @@ export function throwGitInitError(error: unknown): never {
 }
 
 export function classifyGitInitError(error: unknown): Error {
-  if (error instanceof InitError) return error;
+  if (error instanceof InitError || error instanceof GitCliError) return error;
   if (error instanceof GitSourceError) {
     if (error.code === "AUTH_REQUIRED") return authGitError();
     if (error.code === "INVALID_SOURCE" || error.code === "CREDENTIALS_IN_URL") {
       return invalidGitRepositoryError();
     }
-    if (error.code === "SOURCE_UNAVAILABLE") return unavailableRemoteError();
+    if (error.code === "SOURCE_UNAVAILABLE") {
+      if (isInvalidGitRepositoryMessage(error.message)) {
+        return invalidGitRepositoryError();
+      }
+      return unavailableRemoteError();
+    }
   }
   if (isMissingGit(error)) return missingGitError(error);
   const message = errorMessage(error);
   if (
-    /authentication|authorization|permission denied|could not read username|terminal prompts disabled|publickey/i.test(
+    /authentication|authorization|permission denied|could not read username|terminal prompts disabled|publickey|git authentication is required/i.test(
       message,
     )
   ) {
     return authGitError();
   }
-  if (
-    /not a git repository|does not appear to be a git repository|repository .* does not exist|failed to stat|is this a git repository/i.test(
-      message,
-    )
-  ) {
+  if (isInvalidGitRepositoryMessage(message)) {
     return invalidGitRepositoryError();
   }
   if (
-    /could not resolve host|unable to access|connection refused|network is unreachable|timed out|temporarily unavailable|failed to connect|could not read from remote/i.test(
+    /could not resolve host|unable to access|connection refused|network is unreachable|timed out|temporarily unavailable|failed to connect|could not read from remote|git state operation failed/i.test(
       message,
     )
   ) {
     return unavailableRemoteError();
   }
   return error instanceof Error ? error : new Error(message);
+}
+
+export async function withGitCliErrors<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    throw classifyGitInitError(error);
+  }
+}
+
+export function notInitializedError(action: string): GitCliError {
+  return new GitCliError(
+    `Run corotum init before ${action}.`,
+    "NOT_INITIALIZED",
+  );
 }
 
 function parseProviderChoice(answer: string): "git" | "cloud" {
@@ -186,31 +222,50 @@ function outcomeForInitCode(code: InitErrorCode): CliOutcome {
   }
 }
 
-function missingGitError(_error?: unknown): InitError {
-  return new InitError(
-    "Git is not installed or not available on PATH. Install Git and retry `corotum init repository`.",
+function outcomeForGitCode(code: GitCliErrorCode): CliOutcome {
+  switch (code) {
+    case "AUTH_REQUIRED":
+      return "AUTH_REQUIRED";
+    case "REMOTE_UNAVAILABLE":
+      return "NETWORK_ERROR";
+    case "GIT_MISSING":
+      return "GENERAL_ERROR";
+    default:
+      return "INVALID_CONFIG";
+  }
+}
+
+function missingGitError(_error?: unknown): GitCliError {
+  return new GitCliError(
+    "Git is not installed or not available on PATH. Install Git and retry.",
     "GIT_MISSING",
   );
 }
 
-function authGitError(): InitError {
-  return new InitError(
+function authGitError(): GitCliError {
+  return new GitCliError(
     "Git authentication failed. Configure Git credentials for this repository and retry.",
     "AUTH_REQUIRED",
   );
 }
 
-function invalidGitRepositoryError(): InitError {
-  return new InitError(
+function invalidGitRepositoryError(): GitCliError {
+  return new GitCliError(
     "The Git repository is invalid or is not a Git repository. Provide a valid Git remote or path.",
     "INVALID_GIT_REPOSITORY",
   );
 }
 
-function unavailableRemoteError(): InitError {
-  return new InitError(
+function unavailableRemoteError(): GitCliError {
+  return new GitCliError(
     "The Git remote is unavailable. Check the URL and network, then retry.",
     "REMOTE_UNAVAILABLE",
+  );
+}
+
+function isInvalidGitRepositoryMessage(message: string): boolean {
+  return /not a git repository|does not appear to be a git repository|repository .* does not exist|failed to stat|is this a git repository|git could not access the requested source/i.test(
+    message,
   );
 }
 

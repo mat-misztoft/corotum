@@ -9,6 +9,11 @@ import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-s
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { ConfigStore, effectiveStoragePaths } from "./config";
+import {
+  assertGitAvailable,
+  notInitializedError,
+  withGitCliErrors,
+} from "./init-errors";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
@@ -22,21 +27,21 @@ export function registerSetRefCommand(program: Command, io: CliIo): void {
     .command("set-ref <skill> <ref>")
     .description("change a managed skill ref and lock its exact content")
     .action(async (skill: string, ref: string) => {
+      await withGitCliErrors(async () => {
       const homeDir = homedir();
       const paths = resolvePlatformPaths({
         homeDir,
         platform: process.platform as "darwin" | "linux" | "win32",
         env: process.env,
       });
+      await assertGitAvailable();
       const release = await new MutationLock(
         join(paths.stateDir, "process.lock"),
       ).acquire();
       try {
         const config = await new ConfigStore(paths).load();
         if (config.mode !== "git" || !config.gitRepository)
-          throw new Error(
-            "Run corotum init before changing Git skill refs.",
-          );
+          throw notInitializedError("changing Git skill refs");
         const storage = effectiveStoragePaths(config, paths);
         const stateStore = new LocalOperationalStateStore(
           join(paths.stateDir, "state.json"),
@@ -111,5 +116,6 @@ export function registerSetRefCommand(program: Command, io: CliIo): void {
       } finally {
         await release();
       }
+      });
     });
 }

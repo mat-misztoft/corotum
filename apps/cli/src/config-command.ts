@@ -2,39 +2,52 @@ import { homedir } from "node:os";
 
 import type { Command } from "commander";
 import type { CliIo } from "./cli";
-import { jsonEnvelope } from "./cli-contracts";
-import { type ConfigKey, ConfigStore } from "./config";
+import { jsonEnvelope, type CliOutcome } from "./cli-contracts";
+import {
+  CONFIG_KEYS,
+  SETTABLE_CONFIG_KEYS,
+  type ConfigKey,
+  ConfigStore,
+} from "./config";
 import { resolvePlatformPaths } from "./platform";
+
+export class ConfigError extends Error {
+  readonly name = "ConfigError";
+
+  constructor(
+    message: string,
+    readonly outcome: CliOutcome = "INVALID_CONFIG",
+  ) {
+    super(message);
+  }
+}
 
 export function registerConfigCommand(program: Command, io: CliIo): void {
   const config = program
     .command("config")
-    .description("manage local configuration");
+    .description("manage local configuration")
+    .action(async () => {
+      await listConfig(program, io);
+    });
   config.command("list").action(async () => {
-    const value = await store().list();
-    write(
-      io,
-      program,
-      { outcome: "SUCCESS", config: value },
-      `${JSON.stringify(value, null, 2)}\n`,
-    );
+    await listConfig(program, io);
   });
   config.command("get <key>").action(async (key: string) => {
-    assertKey(key);
-    const value = await store().get(key);
+    const typed = assertKnownKey(key);
+    const value = await store().get(typed);
     write(
       io,
       program,
-      { outcome: "SUCCESS", key, value },
-      `${String(value)}\n`,
+      { outcome: "SUCCESS", key: typed, value },
+      formatValue(value),
     );
   });
   config
     .command("set <key> <value>")
     .action(async (key: string, value: string) => {
-      assertKey(key);
-      if (key !== "telemetry" || !["true", "false"].includes(value)) {
-        throw new Error(
+      const typed = assertSettableKey(key);
+      if (typed !== "telemetry" || !["true", "false"].includes(value)) {
+        throw new ConfigError(
           "Only config set telemetry <true|false> is currently supported.",
         );
       }
@@ -48,6 +61,16 @@ export function registerConfigCommand(program: Command, io: CliIo): void {
     });
 }
 
+async function listConfig(program: Command, io: CliIo): Promise<void> {
+  const value = await store().list();
+  write(
+    io,
+    program,
+    { outcome: "SUCCESS", config: value },
+    `${JSON.stringify(value, null, 2)}\n`,
+  );
+}
+
 function store(): ConfigStore {
   return new ConfigStore(
     resolvePlatformPaths({
@@ -58,9 +81,27 @@ function store(): ConfigStore {
   );
 }
 
-function assertKey(key: string): asserts key is ConfigKey {
-  if (key !== "telemetry")
-    throw new Error(`Unknown or unsupported config key: ${key}.`);
+function assertKnownKey(key: string): ConfigKey {
+  if ((CONFIG_KEYS as readonly string[]).includes(key)) return key as ConfigKey;
+  throw new ConfigError(
+    `Unknown config key: ${key}. Known keys: ${CONFIG_KEYS.join(", ")}.`,
+  );
+}
+
+function assertSettableKey(key: string): ConfigKey {
+  assertKnownKey(key);
+  if ((SETTABLE_CONFIG_KEYS as readonly string[]).includes(key)) {
+    return key as ConfigKey;
+  }
+  throw new ConfigError(
+    `Config key ${key} is read-only from the CLI. Set telemetry with \`corotum config set telemetry <true|false>\`.`,
+  );
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return `${String(value)}\n`;
+  if (typeof value === "object") return `${JSON.stringify(value, null, 2)}\n`;
+  return `${String(value)}\n`;
 }
 
 function write(

@@ -19,19 +19,28 @@ import {
   GitSkillMaterializer,
   normalizeGitSource,
 } from "../../../packages/skills-adapter/src/git-source";
-import {
-  type LocalAdoptCandidate,
-  type RepositoryAdoptCandidate,
-} from "./adopt";
+import { type RepositoryAdoptCandidate } from "./adopt";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { ConfigStore, effectiveStoragePaths } from "./config";
+import {
+  assertGitAvailable,
+  notInitializedError,
+  withGitCliErrors,
+} from "./init-errors";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { V2LocalApplier } from "./v2-local-applier";
 import { V2MutationService } from "./v2-mutations";
+
+type CliAdoptCandidate = Readonly<{
+  agentId: AgentId | null;
+  contentHash: string;
+  name: string;
+  path: string;
+}>;
 
 /** Registers safe adoption of one existing unmanaged copy from a Git source. */
 export function registerAdoptCommand(program: Command, io: CliIo): void {
@@ -49,19 +58,21 @@ export function registerAdoptCommand(program: Command, io: CliIo): void {
         name: string,
         options: { source: string; skill?: string; ref: string },
       ) => {
+        await withGitCliErrors(async () => {
         const homeDir = homedir();
         const paths = resolvePlatformPaths({
           homeDir,
           platform: process.platform as "darwin" | "linux" | "win32",
           env: process.env,
         });
+        await assertGitAvailable();
         const release = await new MutationLock(
           join(paths.stateDir, "process.lock"),
         ).acquire();
         try {
           const config = await new ConfigStore(paths).load();
           if (config.mode !== "git" || !config.gitRepository)
-            throw new Error("Run corotum init before adopting Git skills.");
+            throw notInitializedError("adopting Git skills");
           const storage = effectiveStoragePaths(config, paths);
           const nonInteractive =
             program.opts<{ nonInteractive?: boolean }>().nonInteractive ===
@@ -123,7 +134,7 @@ export function registerAdoptCommand(program: Command, io: CliIo): void {
             integrityHash: await gitTreeHash(local.path),
             sizeBytes: scanned.files.reduce((size, file) => size + file.content.length, 0),
             source: { repository: source, path: repository.path, ref: options.ref },
-            targets: [local.agentId],
+            targets: local.agentId ? [local.agentId] : "all",
           });
           if (
             result.kind === "refused" ||
@@ -157,17 +168,18 @@ export function registerAdoptCommand(program: Command, io: CliIo): void {
         } finally {
           await release();
         }
+        });
       },
     );
 }
 
 export async function selectLocalCandidate(
-  candidates: readonly LocalAdoptCandidate[],
+  candidates: readonly CliAdoptCandidate[],
   nonInteractive: boolean,
-): Promise<LocalAdoptCandidate> {
+): Promise<CliAdoptCandidate> {
   if (candidates.length === 0)
     throw new Error(
-      "No unmanaged local skill with that name was found in an enabled agent directory.",
+      "No unmanaged local skill with that name was found in ~/.agents/skills or an enabled agent directory.",
     );
   if (candidates.length === 1) return candidates[0];
   if (nonInteractive)
@@ -177,7 +189,7 @@ export async function selectLocalCandidate(
   return selectCandidate(
     "Choose a local copy to adopt",
     candidates,
-    (candidate) => `${candidate.agentId} (${candidate.path})`,
+    (candidate) => `${candidate.agentId ?? "global"} (${candidate.path})`,
   );
 }
 
@@ -230,24 +242,34 @@ async function discoverLocalCandidates(
   homeDir: string,
   agents: Record<string, { enabled: boolean }>,
   name: string,
-): Promise<LocalAdoptCandidate[]> {
-  const candidates: LocalAdoptCandidate[] = [];
+): Promise<CliAdoptCandidate[]> {
+  const candidates: CliAdoptCandidate[] = [];
+  const seen = new Set<string>();
+  const addCandidate = async (
+    agentId: CliAdoptCandidate["agentId"],
+    directory: string,
+  ): Promise<void> => {
+    try {
+      const entries = await readdir(directory, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name !== name) continue;
+        const path = join(directory, entry.name);
+        if (seen.has(path)) continue;
+        seen.add(path);
+        candidates.push({
+          agentId,
+          name,
+          path,
+          contentHash: await hashSkillDirectory(path),
+        });
+      }
+    } catch {}
+  };
+  await addCandidate(null, join(homeDir, ".agents", "skills"));
   for (const adapter of builtInAgentAdapters) {
     if (!agents[adapter.id]?.enabled) continue;
     for (const directory of adapter.globalSkillPaths(homeDir)) {
-      try {
-        const entries = await readdir(directory, { withFileTypes: true });
-        for (const entry of entries) {
-          if (!entry.isDirectory() || entry.name !== name) continue;
-          const path = join(directory, entry.name);
-          candidates.push({
-            agentId: adapter.id,
-            name,
-            path,
-            contentHash: await hashSkillDirectory(path),
-          });
-        }
-      } catch {}
+      await addCandidate(adapter.id, directory);
     }
   }
   return candidates;

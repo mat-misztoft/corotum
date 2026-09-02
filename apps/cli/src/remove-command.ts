@@ -8,6 +8,11 @@ import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { ConfigStore, effectiveStoragePaths } from "./config";
+import {
+  assertGitAvailable,
+  notInitializedError,
+  withGitCliErrors,
+} from "./init-errors";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
@@ -32,21 +37,21 @@ export function registerRemoveCommands(program: Command, io: CliIo): void {
       .command(`${name} <skill>`)
       .description(description)
       .action(async (skill: string) => {
+        await withGitCliErrors(async () => {
         const homeDir = homedir();
         const paths = resolvePlatformPaths({
           homeDir,
           platform: process.platform as "darwin" | "linux" | "win32",
           env: process.env,
         });
+        await assertGitAvailable();
         const release = await new MutationLock(
           join(paths.stateDir, "process.lock"),
         ).acquire();
         try {
           const config = await new ConfigStore(paths).load();
           if (config.mode !== "git" || !config.gitRepository)
-            throw new Error(
-              `Run corotum init before ${name}ing Git skills.`,
-            );
+            throw notInitializedError(`${name}ing Git skills`);
           const storage = effectiveStoragePaths(config, paths);
           const stateStore = new LocalOperationalStateStore(
             join(paths.stateDir, "state.json"),
@@ -83,6 +88,7 @@ export function registerRemoveCommands(program: Command, io: CliIo): void {
         } finally {
           await release();
         }
+        });
       });
   }
 }

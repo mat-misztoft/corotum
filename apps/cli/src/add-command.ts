@@ -15,6 +15,11 @@ import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { ConfigStore, effectiveStoragePaths } from "./config";
+import {
+  assertGitAvailable,
+  notInitializedError,
+  withGitCliErrors,
+} from "./init-errors";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
@@ -30,19 +35,21 @@ export function registerAddCommand(program: Command, io: CliIo): void {
     .option("--ref <ref>", "branch, tag, or commit to lock", "HEAD")
     .action(
       async (sourceInput: string, options: { skill?: string; ref: string }) => {
+        await withGitCliErrors(async () => {
         const homeDir = homedir();
         const paths = resolvePlatformPaths({
           homeDir,
           platform: process.platform as "darwin" | "linux" | "win32",
           env: process.env,
         });
+        await assertGitAvailable();
         const release = await new MutationLock(
           join(paths.stateDir, "process.lock"),
         ).acquire();
         try {
           const config = await new ConfigStore(paths).load();
           if (config.mode !== "git" || !config.gitRepository)
-            throw new Error("Run corotum init before adding Git skills.");
+            throw notInitializedError("adding Git skills");
           const source = normalizeGitSource(sourceInput);
           const materializer = new GitSkillMaterializer();
           const candidates = await materializer.discover(source, options.ref);
@@ -82,6 +89,7 @@ export function registerAddCommand(program: Command, io: CliIo): void {
         } finally {
           await release();
         }
+        });
       },
     );
 }

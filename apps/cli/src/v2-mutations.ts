@@ -95,16 +95,16 @@ export class V2MutationService {
   }
 
   /** Check performs resolution only; it never calls push or apply. */
-  async check(nameOrId?: string): Promise<readonly Readonly<{ skillId: SkillId; status: "UP_TO_DATE" | "UPDATE_AVAILABLE" | "SOURCE_UNAVAILABLE" | "CHECK_FAILED" }>[]> {
+  async check(nameOrId?: string): Promise<readonly Readonly<{ skillId: SkillId; name: string; status: "UP_TO_DATE" | "UPDATE_AVAILABLE" | "SOURCE_UNAVAILABLE" | "CHECK_FAILED" }>[]> {
     const current = await this.provider.pull();
     const selected = nameOrId ? [select(current.state, nameOrId)].filter(Boolean) : current.state.manifest.skills;
     return Promise.all(selected.map(async (skill) => {
-      if (!skill!.source) return { skillId: skill!.id, status: "SOURCE_UNAVAILABLE" as const };
+      if (!skill!.source) return { skillId: skill!.id, name: skill!.name, status: "SOURCE_UNAVAILABLE" as const };
       const lock = current.state.lockfile.skills.find((entry) => entry.id === skill!.id);
       try {
         const next = await this.resolver.resolve(skill!.source!);
-        return { skillId: skill!.id, status: lock?.materialization.kind === "source" && lock.source?.revision === next.revision && lock.source.contentHash === next.contentHash ? "UP_TO_DATE" as const : "UPDATE_AVAILABLE" as const };
-      } catch { return { skillId: skill!.id, status: "CHECK_FAILED" as const }; }
+        return { skillId: skill!.id, name: skill!.name, status: lock?.materialization.kind === "source" && lock.source?.revision === next.revision && lock.source.contentHash === next.contentHash ? "UP_TO_DATE" as const : "UPDATE_AVAILABLE" as const };
+      } catch { return { skillId: skill!.id, name: skill!.name, status: "CHECK_FAILED" as const }; }
     }));
   }
 

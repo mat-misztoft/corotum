@@ -12,8 +12,8 @@ import {
 import { registerCliUpdateCommand } from "./cli-update-command";
 import { CloudAuthError } from "./cloud-auth";
 import { registerCloudAuthCommands } from "./cloud-auth-command";
-import { registerConfigCommand } from "./config-command";
-import { InitError } from "./init-errors";
+import { ConfigError, registerConfigCommand } from "./config-command";
+import { GitCliError, InitError } from "./init-errors";
 import { registerInitCommand } from "./init-command";
 import { registerMigrateCommand } from "./migrate-command";
 import { registerRemoveCommands } from "./remove-command";
@@ -175,7 +175,9 @@ function outcomeFor(error: unknown): CliOutcome {
     return "SUCCESS";
   }
   if (error instanceof CloudAuthError) return error.outcome;
+  if (error instanceof ConfigError) return error.outcome;
   if (error instanceof InitError) return error.outcome;
+  if (error instanceof GitCliError) return error.outcome;
   return "GENERAL_ERROR";
 }
 

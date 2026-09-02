@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { GitSourceError } from "../../../packages/skills-adapter/src/git-source";
 import {
   classifyGitInitError,
+  GitCliError,
   InitError,
   INIT_PROVIDER_PROMPT,
   resolveInitProvider,
@@ -123,5 +124,28 @@ describe("git init error classification", () => {
     expect(classifyGitInitError(new InitError("already", "ALREADY_INITIALIZED"))).toMatchObject({
       code: "ALREADY_INITIALIZED",
     });
+    expect(classifyGitInitError(new Error("Git authentication is required."))).toBeInstanceOf(
+      GitCliError,
+    );
+    expect(classifyGitInitError(new Error("Git state operation failed."))).toMatchObject({
+      code: "REMOTE_UNAVAILABLE",
+      outcome: "NETWORK_ERROR",
+    });
+    expect(
+      classifyGitInitError(
+        new GitSourceError(
+          "SOURCE_UNAVAILABLE",
+          "fatal: does not appear to be a git repository",
+        ),
+      ),
+    ).toMatchObject({ code: "INVALID_GIT_REPOSITORY", outcome: "INVALID_CONFIG" });
+    expect(
+      classifyGitInitError(
+        new GitSourceError(
+          "SOURCE_UNAVAILABLE",
+          "Git could not access the requested source.",
+        ),
+      ),
+    ).toMatchObject({ code: "INVALID_GIT_REPOSITORY" });
   });
 });

@@ -10,6 +10,11 @@ import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { ConfigStore, effectiveStoragePaths } from "./config";
+import {
+  assertGitAvailable,
+  notInitializedError,
+  withGitCliErrors,
+} from "./init-errors";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
@@ -26,15 +31,17 @@ export function registerUpdateCommand(program: Command, io: CliIo): void {
       "report upstream status without changing local or desired state",
     )
     .action(async (skill: string | undefined, options: { check?: boolean }) => {
+      await withGitCliErrors(async () => {
       const homeDir = homedir();
       const paths = resolvePlatformPaths({
         homeDir,
         platform: process.platform as "darwin" | "linux" | "win32",
         env: process.env,
       });
+      await assertGitAvailable();
       const config = await new ConfigStore(paths).load();
       if (config.mode !== "git" || !config.gitRepository)
-        throw new Error("Run corotum init before updating Git skills.");
+        throw notInitializedError("updating Git skills");
       const storage = effectiveStoragePaths(config, paths);
       const stateStore = new LocalOperationalStateStore(
         join(paths.stateDir, "state.json"),
@@ -78,10 +85,11 @@ export function registerUpdateCommand(program: Command, io: CliIo): void {
       );
       const json = program.opts<{ json?: boolean }>().json === true;
       if (options.check) {
+        const skills = await service.check(skill);
         writeResult(io, json, {
           outcome: "SUCCESS",
           status: "CHECKED",
-          skills: await service.check(skill),
+          skills,
         });
         return;
       }
@@ -111,6 +119,7 @@ export function registerUpdateCommand(program: Command, io: CliIo): void {
       } finally {
         await release();
       }
+      });
     });
 }
 
@@ -123,5 +132,30 @@ function writeResult(
     io.writeOutput(`${JSON.stringify(jsonEnvelope(result))}\n`);
     return;
   }
-  io.writeOutput(`${result.status}\n`);
+  io.writeOutput(formatUpdateHuman(result));
+}
+
+function formatUpdateHuman(result: Record<string, unknown>): string {
+  const skills = result.skills;
+  if (result.status === "CHECKED" && Array.isArray(skills)) {
+    if (skills.length === 0) return "No managed skills.\n";
+    return `${skills
+      .map((skill) => {
+        const row = skill as { name?: string; skillId?: string; status?: string };
+        return `${row.name ?? row.skillId ?? "skill"}\t${row.status ?? ""}`;
+      })
+      .join("\n")}\n`;
+  }
+  if (Array.isArray(skills) && skills.length > 0) {
+    const lines = skills.map((skill) => {
+      const row = skill as {
+        skillId?: string;
+        kind?: string;
+        revision?: string;
+      };
+      return `${row.skillId ?? "skill"}\t${row.kind ?? result.status}${row.revision ? `\t${row.revision}` : ""}`;
+    });
+    return `${result.status}\n${lines.join("\n")}\n`;
+  }
+  return `${result.status}\n`;
 }
