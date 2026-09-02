@@ -1,6 +1,6 @@
 # CLI
 
-The compiled `corotum` binary is the v0.1 client. Git Sync uses the CLI for desired-state mutations. Cloud desired-state mutations after init are performed from the [dashboard or WebMCP](./dashboard-and-webmcp.md). Local reconcile (`status`, `diff`, `sync`) works in both modes.
+The compiled `corotum` binary is the v0.1 client. Git Sync / Free is the current MVP and uses the CLI for desired-state mutations. Cloud desired-state mutations after init are performed from the [dashboard or WebMCP](./dashboard-and-webmcp.md). Local reconcile (`status`, `diff`, `sync`) works in both modes.
 
 Contracts for named storage, source versus artifact, denylist, typed errors, and non-interactive consent are in [skills.md](./skills.md).
 
@@ -8,6 +8,12 @@ Contracts for named storage, source versus artifact, denylist, typed errors, and
 corotum --help
 corotum --version
 ```
+
+With no subcommand, `corotum` prints a read-only welcome/system screen: ASCII banner, version, Git availability, OS/arch, Corotum home readiness, detected agents, Git Sync and Corotum Cloud as sync modes, and getting-started commands. It does not mutate state, create config, prompt for telemetry, sync, enable agents, or run init. Detected agents are informational; an agent is never required.
+
+`--help` and `--version` (including `corotum init --help` and any other command `--help`) have no side effects: no telemetry prompt, no config creation, no mutation, no sync, and no agent enablement.
+
+`--json` prints a machine-readable envelope with `schemaVersion` `1`. It never includes the welcome banner or ANSI. `corotum --json` is an envelope only, not the welcome screen.
 
 Global flags:
 
@@ -17,7 +23,7 @@ corotum --non-interactive <command>
 corotum --allow-artifacts <command>
 ```
 
-`--json` prints a machine-readable envelope with `schemaVersion` `1`. `--non-interactive` never waits for a prompt. A missing TTY is also non-interactive. Non-interactive paths exit instead of prompting.
+`--non-interactive` never waits for a prompt. A missing TTY is also non-interactive. Non-interactive paths exit instead of prompting.
 
 `--allow-artifacts` is the non-interactive consent to commit exact local artifact files to Git. Without it, those writes fail with `CONFIRMATION_REQUIRED` in JSON.
 
@@ -25,7 +31,8 @@ corotum --allow-artifacts <command>
 
 | Command | What it does |
 | --- | --- |
-| `corotum init <repository> [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Initialize Git Sync and adopt selected local skills from `~/.agents/skills` |
+| `corotum init` | On a TTY, ask Git Sync versus Corotum Cloud, then initialize. Agents are not required |
+| `corotum init repository <git-url> [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Initialize Git Sync and adopt selected local skills from `~/.agents/skills` |
 | `corotum init cloud [--origin <url>] [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Pair with Cloud if needed, then adopt selected local skills into Cloud |
 | `corotum login [--origin <url>]` | Pair this device in a browser |
 | `corotum logout [--origin <url>]` | Revoke this device token and delete local Cloud credentials |
@@ -40,7 +47,11 @@ corotum --allow-artifacts <command>
 | `corotum status` | Show local reconciliation status (Git or Cloud) |
 | `corotum diff` | Show the exact-lock reconciliation plan (Git or Cloud) |
 | `corotum sync` | Reconcile local skills to the exact locked state (Git or Cloud) |
-| `corotum config list` | Print local `config.json` |
+| `corotum agents` | List optional local agents and whether they are detected or enabled |
+| `corotum agents scan` | Detect installed agents without enabling them |
+| `corotum agents enable <agent>` | Enable local exposure for one agent on this device |
+| `corotum agents disable <agent>` | Remove local exposure only; global skills and shared desired state stay |
+| `corotum config` / `corotum config list` | Print local `config.json` (Git and Cloud keys; no prompt) |
 | `corotum config get <key>` | Print one config value |
 | `corotum config set telemetry true\|false` | Set anonymous CLI telemetry consent |
 | `corotum migrate cloud --strategy <replace\|merge\|cancel>` | Copy Git desired state to Cloud |
@@ -51,6 +62,8 @@ corotum --allow-artifacts <command>
 | `corotum cli-update --check` | Report CLI release availability |
 
 `corotum update` updates skills. `corotum cli-update` updates the Corotum executable.
+
+Non-interactive `corotum --non-interactive init` never prompts. Missing provider is an actionable error: pass `repository` or `cloud`. Missing Git repository URL for Git Sync is also an actionable error.
 
 `add` / `adopt` `--ref` defaults to `HEAD` as the *follow* ref for later updates. The lock stores the resolved commit SHA. `sync` never installs `HEAD`.
 
@@ -96,6 +109,8 @@ Status / diff / sync envelopes add `command`, `status`, `revision`, `appliedRevi
 
 Local configuration lives in `config.json`. Device Cloud tokens live in `credentials.json` with restrictive file permissions. The plaintext device token is never printed by `login`.
 
+`corotum config list` and `corotum config get` inspect Git Sync and Cloud keys without prompting and without requiring an enabled agent. Known keys include `mode`, `gitRepository`, `workspaceId`, `deviceId`, `skillsStoragePath`, `gitStoragePath`, `telemetry`, `installationId`, and `agents`.
+
 `corotum config set` currently supports only `telemetry` (`true` or `false`). Telemetry is anonymous, opt-in, and stored on the device. It is not a dashboard account setting.
 
 Default locations:
@@ -110,9 +125,20 @@ Default locations:
 
 Default Cloud origin is `https://corotum.com`. Override with `--origin` or `COROTUM_CLOUD_ORIGIN`. Origins must be `http` or `https` and must not include credentials.
 
-## Supported agents
+## Optional agents
 
-v0.1 detects a closed built-in list. Init asks which detected agents to enable. Non-interactive init never enables agents automatically; enable them in `config.json` `agents` before running init without a TTY.
+Agents are optional. Zero detected or enabled agents is a valid Corotum state. Global skill management and Git Sync do not require an agent. Missing `~/.agents/skills` is valid. Existing global skills are discovered independently of agent detection.
+
+v0.1 detects a closed built-in list. Interactive init may offer to enable detected agents; declining is valid. Non-interactive init never enables agents automatically.
+
+```bash
+corotum agents
+corotum agents scan
+corotum agents enable pi
+corotum agents disable pi
+```
+
+`scan` detects without enabling. `enable` later may expose already managed global skills on this device. `disable` removes only local exposure: it does not delete `~/.agents/skills` and does not change shared desired state.
 
 | Id | Agent |
 | --- | --- |

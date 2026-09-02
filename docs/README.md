@@ -2,10 +2,12 @@
 
 Public documentation for Corotum v0.1. These pages describe only commands and behavior that exist in this repository.
 
+Git Sync / Free is the current MVP. Zero installed or enabled agents is valid. Global skill management does not require an agent. Corotum Cloud remains documented and available.
+
 | Page | Contents |
 | --- | --- |
 | [Install and cli-update](./install.md) | Official installers, unsigned binaries, SHA-256 verification, `cli-update` |
-| [CLI](./cli.md) | Commands, flags, exit codes, JSON envelope, config, agents |
+| [CLI](./cli.md) | Welcome screen, commands, flags, exit codes, JSON envelope, config, optional agents |
 | [Skills and v2 contracts](./skills.md) | Named `~/.agents/skills`, source vs artifact, denylist, errors |
 | [Git Sync](./git-sync.md) | Free Git backend, `corotum.yaml` / lock, skill mutations, `PENDING_PUSH` |
 | [Self-hosted Cloud](./self-hosting.md) | Deploy Corotum Cloud without Creem |

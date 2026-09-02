@@ -1,6 +1,8 @@
 # Git Sync
 
-Git Sync is the free backend. No Corotum account is required. System Git must be installed. If Git is missing, Corotum stops before partial mutation and tells you to install Git.
+Git Sync / Free is the current MVP backend. No Corotum account is required. System Git must be installed. If Git is missing, Corotum stops before partial mutation and tells you to install Git.
+
+Zero installed or enabled agents is valid. Global skills live in `~/.agents/skills`. Agents are optional local exposure, not a prerequisite for init, skill management, or sync.
 
 Desired state in the sync repository is v2:
 
@@ -17,13 +19,23 @@ Cloud mode does not require Git unless a skill source is a Git repository.
 
 ## Initialize
 
+On a TTY, `corotum init` asks Git Sync versus Corotum Cloud. Explicit Git Sync:
+
 ```bash
-corotum init git@github.com:example/corotum-state.git
+corotum init repository git@github.com:example/corotum-state.git
 ```
 
-`<repository>` is the desired-state Git remote Corotum owns as a local clone. Init discovers `~/.agents/skills`, classifies each skill from its own provenance (including `~/.agents/.skill-lock.json` as a hint, not a commit proof), and adopts only the skills you select. Source-unknown local skills stay visible and unmanaged unless you pass `--adopt-artifact`. Adoption is never all-or-nothing.
+`<git-url>` is the desired-state Git remote Corotum owns as a local clone. Init discovers `~/.agents/skills` independently of agents. Missing that directory is valid. Init classifies each skill from its own provenance (including `~/.agents/.skill-lock.json` as a hint, not a commit proof) and adopts only the skills you select. Source-unknown local skills stay visible and unmanaged unless you pass `--adopt-artifact`. Adoption is never all-or-nothing.
+
+Non-interactive init never prompts. Pass `repository` or `cloud`. Git Sync also requires the repository URL:
+
+```bash
+corotum --non-interactive init repository git@github.com:example/corotum-state.git
+```
 
 Non-interactive init applies only exact `--replace`, `--keep`, and `--adopt-artifact` choices, and never enables undetected or unconfigured agents.
+
+A machine that is already configured refuses init (`ALREADY_INITIALIZED`).
 
 ## Add, adopt, update, restore
 
@@ -47,6 +59,8 @@ A skill with `source: null` remains syncable from its artifact. `update` reports
 
 `status` never performs upstream checks. `update --check` reports `UP_TO_DATE`, `UPDATE_AVAILABLE`, `SOURCE_UNAVAILABLE`, `UNKNOWN`, `AUTH_REQUIRED`, or `CHECK_FAILED` without changing state.
 
+These commands work with zero agents. Failures for missing Git, a bad repository, an unavailable remote, or Git authentication are typed and actionable.
+
 ## Remove versus unmanage
 
 ```bash
@@ -64,7 +78,9 @@ corotum diff
 corotum sync
 ```
 
-`sync` applies the exact locked revisions to enabled agent targets. Prefer symlink exposure; Corotum falls back to a normal copy when a symlink cannot be used. One failing target does not roll back unrelated successful targets. Applied revision advances only after verification. Absent or corrupt operational state is recovered only from proven ownership.
+`sync` installs the exact locked revisions into `~/.agents/skills`. Enabled agents on this device then receive local exposure. Prefer symlink exposure; Corotum falls back to a normal copy when a symlink cannot be used. One failing target does not roll back unrelated successful targets. Applied revision advances only after verification. Absent or corrupt operational state is recovered only from proven ownership.
+
+Zero enabled agents is valid: Git Sync still manages the global named store. Enable an agent later with `corotum agents enable` to expose already managed skills on that device.
 
 There is no daemon, watch mode, scheduled update, or remote forced sync. A device reconciles only when you run `corotum sync` on that device.
 
@@ -74,10 +90,11 @@ Git mutations pull first. If a previous desired-state push is still pending, mut
 
 ## Another machine
 
-`corotum init` refuses a desired-state repository that already contains skills. On a second machine, install the CLI, create `config.json` with `schemaVersion` `1`, `mode` `git`, and `gitRepository` set to that remote, enable the agents you want under `agents`, then run:
+On a second home that is not already configured, join the existing desired-state repository:
 
 ```bash
+corotum init repository git@github.com:example/corotum-state.git
 corotum sync
 ```
 
-Do not re-run init against the existing repository. `corotum config set` does not write `mode` or `gitRepository`; those keys are set by init on the first machine or by editing `config.json` directly. Each machine materializes into `~/.agents/skills` and keeps its own Git clone.
+Do not re-run init on a machine that already has Corotum configured. `corotum config set` does not write `mode` or `gitRepository`; inspect those keys with `corotum config list` or `corotum config get`. Each machine materializes into `~/.agents/skills` and keeps its own Git clone. Agents remain optional on every machine.

@@ -2,7 +2,7 @@
 
 Keep your agent skills in sync.
 
-Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. It supports a free Git Sync backend and hosted or self-hosted Corotum Cloud.
+Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. Git Sync / Free is the current MVP: a Git-backed backend with no Corotum account. Hosted or self-hosted Corotum Cloud remains available.
 
 v0.1 binaries are unsigned. Official installers are the only supported installation method. There is no daemon and no remote forced sync.
 
@@ -26,6 +26,19 @@ Update:
 corotum cli-update --check
 corotum cli-update
 ```
+
+## Get started
+
+`corotum` with no command prints a read-only welcome/system screen. `corotum --help` and `corotum --version` have no side effects.
+
+On a TTY, `corotum init` asks Git Sync versus Corotum Cloud. Explicit providers skip that prompt:
+
+```bash
+corotum init repository git@github.com:example/corotum-state.git
+corotum init cloud
+```
+
+Zero installed or enabled agents is valid. Global skills live in `~/.agents/skills` independently of agents. Optional `corotum agents` commands scan, enable, or disable local agent exposure later.
 
 ## Docs
 

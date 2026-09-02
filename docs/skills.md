@@ -26,7 +26,7 @@ Config, credentials, Git cache, and operational state stay in the Corotum platfo
 
 ## Provenance at init
 
-Init enumerates `~/.agents/skills/*/`. It does not import those directories until you select them.
+Init enumerates `~/.agents/skills/*/`. Missing `~/.agents/skills` is valid. Discovery does not depend on detected or enabled agents. Init does not import those directories until you select them.
 
 It also reads `~/.agents/.skill-lock.json` and matches `source` / `sourceType` / `sourceUrl` / `skillPath` / `skillFolderHash` to a directory. That file is a hint only. It does not prove an immutable commit, repository access, or that local files still match upstream.
 
@@ -85,7 +85,7 @@ JSON envelopes always include `schemaVersion` `1`. `--json --help` and `--json -
 
 No TTY and `--non-interactive` never wait for a prompt.
 
-Init applies only exact `--replace`, `--keep`, and `--adopt-artifact` names. It never enables undetected or unconfigured agents. Unknown-provenance skills stay unmanaged unless listed in `--adopt-artifact`. Missing required choices fail safely and leave local files in place.
+Init applies only exact `--replace`, `--keep`, and `--adopt-artifact` names. It never enables undetected or unconfigured agents. Zero agents is valid. Unknown-provenance skills stay unmanaged unless listed in `--adopt-artifact`. Missing required choices fail safely and leave local files in place.
 
 `add` / `adopt` in non-interactive mode require an unambiguous `--skill` when more than one candidate exists. `adopt` uses `--source` for that one local name; init has no global source flag.
 
