@@ -132,7 +132,7 @@ export class CloudAuthService {
     this.sleep = deps.sleep ?? defaultSleep;
     this.openUrl = deps.openUrl;
     this.logger = deps.logger;
-    this.device = deps.device ?? defaultCloudDevice("0.1.0");
+    this.device = deps.device ?? defaultCloudDevice("0.2.0");
     this.pollIntervalMs = deps.pollIntervalMs ?? PAIRING_POLL_INTERVAL_MS;
     this.openBrowser = deps.openBrowser ?? true;
     this.onPairing = deps.onPairing;

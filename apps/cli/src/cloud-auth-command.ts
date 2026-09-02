@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Command } from "commander";
-import type { CliIo } from "./cli";
+import { CLI_VERSION, type CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import {
   CloudAuthService,
@@ -85,7 +85,7 @@ export function cloudAuthContext(
       config: new ConfigStore(paths),
       credentials: new CredentialsStore(paths),
       logger: new SanitizedLogger(join(paths.stateDir, "logs")),
-      device: defaultCloudDevice("0.1.0"),
+      device: defaultCloudDevice(CLI_VERSION),
       openBrowser: !nonInteractive,
       openUrl: json || nonInteractive ? undefined : openUrl,
       onPairing: ({ userCode, verificationUrl }) => {
