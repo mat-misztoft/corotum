@@ -4,6 +4,9 @@ import { defineConfig } from "vite";
 import vinext from "vinext";
 
 export default defineConfig({
+  server: {
+    allowedHosts: ["corotum.mixon.dev"],
+  },
   plugins: [
     vinext(),
     cloudflare({
