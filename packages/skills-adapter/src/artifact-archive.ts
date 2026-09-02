@@ -91,16 +91,16 @@ export function validatedTarFiles(tar: Uint8Array): readonly TarEntry[] {
   return parseTar(tar);
 }
 
-function parseTar(tar: Uint8Array): TarEntry[] {
-  if (tar.length < BLOCK * 2 || tar.length % BLOCK !== 0) throw unavailable("Artifact TAR is malformed.");
+function parseTar(input: Uint8Array): TarEntry[] {
+  const tar = padTar(input);
+  if (tar.length < BLOCK) throw unavailable("Artifact TAR is malformed.");
   const entries: TarEntry[] = [];
   const paths = new Set<string>();
   let offset = 0;
   let expanded = 0;
-  while (offset < tar.length) {
+  while (offset + BLOCK <= tar.length) {
     const header = tar.slice(offset, offset + BLOCK);
     if (header.every((byte) => byte === 0)) {
-      if (!tar.slice(offset).every((byte) => byte === 0)) throw unavailable("Artifact TAR has trailing data.");
       return entries;
     }
     if (offset + BLOCK > tar.length || !validChecksum(header)) throw unavailable("Artifact TAR header is invalid.");
@@ -132,7 +132,16 @@ function parseTar(tar: Uint8Array): TarEntry[] {
     if (entries.length >= MAX_ENTRIES || expanded > MAX_EXPANDED_BYTES) throw unavailable("Artifact exceeds extraction limits.");
     entries.push({ path, content: tar.slice(start, end) });
   }
-  throw unavailable("Artifact TAR has no end marker.");
+  if (entries.length === 0) throw unavailable("Artifact TAR is malformed.");
+  return entries;
+}
+
+function padTar(tar: Uint8Array): Uint8Array {
+  const rem = tar.length % BLOCK;
+  if (rem === 0) return tar;
+  const padded = new Uint8Array(tar.length + (BLOCK - rem));
+  padded.set(tar);
+  return padded;
 }
 
 function tarHeader(path: string, size: number): Uint8Array {

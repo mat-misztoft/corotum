@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ArtifactArchiveError, createArtifactArchive, extractArtifactArchive } from "./artifact-archive";
+import { ArtifactArchiveError, createArtifactArchive, extractArtifactArchive, validatedTarFiles } from "./artifact-archive";
 
 async function directory(files: Record<string, string>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "corotum-archive-"));
@@ -68,5 +68,18 @@ describe("deterministic artifact archives", () => {
     await expect(extractArtifactArchive(archive.bytes, destination, { ...archive, contentHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000" })).rejects.toMatchObject({ code: "CONTENT_HASH_MISMATCH" });
     expect(await readFile(join(destination, "SKILL.md"), "utf8")).toBe("old");
     await rm(source, { force: true, recursive: true });
+  });
+
+  test("reads git-archive tars that omit block padding or EOF markers", () => {
+    const content = new TextEncoder().encode("hi");
+    const header = new Uint8Array(512);
+    put(header, 0, 100, "a.txt"); octal(header, 100, 8, 0o644); octal(header, 108, 8, 0); octal(header, 116, 8, 0);
+    octal(header, 124, 12, content.length); octal(header, 136, 12, 0); header.fill(32, 148, 156); header[156] = 48;
+    put(header, 257, 6, "ustar"); put(header, 263, 2, "00"); octal(header, 148, 8, header.reduce((sum, byte) => sum + byte, 0));
+    const unpadded = new Uint8Array(header.length + content.length);
+    unpadded.set(header);
+    unpadded.set(content, header.length);
+    expect(unpadded.length % 512).not.toBe(0);
+    expect(validatedTarFiles(unpadded)).toEqual([{ path: "a.txt", content }]);
   });
 });

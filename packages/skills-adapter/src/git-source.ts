@@ -1,4 +1,4 @@
-import { access, constants, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { access, constants, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -95,15 +95,26 @@ export function normalizeGitSource(source: string): string {
 
 /** Bun-backed system Git runner. Credentials remain exclusively under Git's control. */
 export const runSystemGit: GitCommandRunner = async ({ args, cwd }) => {
-  const process = Bun.spawn(["git", ...args], {
-    cwd,
-    stderr: "pipe",
-    stdout: "pipe",
-  });
+  const child = Bun.spawn(
+    ["git", "-c", "http.timeout=45", ...args],
+    {
+      cwd,
+      stdin: "ignore",
+      stderr: "pipe",
+      stdout: "pipe",
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: "0",
+        GIT_SSH_COMMAND:
+          process.env.GIT_SSH_COMMAND ??
+          "ssh -o BatchMode=yes -o ConnectTimeout=10",
+      },
+    },
+  );
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).bytes(),
-    new Response(process.stderr).text(),
-    process.exited,
+    new Response(child.stdout).bytes(),
+    new Response(child.stderr).text(),
+    child.exited,
   ]);
   return { exitCode, stderr, stdout };
 };
@@ -169,6 +180,49 @@ export class GitSkillMaterializer {
       input,
       async (directory) => (await scanNormalizedContent(directory)).contentHash,
     );
+  }
+
+  /** One shallow clone per source, then exact hashes for each skill path. */
+  async resolveNormalizedGroup(
+    sourceInput: string,
+    ref: string,
+    items: readonly Pick<ResolveGitSkillInput, "skill" | "path">[],
+  ): Promise<readonly (ResolvedGitSkill | GitSourceError)[]> {
+    const source = normalizeGitSource(sourceInput);
+    const checkout = await this.cloneShallow(source, ref);
+    try {
+      const revision = await this.revParse(checkout, "HEAD");
+      const contentHash = async (directory: string) =>
+        (await scanNormalizedContent(directory)).contentHash;
+      const resolved: (ResolvedGitSkill | GitSourceError)[] = [];
+      for (const item of items) {
+        try {
+          const path = normalizeSkillPath(item.path ?? item.skill);
+          await this.assertDirectory(checkout, revision, path);
+          const archive = await this.archive(checkout, revision, path);
+          resolved.push({
+            repository: source,
+            revision,
+            path,
+            contentHash: await this.hashArchive(archive, path, contentHash),
+          });
+        } catch (error) {
+          resolved.push(
+            error instanceof GitSourceError
+              ? error
+              : new GitSourceError(
+                  "SOURCE_UNAVAILABLE",
+                  error instanceof Error
+                    ? error.message
+                    : "Git could not access the requested source.",
+                ),
+          );
+        }
+      }
+      return resolved;
+    } finally {
+      await rm(checkout, { force: true, recursive: true });
+    }
   }
 
   /** Writes only verified locked content, replacing the destination atomically. */
@@ -255,15 +309,41 @@ export class GitSkillMaterializer {
     return checkout;
   }
 
+  private async cloneShallow(source: string, ref: string): Promise<string> {
+    const checkout = await mkdtemp(join(tmpdir(), "corotum-git-"));
+    const result = await this.runGit({
+      args: [
+        "clone",
+        "--quiet",
+        "--no-checkout",
+        "--depth",
+        "1",
+        "--single-branch",
+        "--branch",
+        ref,
+        source,
+        checkout,
+      ],
+    });
+    if (result.exitCode !== 0) {
+      await rm(checkout, { force: true, recursive: true });
+      throw await gitFailure(result.stderr, source);
+    }
+    return checkout;
+  }
+
   private async commit(checkout: string, ref: string): Promise<string> {
     const fetched = await this.runGit({
       args: ["fetch", "--quiet", "origin", ref],
       cwd: checkout,
     });
     if (fetched.exitCode !== 0) throw await gitFailure(fetched.stderr);
+    return this.revParse(checkout, `${ref}^{commit}`);
+  }
 
+  private async revParse(checkout: string, rev: string): Promise<string> {
     const result = await this.runGit({
-      args: ["rev-parse", "--verify", `${ref}^{commit}`],
+      args: ["rev-parse", "--verify", rev],
       cwd: checkout,
     });
     if (result.exitCode !== 0) throw await gitFailure(result.stderr);
@@ -295,12 +375,17 @@ export class GitSkillMaterializer {
     revision: string,
     path: string,
   ): Promise<Uint8Array> {
+    const output = join(checkout, `.corotum-${crypto.randomUUID()}.tar`);
     const result = await this.runGit({
-      args: ["archive", "--format=tar", revision, path],
+      args: ["archive", "--format=tar", "-o", output, revision, path],
       cwd: checkout,
     });
-    if (result.exitCode !== 0) throw await gitFailure(result.stderr);
-    return result.stdout;
+    try {
+      if (result.exitCode !== 0) throw await gitFailure(result.stderr);
+      return new Uint8Array(await readFile(output));
+    } finally {
+      await rm(output, { force: true });
+    }
   }
 
   private async hashArchive(

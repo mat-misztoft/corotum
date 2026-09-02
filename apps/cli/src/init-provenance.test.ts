@@ -46,7 +46,7 @@ describe("init provenance discovery", () => {
     const missing = await fixture(undefined);
     const malformed = await fixture("not a lockfile");
     const incomplete = await fixture({ skills: { review: { ...record, sourceType: "" } } });
-    const stale = await fixture({ skills: { review: { ...record, skillPath: "other" } } });
+    const stale = await fixture({ skills: { other: record } });
     for (const root of [missing, malformed, incomplete, stale]) {
       const [candidate] = await discoverInitProvenance(root);
       expect(candidate.provenance.status).toBe("source-unknown");
@@ -61,6 +61,42 @@ describe("init provenance discovery", () => {
       const [candidate] = await discoverInitProvenance(root);
       expect(candidate.provenance).toMatchObject({ status: "source-unknown", reason: "missing-provenance" });
     }
+  });
+
+  test("matches skills.sh lock keys and strips SKILL.md from the upstream path", async () => {
+    const root = await fixture({
+      version: 1,
+      skills: {
+        "twitter-x-posts": {
+          ...record,
+          skillPath: "skills/platforms/x/SKILL.md",
+        },
+        review: {
+          ...record,
+          skillPath: "skills/review/SKILL.md",
+          sourceUrl: "owner/other",
+        },
+      },
+    }, ["review", "twitter-x-posts"]);
+    const candidates = await discoverInitProvenance(root);
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        name: "review",
+        provenance: expect.objectContaining({
+          status: "source-known",
+          skillPath: "skills/review",
+          sourceUrl: "https://github.com/owner/other.git",
+        }),
+      }),
+      expect.objectContaining({
+        name: "twitter-x-posts",
+        provenance: expect.objectContaining({
+          status: "source-known",
+          skillPath: "skills/platforms/x",
+          sourceUrl: "https://github.com/owner/skills.git",
+        }),
+      }),
+    ]);
   });
 
   test("rejects credential URLs and normalizes local path separators", async () => {

@@ -1,7 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createInterface } from "node:readline/promises";
 
 import type { Command } from "commander";
 import {
@@ -14,12 +13,13 @@ import {
   CanonicalSkillStore,
   hashSkillDirectory,
 } from "../../../packages/skills-adapter/src/canonical-store";
-import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 import {
   GitSkillMaterializer,
   normalizeGitSource,
 } from "../../../packages/skills-adapter/src/git-source";
-import { type RepositoryAdoptCandidate } from "./adopt";
+import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
+import type { RepositoryAdoptCandidate } from "./adopt";
+import { createCliV2GitStateProvider } from "./artifact-consent";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { ConfigStore, effectiveStoragePaths } from "./config";
@@ -31,7 +31,7 @@ import {
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
-import { createCliV2GitStateProvider } from "./artifact-consent";
+import { selectOption } from "./prompts";
 import { V2LocalApplier } from "./v2-local-applier";
 import { V2MutationService } from "./v2-mutations";
 
@@ -218,24 +218,16 @@ async function selectCandidate<T>(
   candidates: readonly T[],
   label: (candidate: T) => string,
 ): Promise<T> {
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    const choices = candidates
-      .map((candidate, index) => `${index + 1}) ${label(candidate)}`)
-      .join("\n");
-    const answer = (
-      await prompt.question(`${title}:\n${choices}\n[1-${candidates.length}] `)
-    ).trim();
-    const index = Number.parseInt(answer, 10) - 1;
-    if (!Number.isInteger(index) || !candidates[index])
-      throw new Error("A valid skill selection is required.");
-    return candidates[index];
-  } finally {
-    prompt.close();
-  }
+  const index = await selectOption(
+    title,
+    candidates.map((candidate, position) => ({
+      value: String(position),
+      label: label(candidate),
+    })),
+  );
+  const selected = candidates[Number(index)];
+  if (!selected) throw new Error("A valid skill selection is required.");
+  return selected;
 }
 
 async function discoverLocalCandidates(

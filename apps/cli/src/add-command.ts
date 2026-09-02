@@ -1,6 +1,5 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createInterface } from "node:readline/promises";
 
 import type { Command } from "commander";
 import type { AgentId } from "../../../packages/agent-targets/src/index";
@@ -11,9 +10,9 @@ import {
   normalizeGitSource,
 } from "../../../packages/skills-adapter/src/git-source";
 import type { AddCandidate } from "./add";
+import { createCliV2GitStateProvider } from "./artifact-consent";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
-import { createCliV2GitStateProvider } from "./artifact-consent";
 import { ConfigStore, effectiveStoragePaths } from "./config";
 import {
   assertGitAvailable,
@@ -23,6 +22,7 @@ import {
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
+import { selectOption } from "./prompts";
 import { V2LocalApplier } from "./v2-local-applier";
 import { V2MutationService } from "./v2-mutations";
 
@@ -133,27 +133,14 @@ export async function selectCandidate(
     );
   if (matches.length === 1) return matches[0];
 
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    const choices = matches
-      .map(
-        (candidate, index) =>
-          `${index + 1}) ${candidate.name} (${candidate.path})`,
-      )
-      .join("\n");
-    const answer = (
-      await prompt.question(
-        `Choose a skill:\n${choices}\n[1-${matches.length}] `,
-      )
-    ).trim();
-    const index = Number.parseInt(answer, 10) - 1;
-    if (!Number.isInteger(index) || !matches[index])
-      throw new Error("A valid skill selection is required.");
-    return matches[index];
-  } finally {
-    prompt.close();
-  }
+  const path = await selectOption(
+    "Choose a skill",
+    matches.map((candidate) => ({
+      value: candidate.path,
+      label: `${candidate.name} (${candidate.path})`,
+    })),
+  );
+  const selected = matches.find((candidate) => candidate.path === path);
+  if (!selected) throw new Error("A valid skill selection is required.");
+  return selected;
 }

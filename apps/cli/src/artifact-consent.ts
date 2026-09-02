@@ -20,7 +20,7 @@ export async function confirmGitArtifactWrite(
     return;
   }
   const accepted = await ask(
-    "Exact local skill content will be committed to your Git repository. Continue? [y/N] ",
+    "Exact local skill content will be committed to your Git repository. Continue?",
   );
   if (!accepted)
     throw new Error("Artifact commit cancelled; no Git changes were made.");
@@ -52,14 +52,6 @@ export function createCliV2GitStateProvider(
 }
 
 async function askOnStdin(question: string): Promise<boolean> {
-  const { createInterface } = await import("node:readline/promises");
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    return /^(y|yes)$/i.test((await prompt.question(question)).trim());
-  } finally {
-    prompt.close();
-  }
+  const { confirmOption } = await import("./prompts");
+  return confirmOption(question, false);
 }

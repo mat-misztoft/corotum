@@ -13,7 +13,7 @@ import { registerCliUpdateCommand } from "./cli-update-command";
 import { CloudAuthError } from "./cloud-auth";
 import { registerCloudAuthCommands } from "./cloud-auth-command";
 import { ConfigError, registerConfigCommand } from "./config-command";
-import { GitCliError, InitError } from "./init-errors";
+import { classifyGitInitError, GitCliError, InitError } from "./init-errors";
 import { registerInitCommand } from "./init-command";
 import { registerMigrateCommand } from "./migrate-command";
 import { registerRemoveCommands } from "./remove-command";
@@ -29,7 +29,7 @@ import {
   type WelcomeDeps,
 } from "./welcome";
 
-export const CLI_VERSION = "0.2.0";
+export const CLI_VERSION = "0.3.0";
 
 export type CliOptions = Readonly<{
   json: boolean;
@@ -148,21 +148,22 @@ export async function runCli(
   try {
     await program.parseAsync([...argv], { from: "user" });
   } catch (error) {
-    outcome = outcomeFor(error);
+    const classified = classifyGitInitError(error);
+    outcome = outcomeFor(classified);
     if (json) {
       io.writeOutput(
         `${JSON.stringify(
           jsonEnvelope({
             outcome:
-              error instanceof V2ArtifactConsentRequiredError
+              classified instanceof V2ArtifactConsentRequiredError
                 ? "CONFIRMATION_REQUIRED"
                 : outcome,
-            error: errorMessage(error),
+            error: errorMessage(classified),
           }),
         )}\n`,
       );
-    } else if (!(error instanceof CommanderError)) {
-      io.writeError(`${errorMessage(error)}\n`);
+    } else if (!(classified instanceof CommanderError)) {
+      io.writeError(`${errorMessage(classified)}\n`);
     }
   }
   await telemetry?.finish(pending ?? null, outcome);

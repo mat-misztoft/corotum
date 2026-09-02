@@ -31,7 +31,7 @@ corotum --allow-artifacts <command>
 
 | Command | What it does |
 | --- | --- |
-| `corotum init` | On a TTY, ask Git Sync versus Corotum Cloud, then initialize. Agents are not required |
+| `corotum init` | On a TTY, interactive Git Sync vs Cloud, skill gates, then initialize. Agents are not required |
 | `corotum init repository <git-url> [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Initialize Git Sync and adopt selected local skills from `~/.agents/skills` |
 | `corotum init cloud [--origin <url>] [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Pair with Cloud if needed, then adopt selected local skills into Cloud |
 | `corotum login [--origin <url>]` | Pair this device in a browser |
@@ -62,6 +62,12 @@ corotum --allow-artifacts <command>
 | `corotum cli-update --check` | Report CLI release availability |
 
 `corotum update` updates skills. `corotum cli-update` updates the Corotum executable.
+
+On a TTY, `corotum init` uses arrow-key prompts (`@clack/prompts`). After Git Sync vs Cloud (and a Git URL when needed) it may ask to enable detected agents, then which local skills to check against upstream. Checking uses one shallow clone per unique Git source and a progress bar. Batch decisions are **Skip all** (default except the first local-skills gate), **All (N)**, or **Choose…**: unknown provenance (adopt as artifacts), unavailable/private sources (keep as artifacts), and modified skills (replace / keep / skip). Git push shows a spinner. `status`, `diff`, and `sync` show a spinner on a TTY.
+
+If a previous TTY init committed desired state but the Git push failed, `corotum init` resumes: it skips skill selection, retries the push, then finishes local apply and config. Empty Git remotes (no commits / no `@{upstream}`) are valid; Corotum creates the first commit and `push -u`.
+
+Git failures (auth, missing Git, bad repository, unreachable remote) are classified on every command. Interactive Git never waits on a credential prompt (`GIT_TERMINAL_PROMPT=0`). After auth failure on a pending push, sign in with system Git (`gh auth login` or a credential helper) and retry `corotum init` (resume) or `corotum sync` if already initialized.
 
 Non-interactive `corotum --non-interactive init` never prompts. Missing provider is an actionable error: pass `repository` or `cloud`. Missing Git repository URL for Git Sync is also an actionable error.
 

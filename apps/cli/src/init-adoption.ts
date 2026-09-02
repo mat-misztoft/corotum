@@ -51,12 +51,14 @@ export type RetainedInitSource = Readonly<{
 
 export type InitAdoptionPrompt = Readonly<{
   notice: (message: string) => void;
-  chooseModified: (name: string) => Promise<"replace" | "keep" | "do-not-manage">;
+  chooseModified: (
+    names: readonly string[],
+  ) => Promise<ReadonlyMap<string, "replace" | "keep" | "do-not-manage">>;
   chooseUnavailable: (
-    name: string,
+    names: readonly string[],
     code: "SOURCE_UNAVAILABLE" | "AUTH_REQUIRED",
-  ) => Promise<"keep" | "do-not-manage">;
-  chooseUnknown: (name: string) => Promise<"adopt-artifact" | "do-not-manage">;
+  ) => Promise<readonly string[]>;
+  chooseUnknown: (names: readonly string[]) => Promise<readonly string[]>;
   chooseDuplicate: (
     name: string,
     candidates: readonly DiscoveredInitCandidate[],
@@ -103,6 +105,7 @@ export type InitSkillOutcome =
 
 export type DecideInitAdoptionsInput = Readonly<{
   candidates: readonly DiscoveredInitCandidate[];
+  classified?: readonly ClassifiedInitCandidate[];
   nonInteractive: boolean;
   choices?: readonly InitAdoptionChoice[];
   prompt?: InitAdoptionPrompt;
@@ -117,10 +120,39 @@ export function adoptArtifactChoices(names: readonly string[]): readonly InitAdo
 
 export async function classifyInitCandidates(
   candidates: readonly DiscoveredInitCandidate[],
-  deps: Pick<DecideInitAdoptionsInput, "materializer" | "runGit"> = {},
+  deps: Pick<DecideInitAdoptionsInput, "materializer" | "runGit"> & {
+    onProgress?: () => void;
+  } = {},
 ): Promise<readonly ClassifiedInitCandidate[]> {
   const materializer = deps.materializer ?? new GitSkillMaterializer(deps.runGit);
-  return Promise.all(candidates.map((candidate) => classifyOne(candidate, materializer, deps.runGit)));
+  const classified: ClassifiedInitCandidate[] = [];
+  const groups = new Map<string, number[]>();
+  for (const [index, candidate] of candidates.entries()) {
+    if (
+      candidate.provenance.status !== "source-known" ||
+      !candidate.provenance.sourceUrl ||
+      !candidate.provenance.skillPath
+    ) {
+      classified[index] = await classifyOne(candidate, materializer, deps.runGit);
+      deps.onProgress?.();
+      continue;
+    }
+    const group = groups.get(candidate.provenance.sourceUrl) ?? [];
+    group.push(index);
+    groups.set(candidate.provenance.sourceUrl, group);
+  }
+  await mapPool([...groups.entries()], 4, async ([source, indices]) => {
+    await classifySourceGroup({
+      source,
+      indices,
+      candidates,
+      classified,
+      materializer,
+      runGit: deps.runGit,
+      onProgress: deps.onProgress,
+    });
+  });
+  return classified;
 }
 
 /**
@@ -130,7 +162,8 @@ export async function classifyInitCandidates(
 export async function decideInitAdoptions(
   input: DecideInitAdoptionsInput,
 ): Promise<readonly InitSkillOutcome[]> {
-  const classified = await classifyInitCandidates(input.candidates, input);
+  const classified =
+    input.classified ?? (await classifyInitCandidates(input.candidates, input));
   const choices = indexChoices(input.choices ?? []);
   const duplicateNames = duplicateNormalizedNames(input.candidates);
   const uniqueDuplicates = uniqueDuplicateSelections(input.candidates, duplicateNames, choices);
@@ -146,6 +179,15 @@ export async function decideInitAdoptions(
     }
   }
 
+  const prompted = await batchPromptedActions({
+    classified,
+    choices,
+    duplicateNames,
+    uniqueDuplicates,
+    nonInteractive: input.nonInteractive,
+    prompt: input.prompt,
+  });
+
   let noticed = false;
   const outcomes: InitSkillOutcome[] = [];
   for (const entry of classified) {
@@ -153,6 +195,7 @@ export async function decideInitAdoptions(
       nonInteractive: input.nonInteractive,
       prompt: input.prompt,
       choice: choices.get(entry.candidate.name),
+      prompted: prompted.get(entry.candidate.name),
       duplicate: duplicateNames.has(entry.candidate.normalizedName),
       selectedDuplicate: uniqueDuplicates.has(entry.candidate.name),
     });
@@ -163,6 +206,75 @@ export async function decideInitAdoptions(
     outcomes.push(outcome);
   }
   return outcomes;
+}
+
+async function classifySourceGroup(input: Readonly<{
+  source: string;
+  indices: readonly number[];
+  candidates: readonly DiscoveredInitCandidate[];
+  classified: ClassifiedInitCandidate[];
+  materializer: GitSkillMaterializer;
+  runGit?: GitCommandRunner;
+  onProgress?: () => void;
+}>): Promise<void> {
+  const members = input.indices.map((index) => input.candidates[index]!);
+  const locals = await Promise.all(members.map((candidate) => scanLocal(candidate.path)));
+  try {
+    const ref = await resolveGitDefaultRef(input.source, input.runGit);
+    const resolved = await input.materializer.resolveNormalizedGroup(
+      input.source,
+      ref,
+      members.map((candidate) => ({
+        skill: candidate.name,
+        path: candidate.provenance.skillPath,
+      })),
+    );
+    for (const [offset, candidate] of members.entries()) {
+      const local = locals[offset]!;
+      const item = resolved[offset]!;
+      const index = input.indices[offset]!;
+      if (item instanceof GitSourceError) {
+        input.classified[index] = classifiedFailure(candidate, local, item);
+      } else {
+        const source = toSourceLock(item, ref);
+        input.classified[index] = {
+          candidate,
+          classification: local.hash && local.hash === source.contentHash ? "unchanged" : "modified",
+          source,
+          resolved: source,
+          localContentHash: local.hash,
+          scanError: local.error,
+        };
+      }
+      input.onProgress?.();
+    }
+  } catch (error) {
+    for (const [offset, candidate] of members.entries()) {
+      input.classified[input.indices[offset]!] = classifiedFailure(
+        candidate,
+        locals[offset]!,
+        error,
+      );
+      input.onProgress?.();
+    }
+  }
+}
+
+function classifiedFailure(
+  candidate: DiscoveredInitCandidate,
+  local: Readonly<{ hash?: `sha256:${string}`; error?: string }>,
+  error: unknown,
+): ClassifiedInitCandidate {
+  return {
+    candidate,
+    classification: isAuthRequired(error) ? "auth-required" : "unavailable",
+    source: {
+      repository: candidate.provenance.sourceUrl!,
+      path: candidate.provenance.skillPath!,
+    },
+    localContentHash: local.hash,
+    scanError: local.error,
+  };
 }
 
 async function classifyOne(
@@ -209,12 +321,77 @@ async function classifyOne(
   }
 }
 
+async function batchPromptedActions(input: Readonly<{
+  classified: readonly ClassifiedInitCandidate[];
+  choices: Map<string, InitAdoptionChoice["action"] | "invalid">;
+  duplicateNames: Set<string>;
+  uniqueDuplicates: Set<string>;
+  nonInteractive: boolean;
+  prompt?: InitAdoptionPrompt;
+}>): Promise<Map<string, InitAdoptionAction>> {
+  const prompted = new Map<string, InitAdoptionAction>();
+  if (input.nonInteractive || !input.prompt) return prompted;
+  const eligible = (entry: ClassifiedInitCandidate) =>
+    !input.choices.get(entry.candidate.name) &&
+    !(input.duplicateNames.has(entry.candidate.normalizedName) &&
+      !input.uniqueDuplicates.has(entry.candidate.name));
+
+  const unknowns = input.classified.filter(
+    (entry) => entry.classification === "unknown" && eligible(entry),
+  );
+  if (unknowns.length > 0) {
+    const adopted = new Set(await input.prompt.chooseUnknown(unknowns.map((entry) => entry.candidate.name)));
+    for (const entry of unknowns) {
+      prompted.set(
+        entry.candidate.name,
+        adopted.has(entry.candidate.name) ? "adopt-artifact" : "do-not-manage",
+      );
+    }
+  }
+
+  for (const [classification, code] of [
+    ["unavailable", "SOURCE_UNAVAILABLE"],
+    ["auth-required", "AUTH_REQUIRED"],
+  ] as const) {
+    const group = input.classified.filter(
+      (entry) => entry.classification === classification && eligible(entry),
+    );
+    if (group.length === 0) continue;
+    const kept = new Set(
+      await input.prompt.chooseUnavailable(
+        group.map((entry) => entry.candidate.name),
+        code,
+      ),
+    );
+    for (const entry of group) {
+      prompted.set(entry.candidate.name, kept.has(entry.candidate.name) ? "keep" : "do-not-manage");
+    }
+  }
+
+  const modified = input.classified.filter(
+    (entry) => entry.classification === "modified" && eligible(entry),
+  );
+  if (modified.length > 0) {
+    const decisions = await input.prompt.chooseModified(
+      modified.map((entry) => entry.candidate.name),
+    );
+    for (const entry of modified) {
+      prompted.set(
+        entry.candidate.name,
+        decisions.get(entry.candidate.name) ?? "do-not-manage",
+      );
+    }
+  }
+  return prompted;
+}
+
 async function decideOne(
   entry: ClassifiedInitCandidate,
   input: Readonly<{
     nonInteractive: boolean;
     prompt?: InitAdoptionPrompt;
     choice?: InitAdoptionChoice["action"] | "invalid";
+    prompted?: InitAdoptionAction;
     duplicate: boolean;
     selectedDuplicate: boolean;
   }>,
@@ -246,25 +423,16 @@ async function resolveAction(
     nonInteractive: boolean;
     prompt?: InitAdoptionPrompt;
     choice?: InitAdoptionChoice["action"] | "invalid";
+    prompted?: InitAdoptionAction;
     duplicate: boolean;
     selectedDuplicate: boolean;
   }>,
 ): Promise<InitAdoptionAction | "unselected" | "invalid"> {
   if (input.choice && input.choice !== "invalid") return validateChoice(entry, input.choice);
+  if (input.prompted) return input.prompted;
   if (input.nonInteractive || !input.prompt) return "unselected";
-
-  switch (entry.classification) {
-    case "unchanged":
-      return "replace";
-    case "modified":
-      return input.prompt.chooseModified(entry.candidate.name);
-    case "unavailable":
-      return input.prompt.chooseUnavailable(entry.candidate.name, "SOURCE_UNAVAILABLE");
-    case "auth-required":
-      return input.prompt.chooseUnavailable(entry.candidate.name, "AUTH_REQUIRED");
-    case "unknown":
-      return input.prompt.chooseUnknown(entry.candidate.name);
-  }
+  if (entry.classification === "unchanged") return "replace";
+  return "unselected";
 }
 
 function validateChoice(
@@ -425,4 +593,23 @@ function indexChoices(
 
 function isAuthRequired(error: unknown): boolean {
   return error instanceof GitSourceError && error.code === "AUTH_REQUIRED";
+}
+
+async function mapPool<T, R>(
+  items: readonly T[],
+  size: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  let index = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) }, async () => {
+      while (index < items.length) {
+        const current = index;
+        index += 1;
+        results[current] = await fn(items[current]!);
+      }
+    }),
+  );
+  return results;
 }

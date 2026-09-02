@@ -1,9 +1,10 @@
 {
   "name": "@corotum/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "dependencies": {
+    "@clack/prompts": "^1.7.0",
     "commander": "^15.0.0",
     "zod": "^4.5.1"
   }

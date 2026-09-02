@@ -115,6 +115,61 @@ describe("init transaction", () => {
     expect(result.kind === "initialized" && result.outcomes.some((outcome) => outcome.name === "gamma" && outcome.kind === "unmanaged")).toBe(true);
   });
 
+  test("resumes a prepared git init without rebuilding when desired state already matches", async () => {
+    const root = await tempDir("corotum-init-resume-");
+    const id = skillId("sk_resume0");
+    const recovery = new InitRecoveryStore(join(root, "init.json"));
+    await recovery.save({
+      schemaVersion: 1,
+      phase: "prepared",
+      backend: "git",
+      skillIds: [id],
+      skills: [{ id, name: "alpha", path: "/tmp/alpha", kind: "source-backed" }],
+      gitRepository: "https://example.test/state.git",
+    });
+    const outcome = sourceOutcome("alpha", "/tmp/alpha");
+    if (outcome.kind !== "source-backed") throw new Error("fixture");
+    const existing: V2DesiredState = {
+      manifest: {
+        version: 2,
+        skills: [{
+          id,
+          name: "alpha",
+          targets: "all",
+          source: {
+            repository: outcome.source.repository,
+            path: outcome.source.path,
+            ref: outcome.source.ref,
+          },
+          resolutionStatus: "RESOLVED",
+        }],
+      },
+      lockfile: {
+        version: 2,
+        skills: [{
+          id,
+          name: "alpha",
+          source: outcome.source,
+          materialization: { kind: "source", contentHash: hash },
+        }],
+      },
+    };
+    const provider = memoryProvider({ existing });
+    let saved = false;
+    const result = await new InitTransactionService({
+      provider,
+      recovery,
+      persistConfig: async () => {
+        saved = true;
+      },
+      backend: { kind: "git" },
+      apply: async () => undefined,
+    }).run({ outcomes: [] });
+    expect(provider.pushes).toBe(0);
+    expect(saved).toBe(true);
+    expect(result).toMatchObject({ kind: "initialized", skillIds: [id] });
+  });
+
   test("a desired-state push failure does not install or claim local ownership", async () => {
     const root = await tempDir("corotum-init-pushfail-");
     const unselected = join(root, "unselected");

@@ -14,6 +14,7 @@ import { type MigrationStrategy } from "./migrate";
 import { resolveLegacyPlatformPaths, resolvePlatformPaths } from "./platform";
 import { mergeV2MigrationSnapshots, migrateV2CloudToGit, migrateV2GitToCloud } from "./v2-migration";
 import { MutationLock } from "./mutation-lock";
+import { withGitCliErrors } from "./init-errors";
 
 export function registerMigrateCommand(program: Command, io: CliIo): void {
   program
@@ -22,6 +23,7 @@ export function registerMigrateCommand(program: Command, io: CliIo): void {
     .option("--strategy <replace|merge|cancel>", "destination-state handling")
     .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
     .action(async (destination: string, repository: string | undefined, options: { strategy?: MigrationStrategy; origin: string }) => {
+      await withGitCliErrors(async () => {
       if (destination === "legacy" || destination === "legacy-cleanup") {
         await runLegacyMigration(program, io, destination);
         return;
@@ -79,6 +81,7 @@ export function registerMigrateCommand(program: Command, io: CliIo): void {
       } finally {
         await release();
       }
+      });
     });
 }
 

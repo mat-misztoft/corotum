@@ -51,11 +51,6 @@ export type InitProviderSelection =
   | Readonly<{ kind: "cloud" }>
   | Readonly<{ kind: "git"; repository: string }>;
 
-export const INIT_PROVIDER_PROMPT =
-  "How do you want to sync?\n\n1) Git Sync\n2) Corotum Cloud\n\nChoice [1/2]: ";
-
-export const INIT_REPOSITORY_PROMPT = "Git repository URL: ";
-
 const PROVIDER_REQUIRED_MESSAGE =
   "A sync provider is required. Run `corotum init repository <git-url>` or `corotum init cloud`.";
 
@@ -66,14 +61,15 @@ export async function resolveInitProvider(input: {
   provider: string | undefined;
   repository: string | undefined;
   nonInteractive: boolean;
-  ask: (question: string) => Promise<string>;
+  chooseProvider: () => Promise<"git" | "cloud">;
+  askRepository: () => Promise<string>;
 }): Promise<InitProviderSelection> {
   const token = input.provider?.trim();
   if (!token) {
     if (input.nonInteractive) {
       throw new InitError(PROVIDER_REQUIRED_MESSAGE, "PROVIDER_REQUIRED");
     }
-    const selected = parseProviderChoice(await input.ask(INIT_PROVIDER_PROMPT));
+    const selected = await input.chooseProvider();
     if (selected === "cloud") {
       rejectCloudRepository(input.repository);
       return { kind: "cloud" };
@@ -167,31 +163,17 @@ export function notInitializedError(action: string): GitCliError {
   );
 }
 
-function parseProviderChoice(answer: string): "git" | "cloud" {
-  const normalized = answer.trim().toLowerCase();
-  if (["1", "git", "g", "repository", "git sync"].includes(normalized)) {
-    return "git";
-  }
-  if (["2", "cloud", "c", "corotum cloud"].includes(normalized)) {
-    return "cloud";
-  }
-  throw new InitError(
-    "Choose Git Sync or Corotum Cloud. Run `corotum init repository <git-url>` or `corotum init cloud`.",
-    "PROVIDER_REQUIRED",
-  );
-}
-
 async function requireGitRepository(input: {
   repository: string | undefined;
   nonInteractive: boolean;
-  ask: (question: string) => Promise<string>;
+  askRepository: () => Promise<string>;
 }): Promise<string> {
   const provided = input.repository?.trim();
   if (provided) return provided;
   if (input.nonInteractive) {
     throw new InitError(REPOSITORY_REQUIRED_MESSAGE, "REPOSITORY_REQUIRED");
   }
-  const value = (await input.ask(INIT_REPOSITORY_PROMPT)).trim();
+  const value = (await input.askRepository()).trim();
   if (!value) {
     throw new InitError(REPOSITORY_REQUIRED_MESSAGE, "REPOSITORY_REQUIRED");
   }

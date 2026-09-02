@@ -69,6 +69,8 @@ export type InitRecoveryMarker = Readonly<{
   skillIds: readonly SkillId[];
   skills: readonly PreparedInitSkill[];
   revision?: string;
+  gitRepository?: string;
+  enabledAgentIds?: readonly string[];
 }>;
 
 export type InitTransactionResult =
@@ -156,6 +158,8 @@ export class InitTransactionService {
         backend: this.deps.backend.kind,
         skillIds: adopted.map(() => this.nextId()),
         skills: [],
+        gitRepository: this.deps.gitRepository,
+        enabledAgentIds: this.deps.enabledAgentIds,
       };
       marker = {
         ...marker,
@@ -446,16 +450,23 @@ export class InitTransactionService {
           : { directory: prepared.path, cleanup: async () => undefined };
       try {
         const canonicalPath = canonicalStore.pathFor(lock.name);
-        if (await pathExists(canonicalPath)) {
-          if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
-            throw new Error("Unmanaged named canonical skill differs from the locked hash.");
-          }
-        } else {
+        const alreadyMatches =
+          (await pathExists(canonicalPath)) &&
+          (await scanNormalizedContent(canonicalPath)).contentHash === expected;
+        if (!alreadyMatches) {
+          const stagedHash = await hashSkillDirectory(staged.directory);
           await canonicalStore.replaceFromDirectory(
             prepared.id,
             lock.name,
             staged.directory,
-            await hashSkillDirectory(staged.directory),
+            stagedHash,
+            (await pathExists(canonicalPath))
+              ? {
+                  skillId: prepared.id,
+                  contentHash: stagedHash,
+                  allowDrift: true,
+                }
+              : undefined,
           );
           if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
             throw new Error("Canonical skill content did not match the persisted lock.");

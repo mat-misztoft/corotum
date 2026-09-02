@@ -5,9 +5,17 @@ import {
   classifyGitInitError,
   GitCliError,
   InitError,
-  INIT_PROVIDER_PROMPT,
   resolveInitProvider,
 } from "./init-errors";
+
+const noPrompt = {
+  chooseProvider: async () => {
+    throw new Error("prompted");
+  },
+  askRepository: async () => {
+    throw new Error("prompted");
+  },
+};
 
 describe("init provider selection", () => {
   test("non-interactive missing provider is a typed actionable error", async () => {
@@ -16,9 +24,7 @@ describe("init provider selection", () => {
         provider: undefined,
         repository: undefined,
         nonInteractive: true,
-        ask: async () => {
-          throw new Error("prompted");
-        },
+        ...noPrompt,
       }),
     ).rejects.toMatchObject({
       code: "PROVIDER_REQUIRED",
@@ -28,30 +34,28 @@ describe("init provider selection", () => {
   });
 
   test("interactive TTY asks Git Sync vs Corotum Cloud and does not require an agent", async () => {
-    const questions: string[] = [];
+    const choices: string[] = [];
     await expect(
       resolveInitProvider({
         provider: undefined,
         repository: undefined,
         nonInteractive: false,
-        ask: async (question) => {
-          questions.push(question);
-          if (question === INIT_PROVIDER_PROMPT) return "1";
-          return "git@example.test:state.git";
+        chooseProvider: async () => {
+          choices.push("provider");
+          return "git";
         },
+        askRepository: async () => "git@example.test:state.git",
       }),
     ).resolves.toEqual({ kind: "git", repository: "git@example.test:state.git" });
-    expect(questions[0]).toContain("How do you want to sync?");
-    expect(questions[0]).toContain("Git Sync");
-    expect(questions[0]).toContain("Corotum Cloud");
+    expect(choices).toEqual(["provider"]);
 
     await expect(
       resolveInitProvider({
         provider: undefined,
         repository: undefined,
         nonInteractive: false,
-        ask: async (question) => {
-          if (question === INIT_PROVIDER_PROMPT) return "cloud";
+        chooseProvider: async () => "cloud",
+        askRepository: async () => {
           throw new Error("prompted for git url");
         },
       }),
@@ -64,9 +68,7 @@ describe("init provider selection", () => {
         provider: "repository",
         repository: "/tmp/state.git",
         nonInteractive: true,
-        ask: async () => {
-          throw new Error("prompted");
-        },
+        ...noPrompt,
       }),
     ).resolves.toEqual({ kind: "git", repository: "/tmp/state.git" });
     await expect(
@@ -74,9 +76,7 @@ describe("init provider selection", () => {
         provider: "cloud",
         repository: undefined,
         nonInteractive: true,
-        ask: async () => {
-          throw new Error("prompted");
-        },
+        ...noPrompt,
       }),
     ).resolves.toEqual({ kind: "cloud" });
     await expect(
@@ -84,9 +84,7 @@ describe("init provider selection", () => {
         provider: "/tmp/legacy.git",
         repository: undefined,
         nonInteractive: true,
-        ask: async () => {
-          throw new Error("prompted");
-        },
+        ...noPrompt,
       }),
     ).resolves.toEqual({ kind: "git", repository: "/tmp/legacy.git" });
   });
@@ -97,9 +95,7 @@ describe("init provider selection", () => {
         provider: "repository",
         repository: undefined,
         nonInteractive: true,
-        ask: async () => {
-          throw new Error("prompted");
-        },
+        ...noPrompt,
       }),
     ).rejects.toMatchObject({ code: "REPOSITORY_REQUIRED", outcome: "INVALID_CONFIG" });
   });

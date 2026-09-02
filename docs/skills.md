@@ -28,7 +28,7 @@ Config, credentials, Git cache, and operational state stay in the Corotum platfo
 
 Init enumerates `~/.agents/skills/*/`. Missing `~/.agents/skills` is valid. Discovery does not depend on detected or enabled agents. Init does not import those directories until you select them.
 
-It also reads `~/.agents/.skill-lock.json` and matches `source` / `sourceType` / `sourceUrl` / `skillPath` / `skillFolderHash` to a directory. That file is a hint only. It does not prove an immutable commit, repository access, or that local files still match upstream.
+It also reads `~/.agents/.skill-lock.json`. A record is source-known when the lock **key** matches the local folder name and `source`, `sourceType`, `sourceUrl`, `skillPath`, and `skillFolderHash` are non-empty strings. `skillPath` is the path in the upstream Git repo; if it ends with `SKILL.md`, Corotum uses the parent directory. The lock is a hint only. It does not prove an immutable commit, repository access, or that local files still match upstream.
 
 Agent-local copies are scanned only to explain collisions. They are not a second canonical store.
 
@@ -71,7 +71,7 @@ Domain and CLI outcomes stay named. Common codes:
 | `ARTIFACT_UNAVAILABLE` | Artifact bytes/tree cannot be fetched or extracted |
 | `CONTENT_HASH_MISMATCH` | Bytes do not match the locked hash |
 | `DENYLISTED_PATH` | Artifact scan hit the secret denylist |
-| `LOCAL_CONFLICT` | Unmanaged or unproven content is in the way; it is not overwritten |
+| `LOCAL_CONFLICT` | Unmanaged or unproven content is in the way; ordinary sync does not overwrite it. Interactive init **Replace** overwrites that named folder in `~/.agents/skills` |
 | `DRIFTED` | A managed copy changed; ordinary sync does not clobber it |
 | `PENDING_PUSH` | A previous Git desired-state push is still pending |
 | `CONFIRMATION_REQUIRED` | Non-interactive Git artifact write without `--allow-artifacts` |

@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { basename, join, posix } from "node:path";
+import { join, posix } from "node:path";
 
 import { hashSkillDirectory } from "../../../packages/skills-adapter/src/canonical-store";
 import { normalizeGitSource } from "../../../packages/skills-adapter/src/git-source";
@@ -23,6 +23,7 @@ export type DiscoveredInitCandidate = Readonly<{
 }>;
 
 type LockEntry = Readonly<{
+  name: string;
   source?: unknown;
   sourceType?: unknown;
   sourceUrl?: unknown;
@@ -31,6 +32,7 @@ type LockEntry = Readonly<{
 }>;
 
 type ValidLockEntry = Readonly<{
+  name: string;
   source: string;
   sourceType: string;
   sourceUrl: string;
@@ -78,7 +80,9 @@ async function readLocks(path: string): Promise<Locks> {
       ? parsed.skills
       : parsed;
     return {
-      entries: Object.values(records).filter(isRecord),
+      entries: Object.entries(records).flatMap(([name, value]) =>
+        isRecord(value) ? [{ name, ...value }] : [],
+      ),
       invalid: false,
     };
   } catch (error) {
@@ -89,8 +93,10 @@ async function readLocks(path: string): Promise<Locks> {
 function provenanceFor(name: string, locks: Locks): InitProvenance {
   const matches = locks.entries.filter((entry) => {
     if (!hasRequiredFields(entry)) return false;
-    const skillPath = normalizeSkillPath(entry.skillPath);
-    return !!skillPath && normalizeCandidateName(basename(skillPath)) === normalizeCandidateName(name);
+    return (
+      normalizeCandidateName(entry.name) === normalizeCandidateName(name) &&
+      !!skillDirectoryPath(entry.skillPath)
+    );
   });
   if (matches.length === 0) {
     return { status: "source-unknown", reason: locks.invalid ? "invalid-lockfile" : "missing-provenance" };
@@ -99,7 +105,7 @@ function provenanceFor(name: string, locks: Locks): InitProvenance {
 
   const [entry] = matches;
   if (!hasRequiredFields(entry)) return { status: "source-unknown", reason: "missing-provenance" };
-  const skillPath = normalizeSkillPath(entry.skillPath);
+  const skillPath = skillDirectoryPath(entry.skillPath);
   if (!skillPath) {
     return { status: "source-unknown", reason: "nonmatching-provenance" };
   }
@@ -121,6 +127,16 @@ function provenanceFor(name: string, locks: Locks): InitProvenance {
 function hasRequiredFields(entry: LockEntry): entry is ValidLockEntry {
   return [entry.source, entry.sourceType, entry.sourceUrl, entry.skillPath, entry.skillFolderHash]
     .every((value) => typeof value === "string" && value.trim().length > 0);
+}
+
+function skillDirectoryPath(path: string): string | null {
+  const normalized = normalizeSkillPath(path);
+  if (!normalized) return null;
+  if (posix.basename(normalized).toLowerCase() === "skill.md") {
+    const directory = posix.dirname(normalized);
+    return directory === "." ? null : directory;
+  }
+  return normalized;
 }
 
 function normalizeSkillPath(path: string): string | null {

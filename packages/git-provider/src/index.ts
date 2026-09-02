@@ -260,11 +260,11 @@ export class GitStateProvider implements StateProvider {
       await this.command(cache, ["-c", "user.name=Corotum", "-c", "user.email=toolmirror@users.noreply.github.com", "commit", "--no-gpg-sign", "-m", "corotum: initialize"]);
       try {
         await this.command(cache, ["push", "-u", "origin", "HEAD"]);
-      } catch {
+      } catch (error) {
         // An empty remote has no base commit. The empty marker tells retry that
         // it can safely retry the initial push rather than merge snapshots.
         await this.writePending({ baseRevision: "" });
-        return { kind: "failure", error: { code: "CONFLICT", message: "Desired state was committed locally and is waiting to be pushed." } };
+        return { kind: "failure", error: { code: "CONFLICT", message: pendingPushMessage(error) } };
       }
       return { kind: "success", value: await this.readState(cache) };
     } catch (error) {
@@ -381,14 +381,13 @@ export class GitStateProvider implements StateProvider {
       ]);
       try {
         await this.command(cache, ["push", "origin", "HEAD"]);
-      } catch {
+      } catch (error) {
         await this.writePending({ baseRevision: current });
         return {
           kind: "failure",
           error: {
             code: "CONFLICT",
-            message:
-              "Desired state was committed locally and is waiting to be pushed.",
+            message: pendingPushMessage(error),
           },
         };
       }
@@ -424,6 +423,11 @@ export class GitStateProvider implements StateProvider {
 
   private async sync(cache: string): Promise<void> {
     await this.command(cache, ["fetch", "--quiet", "origin"]);
+    const upstream = await this.runGit({
+      args: ["rev-parse", "--verify", "@{upstream}"],
+      cwd: cache,
+    });
+    if (upstream.exitCode !== 0) return;
     await this.command(cache, ["merge", "--ff-only", "@{upstream}"]);
   }
 
@@ -720,8 +724,7 @@ export class V2GitStateProvider {
     if (pending.kind === "pending" || pending.kind === "conflict") {
       throw new Error("A previous v2 desired-state change is waiting to be pushed.");
     }
-    await this.command(cache, ["fetch", "--quiet", "origin"]);
-    await this.command(cache, ["merge", "--ff-only", "@{upstream}"]);
+    await this.fastForwardOrigin(cache);
     return this.read(cache);
   }
 
@@ -746,11 +749,10 @@ export class V2GitStateProvider {
     if (pending.kind === "pending" || pending.kind === "conflict") {
       throw new Error("A previous v2 desired-state change is waiting to be pushed.");
     }
-    await this.command(cache, ["fetch", "--quiet", "origin"]);
-    await this.command(cache, ["merge", "--ff-only", "@{upstream}"]);
+    await this.fastForwardOrigin(cache);
     if (!(await exists(join(cache, v2ManifestFile)))) {
       return {
-        revisionId: await this.revision(cache),
+        revisionId: (await this.tryRev(cache, "HEAD")) ?? "",
         state: { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } },
         ledger: { version: 2, activeDispositions: {} },
       };
@@ -795,9 +797,8 @@ export class V2GitStateProvider {
     if (pending.kind === "pending" || pending.kind === "conflict") {
       throw new Error("Resolve the previous PENDING_PUSH before changing desired state.");
     }
-    await this.command(cache, ["fetch", "--quiet", "origin"]);
-    await this.command(cache, ["merge", "--ff-only", "@{upstream}"]);
-    if ((await this.revision(cache)) !== input.baseRevision) {
+    await this.fastForwardOrigin(cache);
+    if (((await this.tryRev(cache, "HEAD")) ?? "") !== input.baseRevision) {
       throw new Error("Git desired state has changed.");
     }
     const changedArtifacts = await this.changedArtifacts(cache, state);
@@ -836,9 +837,9 @@ export class V2GitStateProvider {
         await this.writeV2Pending({ baseRevision: input.baseRevision });
         pendingRecorded = true;
         try {
-          await this.command(cache, ["push", "origin", "HEAD"]);
-        } catch {
-          throw new Error("Desired state was committed locally and is waiting to be pushed.");
+          await this.pushHead(cache);
+        } catch (error) {
+          throw new Error(pendingPushMessage(error));
         }
       } else if (changed.exitCode !== 0) throw new Error(changed.stderr || "Git could not inspect staged state.");
       await this.clearV2Pending();
@@ -954,8 +955,20 @@ export class V2GitStateProvider {
     const pending = await this.readV2Pending();
     if (!pending) return { kind: "none" };
     await this.command(cache, ["fetch", "--quiet", "origin"]);
-    const head = await this.revision(cache);
-    const upstream = await this.output(cache, ["rev-parse", "@{upstream}"]);
+    const head = await this.tryRev(cache, "HEAD");
+    const upstream =
+      (await this.tryRev(cache, "@{upstream}")) ??
+      (await this.tryRev(cache, "origin/HEAD"));
+    if (!head) return { kind: "pending" };
+    if (!upstream) {
+      try {
+        await this.pushHead(cache);
+        await this.clearV2Pending();
+        return { kind: "resolved" };
+      } catch {
+        return { kind: "pending" };
+      }
+    }
     if (await this.isAncestor(cache, upstream, head)) {
       try { await this.command(cache, ["push", "origin", "HEAD"]); await this.clearV2Pending(); return { kind: "resolved" }; }
       catch { return { kind: "pending" }; }
@@ -1029,6 +1042,30 @@ export class V2GitStateProvider {
     return cache;
   }
   private async revision(cache: string): Promise<string> { return this.output(cache, ["rev-parse", "HEAD"]); }
+  private async tryRev(cache: string, rev: string): Promise<string | null> {
+    const result = await this.runGit({ args: ["rev-parse", "--verify", rev], cwd: cache });
+    if (result.exitCode !== 0) return null;
+    return new TextDecoder().decode(result.stdout).trim();
+  }
+  private async fastForwardOrigin(cache: string): Promise<void> {
+    await this.command(cache, ["fetch", "--quiet", "origin"]);
+    const upstream =
+      (await this.tryRev(cache, "@{upstream}")) ??
+      (await this.tryRev(cache, "origin/HEAD"));
+    if (!upstream) return;
+    if (!(await this.tryRev(cache, "HEAD"))) {
+      await this.command(cache, ["checkout", "--force", "-B", "main", upstream]);
+      return;
+    }
+    await this.command(cache, ["merge", "--ff-only", upstream]);
+  }
+  private async pushHead(cache: string): Promise<void> {
+    const tracked = await this.tryRev(cache, "@{upstream}");
+    await this.command(
+      cache,
+      tracked ? ["push", "origin", "HEAD"] : ["push", "-u", "origin", "HEAD"],
+    );
+  }
   private async output(cwd: string, args: readonly string[]): Promise<string> { return new TextDecoder().decode((await this.command(cwd, args)).stdout).trim(); }
   private async command(cwd: string | undefined, args: readonly string[]): Promise<Readonly<{ exitCode: number; stderr: string; stdout: Uint8Array }>> { const result = await this.runGit({ args, cwd }); if (result.exitCode !== 0) throw new Error(result.stderr.trim() || "Git command failed."); return result; }
 }
@@ -1083,6 +1120,20 @@ export async function gitTreeHash(directory: string): Promise<`sha256:${string}`
   const hasher = new Bun.CryptoHasher("sha256"); hasher.update("corotum-git-tree-v1\\0");
   for (const file of scanned.files) { hasher.update(file.path); hasher.update("\\0"); hasher.update(file.content); hasher.update("\\0"); }
   return `sha256:${hasher.digest("hex")}`;
+}
+
+function pendingPushMessage(error: unknown): string {
+  const detail = error instanceof Error ? error.message.trim() : "";
+  const base = "Desired state was committed locally and is waiting to be pushed.";
+  if (
+    /authentication|authorization|permission denied|could not read username|terminal prompts disabled|invalid username or token|403|401/i.test(
+      detail,
+    )
+  ) {
+    return `${base} Git authentication is required to push this repository. Sign in with gh auth login or a Git credential helper, then run corotum sync. ${detail}`;
+
+  }
+  return detail ? `${base} ${detail}` : base;
 }
 
 function sourceKey(source: string): string {

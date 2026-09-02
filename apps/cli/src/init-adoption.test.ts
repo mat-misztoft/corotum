@@ -118,17 +118,17 @@ describe("init adoption decisions", () => {
     const replaced = await decideInitAdoptions({
       candidates: await discoverInitProvenance(replaceHome),
       nonInteractive: false,
-      prompt: interactive({ chooseModified: async () => "replace" }),
+      prompt: interactive({ chooseModified: async (names) => asModified(names, "replace") }),
     });
     const kept = await decideInitAdoptions({
       candidates: await discoverInitProvenance(keepHome),
       nonInteractive: false,
-      prompt: interactive({ chooseModified: async () => "keep" }),
+      prompt: interactive({ chooseModified: async (names) => asModified(names, "keep") }),
     });
     const skipped = await decideInitAdoptions({
       candidates: await discoverInitProvenance(skipHome),
       nonInteractive: false,
-      prompt: interactive({ chooseModified: async () => "do-not-manage" }),
+      prompt: interactive({ chooseModified: async (names) => asModified(names, "do-not-manage") }),
     });
 
     expect(replaced[0]).toMatchObject({
@@ -156,7 +156,7 @@ describe("init adoption decisions", () => {
     const kept = await decideInitAdoptions({
       candidates: await discoverInitProvenance(root),
       nonInteractive: false,
-      prompt: interactive({ chooseUnavailable: async () => "keep" }),
+      prompt: interactive({ chooseUnavailable: async (names) => names }),
     });
     expect(kept[0]).toMatchObject({
       kind: "artifact-backed",
@@ -165,6 +165,29 @@ describe("init adoption decisions", () => {
       source: { repository: missing, path: "skills/review" },
     });
     expect(await snapshot(skill)).toBe(before);
+  });
+
+  test("interactive unknown skills are chosen in one batch", async () => {
+    const source = await gitRepo();
+    const root = await home({ git: source.directory, names: ["review", "notes"], lock: null });
+    let asked: readonly string[] = [];
+    const outcomes = await decideInitAdoptions({
+      candidates: await discoverInitProvenance(root),
+      nonInteractive: false,
+      prompt: interactive({
+        chooseUnknown: async (names) => {
+          asked = names;
+          return names.slice(0, 1);
+        },
+      }),
+    });
+    expect([...asked].sort()).toEqual(["notes", "review"]);
+    expect(outcomes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "artifact-backed", name: asked[0] }),
+        expect.objectContaining({ kind: "unmanaged", outcome: "DO_NOT_MANAGE" }),
+      ]),
+    );
   });
 
   test("unknown artifact adoption scans first and invents no source", async () => {
@@ -273,18 +296,25 @@ describe("init adoption decisions", () => {
   });
 });
 
+function asModified(
+  names: readonly string[],
+  action: "replace" | "keep" | "do-not-manage",
+) {
+  return new Map(names.map((name) => [name, action]));
+}
+
 function interactive(overrides: Partial<{
   notice: (message: string) => void;
-  chooseModified: () => Promise<"replace" | "keep" | "do-not-manage">;
-  chooseUnavailable: () => Promise<"keep" | "do-not-manage">;
-  chooseUnknown: () => Promise<"adopt-artifact" | "do-not-manage">;
+  chooseModified: (names: readonly string[]) => Promise<ReadonlyMap<string, "replace" | "keep" | "do-not-manage">>;
+  chooseUnavailable: (names: readonly string[]) => Promise<readonly string[]>;
+  chooseUnknown: (names: readonly string[]) => Promise<readonly string[]>;
   chooseDuplicate: () => Promise<string | "do-not-manage">;
 }> = {}) {
   return {
     notice: overrides.notice ?? (() => undefined),
-    chooseModified: overrides.chooseModified ?? (async () => "do-not-manage" as const),
-    chooseUnavailable: overrides.chooseUnavailable ?? (async () => "do-not-manage" as const),
-    chooseUnknown: overrides.chooseUnknown ?? (async () => "do-not-manage" as const),
+    chooseModified: overrides.chooseModified ?? (async (names) => asModified(names, "do-not-manage")),
+    chooseUnavailable: overrides.chooseUnavailable ?? (async () => []),
+    chooseUnknown: overrides.chooseUnknown ?? (async () => []),
     chooseDuplicate: overrides.chooseDuplicate ?? (async () => "do-not-manage" as const),
   };
 }

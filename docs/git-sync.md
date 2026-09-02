@@ -19,13 +19,15 @@ Cloud mode does not require Git unless a skill source is a Git repository.
 
 ## Initialize
 
-On a TTY, `corotum init` asks Git Sync versus Corotum Cloud. Explicit Git Sync:
+On a TTY, `corotum init` asks Git Sync versus Corotum Cloud (arrow keys), then a Git URL, optional agent enablement, which local skills to check, and batch Skip/All/Choose gates. Explicit Git Sync:
 
 ```bash
 corotum init repository git@github.com:example/corotum-state.git
 ```
 
-`<git-url>` is the desired-state Git remote Corotum owns as a local clone. Init discovers `~/.agents/skills` independently of agents. Missing that directory is valid. Init classifies each skill from its own provenance (including `~/.agents/.skill-lock.json` as a hint, not a commit proof) and adopts only the skills you select. Source-unknown local skills stay visible and unmanaged unless you pass `--adopt-artifact`. Adoption is never all-or-nothing.
+`<git-url>` is the desired-state Git remote Corotum owns as a local clone. An empty remote (no commits) is valid. Init discovers `~/.agents/skills` independently of agents. Missing that directory is valid. Init classifies each skill from its own provenance (including `~/.agents/.skill-lock.json` as a hint, not a commit proof) and adopts only the skills you select. Checking upstream uses one shallow clone per unique source URL. Source-unknown local skills stay unmanaged unless you adopt them as artifacts (TTY gate or `--adopt-artifact`). Skills whose recorded source cannot be read can be kept as artifacts with source metadata retained. **Replace** at init overwrites that named folder in `~/.agents/skills` with the locked bytes. Adoption is never all-or-nothing.
+
+If init commits locally but `git push` fails (`PENDING_PUSH`), a later `corotum init` on the same machine resumes without repeating skill prompts.
 
 Non-interactive init never prompts. Pass `repository` or `cloud`. Git Sync also requires the repository URL:
 
@@ -86,7 +88,7 @@ There is no daemon, watch mode, scheduled update, or remote forced sync. A devic
 
 ## PENDING_PUSH
 
-Git mutations pull first. If a previous desired-state push is still pending, mutating commands refuse to change state and report `PENDING_PUSH`. Restore network access and retry. Read-only `status`, `diff`, and `update --check` remain available while a push is pending.
+Git mutations pull first. If a previous desired-state push is still pending, mutating commands refuse to change state and report `PENDING_PUSH`. Restore network or Git credentials and retry (`corotum sync`, or `corotum init` if config was never written). Auth failures say that Git authentication is required. Read-only `status`, `diff`, and `update --check` remain available while a push is pending.
 
 ## Another machine
 

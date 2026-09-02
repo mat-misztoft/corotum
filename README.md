@@ -31,7 +31,7 @@ corotum cli-update
 
 `corotum` with no command prints a read-only welcome/system screen. `corotum --help` and `corotum --version` have no side effects.
 
-On a TTY, `corotum init` asks Git Sync versus Corotum Cloud. Explicit providers skip that prompt:
+On a TTY, `corotum init` interactively chooses Git Sync versus Corotum Cloud, then which local skills to check and adopt. Explicit providers skip the backend prompt:
 
 ```bash
 corotum init repository git@github.com:example/corotum-state.git

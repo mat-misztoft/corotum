@@ -1,6 +1,5 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createInterface } from "node:readline/promises";
 
 import type { Command } from "commander";
 import {
@@ -8,37 +7,38 @@ import {
   detectAgents,
   localAgentFileSystem,
 } from "../../../packages/agent-targets/src/index";
-import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
+import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import type { CliIo } from "./cli";
 import { isNonInteractive } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
+import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
+import {
+  CloudSyncReportService,
+  deviceSyncAggregateFrom,
+} from "./cloud-sync-report";
+import {
+  ConfigStore,
+  type CorotumConfig,
+  CredentialsStore,
+  effectiveStoragePaths,
+} from "./config";
 import {
   assertGitAvailable,
   notInitializedError,
   withGitCliErrors,
 } from "./init-errors";
-import {
-  CloudSyncReportService,
-  deviceSyncAggregateFrom,
-} from "./cloud-sync-report";
-import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
-import {
-  ConfigStore,
-  CredentialsStore,
-  effectiveStoragePaths,
-  type CorotumConfig,
-} from "./config";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
-import { V2LocalApplier } from "./v2-local-applier";
+import { confirmOption, withSpinner } from "./prompts";
 import { LifecycleRecoveryStore } from "./v2-lifecycle";
+import { V2LocalApplier } from "./v2-local-applier";
 import {
-  V2SyncService,
   type V2SyncEnvelope,
   type V2SyncProviderPort,
+  V2SyncService,
   v2SyncStatusPayload,
 } from "./v2-sync";
 
@@ -65,7 +65,13 @@ async function inspectCommand(
 ): Promise<void> {
   await withGitCliErrors(async () => {
   const runtime = await createRuntime(program, io, false);
-  const result = await runtime.service.inspect();
+  const result = await busy(
+    program,
+    io,
+    kind === "STATUS" ? "Inspecting skills…" : "Computing diff…",
+    kind === "STATUS" ? "Inspected skills" : "Computed diff",
+    () => runtime.service.inspect(),
+  );
   const payload: Record<string, unknown> = {
     ...v2SyncStatusPayload(result),
     command: kind,
@@ -101,7 +107,6 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
       config.agents,
       homeDir,
       isNonInteractive(program.opts(), io.stdinIsTTY),
-      io,
     );
     const newlyEnabled = agents.filter(
       (agent) =>
@@ -117,7 +122,13 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
       config = await configStore.load();
     }
     const runtime = await createRuntime(program, io, true, config);
-    const result = await runtime.service.sync();
+    const result = await busy(
+      program,
+      io,
+      "Syncing skills…",
+      "Synced",
+      () => runtime.service.sync(),
+    );
     const payload: Record<string, unknown> = {
       ...v2SyncStatusPayload(result),
       command: "SYNC",
@@ -298,7 +309,6 @@ async function scanAgents(
   configured: Record<string, { enabled: boolean }>,
   homeDir: string,
   nonInteractive: boolean,
-  io: CliIo,
 ): Promise<readonly DetectedAgentStatus[]> {
   const fresh = (await detectAgents(homeDir, localAgentFileSystem)).filter(
     (agent) => configured[agent.id] === undefined,
@@ -306,9 +316,9 @@ async function scanAgents(
   if (fresh.length === 0) return [];
   const enable =
     !nonInteractive &&
-    (await confirm(
-      io,
-      `Enable newly detected agents (${fresh.map((agent) => agent.id).join(", ")})? [Y/n] `,
+    (await confirmOption(
+      `Enable newly detected agents (${fresh.map((agent) => agent.id).join(", ")})?`,
+      true,
     ));
   return detectedAgentStatuses(fresh, enable);
 }
@@ -324,16 +334,20 @@ export function detectedAgentStatuses(
   }));
 }
 
-async function confirm(io: CliIo, question: string): Promise<boolean> {
-  const prompt = createInterface({
-    input: process.stdin,
-    output: { write: io.writeError } as never,
-  });
-  try {
-    return !/^(n|no)$/i.test((await prompt.question(question)).trim());
-  } finally {
-    prompt.close();
+function busy<T>(
+  program: Command,
+  io: CliIo,
+  message: string,
+  done: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  if (
+    program.opts<{ json?: boolean }>().json === true ||
+    isNonInteractive(program.opts(), io.stdinIsTTY)
+  ) {
+    return work();
   }
+  return withSpinner(message, work, done);
 }
 
 function write(

@@ -1,10 +1,10 @@
 import { homedir } from "node:os";
-import { createInterface } from "node:readline/promises";
 
 import { CLI_VERSION, runCli } from "./cli";
 import { applyPendingCliUpdate, createCliUpdateDeps } from "./cli-update";
 import { ConfigStore } from "./config";
 import { resolvePlatformPaths } from "./platform";
+import { confirmOption } from "./prompts";
 import {
   CliTelemetry,
   isHelpOrVersionArgv,
@@ -19,20 +19,11 @@ const paths = resolvePlatformPaths({
 const telemetry = new CliTelemetry(
   new ConfigStore(paths),
   {
-    confirm: async () => {
-      const prompt = createInterface({
-        input: process.stdin,
-        output: process.stderr,
-      });
-      try {
-        const response = await prompt.question(
-          "Help improve Corotum by sending anonymous usage telemetry?\n● Yes\n○ No\n[Enter] ",
-        );
-        return !/^(n|no)$/i.test(response.trim());
-      } finally {
-        prompt.close();
-      }
-    },
+    confirm: () =>
+      confirmOption(
+        "Help improve Corotum by sending anonymous usage telemetry?",
+        true,
+      ),
   },
   noOpTelemetryEmitter(),
   { version: CLI_VERSION, os: process.platform, architecture: process.arch },

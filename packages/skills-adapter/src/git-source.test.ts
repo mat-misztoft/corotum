@@ -10,6 +10,7 @@ import {
   GitSkillMaterializer,
   GitSourceError,
   normalizeGitSource,
+  runSystemGit,
 } from "./git-source";
 
 const temporaryDirectories: string[] = [];
@@ -92,6 +93,43 @@ describe("GitSkillMaterializer", () => {
     ]);
     expect(new Set(results.map((result) => result.contentHash)).size).toBe(1);
     expect(results[0]?.path).toBe("skills/example");
+  });
+
+  test("resolves many skills from one shallow clone", async () => {
+    const source = await fixture();
+    await mkdir(join(source.directory, "skills", "second"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(source.directory, "skills", "second", "SKILL.md"),
+      "# Second\n",
+    );
+    await git(["-C", source.directory, "add", "."]);
+    await git(["-C", source.directory, "commit", "-m", "second skill"]);
+    let clones = 0;
+    const runGit: GitCommandRunner = async (command) => {
+      if (command.args[0] === "clone") {
+        clones += 1;
+        expect(command.args).toContain("--depth");
+        expect(command.args).toContain("--single-branch");
+      }
+      return runSystemGit(command);
+    };
+    const resolved = await new GitSkillMaterializer(runGit).resolveNormalizedGroup(
+      source.directory,
+      "main",
+      [
+        { skill: "example", path: "skills/example" },
+        { skill: "second", path: "skills/second" },
+      ],
+    );
+    expect(clones).toBe(1);
+    expect(resolved).toHaveLength(2);
+    expect(resolved.every((item) => !(item instanceof GitSourceError))).toBe(true);
+    expect(resolved.map((item) => "path" in item && item.path)).toEqual([
+      "skills/example",
+      "skills/second",
+    ]);
   });
 
   test("discovers each skill directory from a multi-skill source", async () => {

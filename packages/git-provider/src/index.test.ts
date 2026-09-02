@@ -133,6 +133,30 @@ function v2WithRef(hash: `sha256:${string}`, ref: string): V2DesiredState {
 }
 
 describe("V2GitStateProvider", () => {
+  test("initializes an empty remote without requiring @{upstream}", async () => {
+    const root = await mkdtemp(join(tmpdir(), "corotum-git-empty-"));
+    temporaryDirectories.push(root);
+    const bare = join(root, "remote.git");
+    await git(["init", "--bare", "--initial-branch=main", bare]);
+    const provider = new V2GitStateProvider(join(root, "cache"), bare);
+    const pulled = await provider.pullAllowEmpty();
+    expect(pulled).toMatchObject({
+      revisionId: "",
+      state: { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } },
+    });
+    const empty = {
+      manifest: { version: 2 as const, skills: [] },
+      lockfile: { version: 2 as const, skills: [] },
+    };
+    const pushed = await provider.push({
+      state: empty,
+      ledger: { version: 2, activeDispositions: {} },
+      baseRevision: "",
+    });
+    expect(pushed.revisionId).toMatch(/^[a-f0-9]{40}$/);
+    expect((await git(["--git-dir", bare, "rev-parse", "HEAD"])).trim()).toMatch(/^[a-f0-9]{40}$/);
+  });
+
   test("commits v2 state atomically and never writes an artifact for a source lock", async () => {
     const source = await fixture(); const provider = new V2GitStateProvider(join(source.worktree, "v2-cache"), source.bare);
     const base = (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(); const hash = `sha256:${"a".repeat(64)}` as const;
