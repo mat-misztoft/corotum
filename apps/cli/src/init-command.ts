@@ -13,7 +13,7 @@ import { createArtifactArchive } from "../../../packages/skills-adapter/src/arti
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
 import { createCliV2GitStateProvider } from "./artifact-consent";
-import type { CliIo } from "./cli";
+import { CLI_VERSION, type CliIo } from "./cli";
 import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
 import { cloudAuthContext } from "./cloud-auth-command";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
@@ -37,6 +37,19 @@ import {
   coalesceInitCandidates,
   divergentCandidates,
 } from "./init";
+
+const INIT_BANNER = [
+  ",-----.                       ,--.                     ",
+  "'  .--./ ,---. ,--.--. ,---. ,-'  '-.,--.,--.,--,--,--. ",
+  "|  |    | .-. ||  .--'| .-. |'-.  .-'|  ||  ||        | ",
+  "'  '--'\\' '-' '|  |   ' '-' '  |  |  '  ''  '|  |  |  | ",
+  " `-----' `---' `--'    `---'   `--'   `----' `--`--`--' ",
+];
+
+function initBanner(version: string): string {
+  const width = Math.max(...INIT_BANNER.map((line) => line.length));
+  return `${INIT_BANNER.join("\n")}\n${`v${version}`.padStart(width)}\n`;
+}
 
 export function registerInitCommand(program: Command, io: CliIo): void {
   program
@@ -82,6 +95,13 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             );
           }
 
+          const opts = program.opts<{ json?: boolean; nonInteractive?: boolean }>();
+          const nonInteractive =
+            opts.nonInteractive === true || io.stdinIsTTY !== true;
+          if (!opts.json && !nonInteractive) {
+            io.writeOutput(initBanner(CLI_VERSION));
+          }
+
           const detected = await detectAgents(homeDir, localAgentFileSystem);
           let enabledAgentIds = detected
             .map((agent) => agent.id)
@@ -106,9 +126,6 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           const filtered = options.skill?.length
             ? discovered.filter((candidate) => options.skill?.includes(candidate.name))
             : discovered;
-          const nonInteractive =
-            program.opts<{ nonInteractive?: boolean }>().nonInteractive === true ||
-            !io.stdinIsTTY;
           const outcomes = await decideInitAdoptions({
             candidates: filtered,
             nonInteractive,
