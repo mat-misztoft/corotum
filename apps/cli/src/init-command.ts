@@ -34,6 +34,12 @@ import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
 import {
+  assertGitAvailable,
+  InitError,
+  resolveInitProvider,
+  throwGitInitError,
+} from "./init-errors";
+import {
   coalesceInitCandidates,
   divergentCandidates,
 } from "./init";
@@ -53,7 +59,7 @@ function initBanner(version: string): string {
 
 export function registerInitCommand(program: Command, io: CliIo): void {
   program
-    .command("init <repository|cloud>")
+    .command("init [provider] [repository]")
     .description(
       "initialize Git Sync or Corotum Cloud and safely adopt selected local skills",
     )
@@ -67,7 +73,8 @@ export function registerInitCommand(program: Command, io: CliIo): void {
     .option("--origin <url>", "Cloud origin")
     .action(
       async (
-        repository: string,
+        provider: string | undefined,
+        repository: string | undefined,
         options: {
           skill?: string[];
           replace?: string[];
@@ -88,19 +95,26 @@ export function registerInitCommand(program: Command, io: CliIo): void {
         try {
           const configStore = new ConfigStore(paths);
           const config = await configStore.load();
-          const cloud = repository === "cloud";
-          if (config.mode && config.mode !== (cloud ? "cloud" : "git")) {
-            throw new Error(
-              `Corotum is already configured for ${cloud ? "Git" : "Cloud"} Sync.`,
-            );
-          }
-
           const opts = program.opts<{ json?: boolean; nonInteractive?: boolean }>();
           const nonInteractive =
             opts.nonInteractive === true || io.stdinIsTTY !== true;
+          if (config.mode) {
+            throw new InitError(
+              `Corotum is already configured for ${config.mode === "cloud" ? "Cloud" : "Git"} Sync.`,
+              "ALREADY_INITIALIZED",
+            );
+          }
           if (!opts.json && !nonInteractive) {
             io.writeOutput(initBanner(CLI_VERSION));
           }
+          const selection = await resolveInitProvider({
+            provider,
+            repository,
+            nonInteractive,
+            ask: (question) => confirmChoice(question, io),
+          });
+          const cloud = selection.kind === "cloud";
+          const gitRepository = selection.kind === "git" ? selection.repository : undefined;
 
           const detected = await detectAgents(homeDir, localAgentFileSystem);
           let enabledAgentIds = detected
@@ -109,17 +123,12 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           if (
             enabledAgentIds.length === 0 &&
             detected.length > 0 &&
-            io.stdinIsTTY
+            !nonInteractive
           ) {
             const names = detected.map((agent) => agent.id).join(", ");
-            if (await confirm(`Enable detected agents (${names})? [Y/n] `)) {
+            if (await confirm(`Enable detected agents (${names})? [Y/n] `, io)) {
               enabledAgentIds = detected.map((agent) => agent.id);
             }
-          }
-          if (enabledAgentIds.length === 0) {
-            throw new Error(
-              "No detected agents are enabled. Non-interactive init never enables agents automatically.",
-            );
           }
 
           const discovered = await discoverInitProvenance(homeDir);
@@ -152,7 +161,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             if (cloud) {
               await configStore.set("mode", "cloud");
             } else {
-              await configStore.set("gitRepository", repository);
+              await configStore.set("gitRepository", gitRepository);
               await configStore.set("mode", "git");
             }
           };
@@ -160,41 +169,52 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           const cloudConnection = cloud
             ? await connectCloud(program, io, paths, configStore, options.origin)
             : null;
-          const result = cloudConnection
-            ? await new InitTransactionService({
-                provider: cloudConnection.provider,
-                recovery: new InitRecoveryStore(join(paths.stateDir, "init-transaction.json")),
-                persistConfig,
-                backend: {
-                  kind: "cloud",
-                  workspaceId: cloudConnection.workspaceId,
-                },
-                stateStore,
-                canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
-                enabledAgentIds,
-                homeDir,
-              }).run({ outcomes })
-            : await new InitTransactionService({
-                provider: gitProvider(
-                  createCliV2GitStateProvider({
-                    storagePath: storage.gitStoragePath,
-                    source: repository,
-                    options: program.opts(),
-                    io,
-                  }),
-                ),
-                recovery: new InitRecoveryStore(join(paths.stateDir, "init-transaction.json")),
-                persistConfig,
-                backend: { kind: "git" },
-                stateStore,
-                canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
-                enabledAgentIds,
-                homeDir,
-                gitRepository: repository,
-                gitStoragePath: storage.gitStoragePath,
-              }).run({ outcomes });
+          if (!cloud) await assertGitAvailable();
+          let result;
+          try {
+            result = cloudConnection
+              ? await new InitTransactionService({
+                  provider: cloudConnection.provider,
+                  recovery: new InitRecoveryStore(join(paths.stateDir, "init-transaction.json")),
+                  persistConfig,
+                  backend: {
+                    kind: "cloud",
+                    workspaceId: cloudConnection.workspaceId,
+                  },
+                  stateStore,
+                  canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
+                  enabledAgentIds,
+                  homeDir,
+                }).run({ outcomes })
+              : await new InitTransactionService({
+                  provider: gitProvider(
+                    createCliV2GitStateProvider({
+                      storagePath: storage.gitStoragePath,
+                      source: gitRepository as string,
+                      options: program.opts(),
+                      io,
+                    }),
+                  ),
+                  recovery: new InitRecoveryStore(join(paths.stateDir, "init-transaction.json")),
+                  persistConfig,
+                  backend: { kind: "git" },
+                  stateStore,
+                  canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
+                  enabledAgentIds,
+                  homeDir,
+                  gitRepository,
+                  gitStoragePath: storage.gitStoragePath,
+                }).run({ outcomes });
+          } catch (error) {
+            throwGitInitError(error);
+          }
 
-          if (result.kind === "refused") throw new Error(result.reason);
+          if (result.kind === "refused") {
+            if (/already initialized|already configured/i.test(result.reason)) {
+              throw new InitError(result.reason, "ALREADY_INITIALIZED");
+            }
+            throwGitInitError(new Error(result.reason));
+          }
           const unmanaged = result.outcomes.filter((outcome) => outcome.kind === "unmanaged");
           if (result.kind === "partial") {
             io.writeError(`${result.reason}\n`);
@@ -302,6 +322,7 @@ function adoptionPrompt(io: CliIo): InitAdoptionPrompt {
     chooseModified: async (name) => {
       const answer = await confirmChoice(
         `Local skill ${name} differs from upstream. [R]eplace latest, [K]eep local, [D]o not manage? `,
+        io,
       );
       if (/^k/i.test(answer)) return "keep";
       if (/^d/i.test(answer)) return "do-not-manage";
@@ -310,12 +331,14 @@ function adoptionPrompt(io: CliIo): InitAdoptionPrompt {
     chooseUnavailable: async (name, code) => {
       const answer = await confirmChoice(
         `${name} source is ${code === "AUTH_REQUIRED" ? "private" : "unavailable"}. [K]eep local as artifact, [D]o not manage? `,
+        io,
       );
       return /^k/i.test(answer) ? "keep" : "do-not-manage";
     },
     chooseUnknown: async (name) => {
       const answer = await confirmChoice(
         `${name} has no trusted source. [A]dopt as artifact, [D]o not manage? `,
+        io,
       );
       return /^a/i.test(answer) ? "adopt-artifact" : "do-not-manage";
     },
@@ -326,6 +349,7 @@ function adoptionPrompt(io: CliIo): InitAdoptionPrompt {
       const answer = (
         await confirmChoice(
           `Choose one ${name} candidate:\n${lines}\n[1-${candidates.length}, or Enter to leave unmanaged] `,
+          io,
         )
       ).trim();
       if (answer === "") return "do-not-manage";
@@ -337,11 +361,12 @@ function adoptionPrompt(io: CliIo): InitAdoptionPrompt {
   };
 }
 
-async function confirm(question: string): Promise<boolean> {
-  return !/^(n|no)$/i.test((await confirmChoice(question)).trim());
+async function confirm(question: string, io: CliIo): Promise<boolean> {
+  return !/^(n|no)$/i.test((await confirmChoice(question, io)).trim());
 }
 
-async function confirmChoice(question: string): Promise<string> {
+async function confirmChoice(question: string, io: CliIo): Promise<string> {
+  if (io.readQuestion) return io.readQuestion(question);
   const prompt = createInterface({
     input: process.stdin,
     output: process.stderr,

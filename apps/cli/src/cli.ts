@@ -12,6 +12,7 @@ import { registerCliUpdateCommand } from "./cli-update-command";
 import { CloudAuthError } from "./cloud-auth";
 import { registerCloudAuthCommands } from "./cloud-auth-command";
 import { registerConfigCommand } from "./config-command";
+import { InitError } from "./init-errors";
 import { registerInitCommand } from "./init-command";
 import { registerMigrateCommand } from "./migrate-command";
 import { registerRemoveCommands } from "./remove-command";
@@ -33,6 +34,7 @@ export type CliIo = Readonly<{
   stdinIsTTY: boolean | undefined;
   writeError: (message: string) => void;
   writeOutput: (message: string) => void;
+  readQuestion?: (question: string) => Promise<string>;
 }>;
 
 const processIo = (): CliIo => ({
@@ -157,6 +159,7 @@ function outcomeFor(error: unknown): CliOutcome {
     return "SUCCESS";
   }
   if (error instanceof CloudAuthError) return error.outcome;
+  if (error instanceof InitError) return error.outcome;
   return "GENERAL_ERROR";
 }
 
