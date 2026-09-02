@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { validEmail } from "./sign-in-form";
+import { signInCallbackURL, validEmail } from "./sign-in-form";
 
 const page = await Bun.file(`${import.meta.dir}/page.tsx`).text();
 const form = await Bun.file(`${import.meta.dir}/sign-in-form.tsx`).text();
@@ -13,7 +13,7 @@ test("sign-in keeps GitHub, Google, and a keyboard-operable email path", () => {
   expect(form).toContain('id="email"');
   expect(form).toContain('autoComplete="email"');
   expect(form).toContain('type="email"');
-  expect(form).toContain('callbackURL: "/dashboard"');
+  expect(form).toContain("callbackURL: signInCallbackURL(window.location.search)");
 });
 
 test("email validation and request states retain disclosure-safe messaging", () => {
@@ -26,6 +26,15 @@ test("email validation and request states retain disclosure-safe messaging", () 
   expect(form).not.toContain("account exists");
   expect(form).not.toContain("new account");
   expect(form).toContain("ref={confirmationRef}");
+});
+
+test("sign-in returns to a same-origin next path and rejects open redirects", () => {
+  expect(signInCallbackURL("?next=/activate?code=ALDC-KWYE")).toBe(
+    "/activate?code=ALDC-KWYE",
+  );
+  expect(signInCallbackURL("")).toBe("/dashboard");
+  expect(signInCallbackURL("?next=https://evil.example")).toBe("/dashboard");
+  expect(signInCallbackURL("?next=//evil.example")).toBe("/dashboard");
 });
 
 test("OAuth controls expose a generic pending and failure state", () => {

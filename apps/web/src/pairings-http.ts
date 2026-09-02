@@ -9,6 +9,7 @@ import {
   type PairingDatabase,
   type PairingDevice,
   PairingExpiredError,
+  pairingIdForUserCode,
   PairingNotFoundError,
 } from "./pairings";
 
@@ -62,7 +63,7 @@ export async function handleGetPairing(
   id: string,
 ) {
   const blocked = await protectCloudRequest(request, db, {
-    kind: "pairingAuth",
+    kind: "normal",
     requireCli: true,
   });
   if (blocked) return blocked;
@@ -78,7 +79,7 @@ export async function handleGetPairing(
 export async function handleApprovePairing(
   request: Request,
   db: PairingDatabase,
-  id: string,
+  id: string | null,
   userId: string | null,
 ) {
   const blocked = await protectCloudRequest(request, db, {
@@ -96,13 +97,11 @@ export async function handleApprovePairing(
     return jsonError("Invalid request", 400);
 
   try {
-    const result = await approvePairing(
-      db,
-      userId,
-      id,
-      (body as { userCode: string }).userCode,
-    );
-    return Response.json({ pairingId: id, ...result });
+    const userCode = (body as { userCode: string }).userCode;
+    const pairingId = id ?? (await pairingIdForUserCode(db, userCode));
+    if (!pairingId) return pairingError(new PairingNotFoundError());
+    const result = await approvePairing(db, userId, pairingId, userCode);
+    return Response.json({ pairingId, ...result });
   } catch (error) {
     return pairingError(error);
   }

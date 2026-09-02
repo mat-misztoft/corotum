@@ -156,6 +156,59 @@ test("a compatible CLI can still pair, and browser approve is not gated on CLI v
   expect(approved.status).toBe(200);
 });
 
+test("CLI pairing polls do not consume the pairingAuth budget", async () => {
+  const { sqlite, db } = await protectDb();
+  sqlite
+    .query(
+      "INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, 1, 1, 1)",
+    )
+    .run("user_1", "Ada", "ada@example.com");
+  const created = await handleCreatePairing(
+    apiRequest("/api/v1/cli/pairings", {
+      method: "POST",
+      headers: {
+        "x-toolmirror-cli-version": "0.1.0",
+        "cf-connecting-ip": "203.0.113.20",
+      },
+      body: JSON.stringify(device),
+    }),
+    db,
+  );
+  const pairing = (await created.json()) as {
+    id: string;
+    deviceCode: string;
+    userCode: string;
+  };
+  for (let index = 0; index < RATE_LIMITS.pairingAuth.limit + 1; index += 1) {
+    const polled = await handleGetPairing(
+      apiRequest(`/api/v1/cli/pairings/${pairing.id}`, {
+        headers: {
+          "x-toolmirror-cli-version": "0.1.0",
+          "x-toolmirror-device-code": pairing.deviceCode,
+          "cf-connecting-ip": "203.0.113.20",
+        },
+      }),
+      db,
+      pairing.id,
+    );
+    expect(polled.status).toBe(200);
+  }
+  const approved = await handleApprovePairing(
+    apiRequest("/api/v1/cli/pairings/approve", {
+      method: "POST",
+      headers: {
+        origin: "https://corotum.com",
+        "cf-connecting-ip": "203.0.113.20",
+      },
+      body: JSON.stringify({ userCode: pairing.userCode }),
+    }),
+    db,
+    null,
+    "user_1",
+  );
+  expect(approved.status).toBe(200);
+});
+
 test("an over-limit incompatible CLI is throttled instead of reaching Cloud pairing", async () => {
   const { sqlite, db } = await protectDb();
   let last = new Response();

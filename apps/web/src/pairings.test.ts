@@ -360,6 +360,35 @@ test("pairing HTTP flow creates, polls, approves once, and refuses a second exch
   ).not.toContain(pairing.deviceCode);
 });
 
+test("approve by user code does not need the pairing id", async () => {
+  const { sqlite, db } = await pairingDb();
+  await insertUser(sqlite, "user_1");
+  const pairing = await createPairing(db, device);
+  const missing = await handleApprovePairing(
+    pairingRequest("/api/v1/cli/pairings/approve", {
+      method: "POST",
+      headers: { origin: "https://corotum.com" },
+      body: JSON.stringify({ userCode: "NOPE-CODE" }),
+    }),
+    db,
+    null,
+    "user_1",
+  );
+  expect(missing.status).toBe(404);
+  const approved = await handleApprovePairing(
+    pairingRequest("/api/v1/cli/pairings/approve", {
+      method: "POST",
+      headers: { origin: "https://corotum.com" },
+      body: JSON.stringify({ userCode: ` ${pairing.userCode.toLowerCase()} ` }),
+    }),
+    db,
+    null,
+    "user_1",
+  );
+  expect(approved.status).toBe(200);
+  expect(await approved.json()).toMatchObject({ pairingId: pairing.id });
+});
+
 test("polling without the secret device code is unauthorized", async () => {
   const { db } = await pairingDb();
   const created = await createPairing(db, device, 1_000);

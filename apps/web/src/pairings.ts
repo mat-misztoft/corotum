@@ -103,6 +103,17 @@ function normalizeUserCode(userCode: string) {
   return userCode.trim().toUpperCase();
 }
 
+export async function pairingIdForUserCode(
+  db: PairingDatabase,
+  userCode: string,
+) {
+  const row = await db
+    .prepare("SELECT id FROM cli_pairings WHERE user_code = ?")
+    .bind(normalizeUserCode(userCode))
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 function isUniqueConstraint(error: unknown) {
   return error instanceof Error && /unique/i.test(error.message);
 }

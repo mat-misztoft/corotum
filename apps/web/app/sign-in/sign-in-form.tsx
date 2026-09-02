@@ -9,6 +9,17 @@ export function validEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+export function signInCallbackURL(search = "") {
+  const next = new URLSearchParams(search).get("next");
+  return next &&
+    next.startsWith("/") &&
+    !next.startsWith("//") &&
+    !next.includes("\\") &&
+    !next.includes("://")
+    ? next
+    : "/dashboard";
+}
+
 export function SignInForm() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<EmailState>("form");
@@ -34,7 +45,7 @@ export function SignInForm() {
     try {
       const { error } = await authClient.signIn.magicLink({
         email: address,
-        callbackURL: "/dashboard",
+        callbackURL: signInCallbackURL(window.location.search),
       });
       setState(error ? "error" : "confirmed");
     } catch {
@@ -48,7 +59,7 @@ export function SignInForm() {
     try {
       const { error } = await authClient.signIn.social({
         provider,
-        callbackURL: "/dashboard",
+        callbackURL: signInCallbackURL(window.location.search),
       });
       if (error) {
         setOauthProvider(null);
