@@ -2,7 +2,7 @@
 set -eu
 
 binary=${1:?usage: verify-cli.sh path-to-corotum}
-expected='corotum 0.5.0'
+expected='corotum 0.6.0'
 actual=$(env -i PATH=/usr/bin:/bin "$binary" --version)
 
 if [ "$actual" != "$expected" ]; then

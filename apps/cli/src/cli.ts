@@ -31,7 +31,7 @@ import {
   type WelcomeDeps,
 } from "./welcome";
 
-export const CLI_VERSION = "0.5.0";
+export const CLI_VERSION = "0.6.0";
 
 export type CliOptions = Readonly<{
   json: boolean;
