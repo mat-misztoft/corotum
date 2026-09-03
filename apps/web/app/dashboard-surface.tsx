@@ -56,7 +56,12 @@ const navItems: { view: View; href: string; label: string }[] = [
 ];
 
 function statusClass(status: string) {
-  if (status === "SYNCED" || status === "LOCKED" || status === "ACTIVE")
+  if (
+    status === "SYNCED" ||
+    status === "LOCKED" ||
+    status === "ACTIVE" ||
+    status === "RESOLVED"
+  )
     return "status-synced";
   if (status === "DRIFTED") return "status-drifted";
   if (status === "ERROR" || status === "AUTH_REQUIRED" || status === "402")
@@ -65,7 +70,10 @@ function statusClass(status: string) {
 }
 
 function statusMark(status: string) {
-  return status === "SYNCED" || status === "LOCKED" || status === "ACTIVE"
+  return status === "SYNCED" ||
+    status === "LOCKED" ||
+    status === "ACTIVE" ||
+    status === "RESOLVED"
     ? "✓"
     : status === "DRIFTED"
       ? "≠"
@@ -109,6 +117,7 @@ function DashboardShell({
               </a>
             ))}
             <button
+              className="dashboard-sign-out"
               type="button"
               onClick={async () => {
                 await authClient.signOut();
@@ -211,7 +220,7 @@ export function DashboardSurface({ view }: { view: View }) {
   async function revokeDevice(deviceId: string) {
     if (
       !window.confirm(
-        "Revoke this device? Its remote status data will be preserved.",
+        "Remove this device? It will need corotum login again. Remote status rows stay.",
       )
     )
       return;
@@ -233,6 +242,92 @@ export function DashboardSurface({ view }: { view: View }) {
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to revoke device",
+      );
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function mutateDesired(mutation: Record<string, string>) {
+    if (!data) return false;
+    setError(null);
+    const response = await fetch("/api/v1/dashboard", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        baseRevisionId: data.revision.id,
+        idempotencyKey: crypto.randomUUID(),
+        mutation,
+      }),
+    });
+    const body = (await response.json()) as { error?: string };
+    if (response.status === 409) {
+      const fresh = await fetch("/api/v1/dashboard");
+      if (fresh.ok) setData((await fresh.json()) as Dashboard);
+      throw new Error(
+        body.error ?? "The workspace changed before this mutation could be applied.",
+      );
+    }
+    if (!response.ok) throw new Error(body.error ?? "Unable to update skills");
+    const fresh = await fetch("/api/v1/dashboard");
+    if (fresh.ok) setData((await fresh.json()) as Dashboard);
+    return true;
+  }
+
+  async function clearCloudData() {
+    if (
+      !window.confirm(
+        "Delete all Cloud desired-state skills? Local files on devices stay. This cannot be undone.",
+      )
+    )
+      return;
+    setAction("clear-cloud");
+    try {
+      await mutateDesired({ type: "CLEAR" });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to delete Cloud data",
+      );
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function addSkill(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    const source = String(fields.get("source") ?? "").trim();
+    const skill = String(fields.get("skill") ?? "").trim();
+    const ref = String(fields.get("ref") ?? "").trim();
+    setAction("add");
+    try {
+      if (
+        await mutateDesired({
+          type: "ADD",
+          source,
+          skill,
+          ...(ref ? { ref } : {}),
+        })
+      ) {
+        form.reset();
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to add skill");
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function removeSkill(skillId: string, name: string) {
+    if (!window.confirm(`Remove ${name} from desired state? Devices apply on corotum sync.`))
+      return;
+    setAction(skillId);
+    try {
+      await mutateDesired({ type: "REMOVE", skillId });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to remove skill",
       );
     } finally {
       setAction(null);
@@ -362,6 +457,15 @@ export function DashboardSurface({ view }: { view: View }) {
   const pending = data.skills.filter(
     (skill) => skill.resolutionStatus === "PENDING_RESOLUTION",
   );
+  const resolved = data.skills.length - pending.length;
+  const locked = data.skills.filter((skill) => skill.locked).length;
+  const deviceCounts = data.devices.reduce(
+    (counts, device) => {
+      counts[device.syncStatus] = (counts[device.syncStatus] ?? 0) + 1;
+      return counts;
+    },
+    {} as Record<string, number>,
+  );
 
   if (view === "overview")
     return (
@@ -380,90 +484,71 @@ export function DashboardSurface({ view }: { view: View }) {
         </header>
         <section className="dashboard-panel" aria-labelledby="desired-skills">
           <h2 id="desired-skills">Desired skills</h2>
+          {data.skills.length === 0 ? (
+            <p className="dashboard-empty">No managed skills yet.</p>
+          ) : (
+            <dl className="dashboard-skill-summary">
+              <div>
+                <dt>Total</dt>
+                <dd>{data.skills.length}</dd>
+              </div>
+              <div>
+                <dt>Resolved</dt>
+                <dd>{resolved}</dd>
+              </div>
+              <div>
+                <dt>Pending</dt>
+                <dd>{pending.length}</dd>
+              </div>
+              <div>
+                <dt>Locked</dt>
+                <dd>{locked}</dd>
+              </div>
+            </dl>
+          )}
           {pending.length > 0 && (
             <p className="dashboard-pending">
               <StatusLabel status="PENDING_RESOLUTION" />
-              {pending.map((skill) => skill.skill).join(", ")} must be resolved
-              by a device with repository access. No remote sync is requested.
+              {pending.length} skill{pending.length === 1 ? "" : "s"} need a
+              device with Git access. No remote sync is requested.
             </p>
           )}
-          {data.skills.length === 0 ? (
-            <p className="dashboard-empty">
-              No managed skills yet.
-              <br />
-              <span>
-                Add skills from the CLI with <code>corotum add</code>.
-              </span>
-            </p>
-          ) : (
-            <div className="dashboard-table-wrap">
-              <table className="dashboard-skills">
-                <caption>Desired skills in this workspace</caption>
-                <thead>
-                  <tr>
-                    <th>Skill</th>
-                    <th>Ref</th>
-                    <th>Resolution</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.skills.map((skill) => (
-                    <tr key={skill.id}>
-                      <td data-label="Skill">{skill.skill}</td>
-                      <td data-label="Ref">
-                        <code>{skill.ref}</code>
-                      </td>
-                      <td data-label="Resolution">
-                        <StatusLabel status={skill.resolutionStatus} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <a className="dashboard-inline-link" href="/dashboard/skills">
+            Open skills
+          </a>
         </section>
         <section
           className="dashboard-panel dashboard-devices-panel"
           aria-labelledby="device-reports"
         >
-          <h2 id="device-reports">Device reports</h2>
+          <h2 id="device-reports">Devices</h2>
           {data.devices.length === 0 ? (
             <p className="dashboard-empty">
               No paired devices have reported yet.
             </p>
           ) : (
-            data.devices.map((device) => (
-              <article className="dashboard-device" key={device.id}>
-                <header>
-                  <h3>{device.name}</h3>
-                  <StatusLabel status={device.syncStatus} />
-                </header>
-                <p className="dashboard-device-meta">
-                  {device.platform}/{device.architecture}
-                  <span>applied revision {device.appliedRevisionSequence}</span>
-                </p>
-                {device.targets.length === 0 ? (
-                  <p className="dashboard-target-empty">No target report.</p>
-                ) : (
-                  <ul className="dashboard-targets">
-                    {device.targets.map((target) => (
-                      <li key={`${target.skillId}-${target.agentId}`}>
-                        <code>{target.skillId}</code>
-                        <code>{target.agentId}</code>
-                        <StatusLabel status={target.status} />
-                        {target.errorCode && (
-                          <code className="dashboard-error-code">
-                            ({target.errorCode})
-                          </code>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-            ))
+            <dl className="dashboard-skill-summary">
+              <div>
+                <dt>Total</dt>
+                <dd>{data.devices.length}</dd>
+              </div>
+              <div>
+                <dt>Synced</dt>
+                <dd>{deviceCounts.SYNCED ?? 0}</dd>
+              </div>
+              <div>
+                <dt>Drifted</dt>
+                <dd>{deviceCounts.DRIFTED ?? 0}</dd>
+              </div>
+              <div>
+                <dt>Never synced</dt>
+                <dd>{deviceCounts.NEVER_SYNCED ?? 0}</dd>
+              </div>
+            </dl>
           )}
+          <a className="dashboard-inline-link" href="/dashboard/devices">
+            Open devices
+          </a>
         </section>
       </DashboardShell>
     );
@@ -497,10 +582,6 @@ export function DashboardSurface({ view }: { view: View }) {
             {data.skills.length === 0 ? (
               <p className="dashboard-empty">
                 No managed skills yet.
-                <br />
-                <span>
-                  Add skills from the CLI with <code>corotum add</code>.
-                </span>
               </p>
             ) : (
               <div className="dashboard-table-wrap">
@@ -511,6 +592,7 @@ export function DashboardSurface({ view }: { view: View }) {
                       <th>Skill</th>
                       <th>Ref</th>
                       <th>Resolution</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -523,16 +605,66 @@ export function DashboardSurface({ view }: { view: View }) {
                         <td data-label="Resolution">
                           <StatusLabel status={skill.resolutionStatus} />
                         </td>
+                        <td data-label="Actions">
+                          <button
+                            className="dashboard-secondary-button"
+                            type="button"
+                            disabled={action === skill.id}
+                            onClick={() => removeSkill(skill.id, skill.skill)}
+                          >
+                            {action === skill.id ? "Removing…" : "Remove"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+            <form className="dashboard-add-skill" onSubmit={addSkill}>
+              <p className="dashboard-add-skill-kicker">Add a Git-backed skill</p>
+              <label>
+                Source
+                <input
+                  autoComplete="off"
+                  disabled={action === "add"}
+                  name="source"
+                  placeholder="https://github.com/owner/skills.git"
+                  required
+                  spellCheck={false}
+                />
+              </label>
+              <label>
+                Skill
+                <input
+                  autoComplete="off"
+                  disabled={action === "add"}
+                  name="skill"
+                  required
+                  spellCheck={false}
+                />
+              </label>
+              <label>
+                Ref
+                <input
+                  autoComplete="off"
+                  disabled={action === "add"}
+                  name="ref"
+                  placeholder="main"
+                  spellCheck={false}
+                />
+              </label>
+              <button type="submit" disabled={action === "add"}>
+                {action === "add" ? "Adding…" : "Add skill"}
+              </button>
+              <p className="dashboard-add-skill-note">
+                New skills stay pending until a device with Git access resolves them. Devices apply on <code>corotum sync</code>. No remote sync is requested.
+              </p>
+            </form>
           </section>
         )}
         {view === "devices" && (
-          <section className="dashboard-panel" aria-labelledby="device-reports">
+          <section className="dashboard-overview-block" aria-labelledby="device-reports">
             <h2 id="device-reports">Device reports</h2>
             {data.devices.length === 0 ? (
               <p className="dashboard-empty">
@@ -543,46 +675,46 @@ export function DashboardSurface({ view }: { view: View }) {
                 </span>
               </p>
             ) : (
-              data.devices.map((device) => (
-                <article className="dashboard-device" key={device.id}>
-                  <header>
-                    <h3>{device.name}</h3>
-                    <StatusLabel status={device.syncStatus} />
-                  </header>
-                  <p className="dashboard-device-meta">
-                    {device.platform}/{device.architecture}
-                    <span>
-                      applied revision {device.appliedRevisionSequence}
-                    </span>
-                  </p>
-                  {device.targets.length === 0 ? (
-                    <p className="dashboard-target-empty">No target report.</p>
-                  ) : (
-                    <ul className="dashboard-targets">
-                      {device.targets.map((target) => (
-                        <li key={`${target.skillId}-${target.agentId}`}>
-                          <code>{target.skillId}</code>
-                          <code>{target.agentId}</code>
-                          <StatusLabel status={target.status} />
-                          {target.errorCode && (
-                            <code className="dashboard-error-code">
-                              ({target.errorCode})
-                            </code>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <button
-                    className="dashboard-secondary-button"
-                    type="button"
-                    disabled={action === device.id}
-                    onClick={() => revokeDevice(device.id)}
-                  >
-                    {action === device.id ? "Revoking…" : "Revoke device"}
-                  </button>
-                </article>
-              ))
+              <div className="dashboard-device-grid">
+                {data.devices.map((device) => (
+                  <article className="dashboard-device-tile" key={device.id}>
+                    <header>
+                      <h3>{device.name}</h3>
+                      <StatusLabel status={device.syncStatus} />
+                    </header>
+                    <p className="dashboard-device-meta">
+                      {device.platform}/{device.architecture}
+                      <span>rev {device.appliedRevisionSequence}</span>
+                    </p>
+                    {device.targets.length === 0 ? (
+                      <p className="dashboard-target-empty">No target report.</p>
+                    ) : (
+                      <ul className="dashboard-targets">
+                        {device.targets.map((target) => (
+                          <li key={`${target.skillId}-${target.agentId}`}>
+                            <code>{target.skillId}</code>
+                            <code>{target.agentId}</code>
+                            <StatusLabel status={target.status} />
+                            {target.errorCode && (
+                              <code className="dashboard-error-code">
+                                ({target.errorCode})
+                              </code>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <button
+                      className="dashboard-secondary-button"
+                      type="button"
+                      disabled={action === device.id}
+                      onClick={() => revokeDevice(device.id)}
+                    >
+                      {action === device.id ? "Removing…" : "Remove"}
+                    </button>
+                  </article>
+                ))}
+              </div>
             )}
           </section>
         )}
@@ -830,6 +962,24 @@ export function DashboardSurface({ view }: { view: View }) {
           <br />
           corotum config set telemetry false
         </code>
+      </section>
+      <section
+        className="dashboard-panel dashboard-settings-panel"
+        aria-labelledby="cloud-data-heading"
+      >
+        <h2 id="cloud-data-heading">Cloud data</h2>
+        <p>
+          Delete desired-state skills stored in Cloud. Local skill files on
+          devices are not deleted. Remove a paired device on the Devices page.
+        </p>
+        <button
+          className="dashboard-secondary-button"
+          type="button"
+          disabled={action !== null}
+          onClick={() => clearCloudData()}
+        >
+          {action === "clear-cloud" ? "Deleting…" : "Delete Cloud skills"}
+        </button>
       </section>
         </>
       )}

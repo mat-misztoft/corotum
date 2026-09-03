@@ -42,6 +42,13 @@ describe("init provenance discovery", () => {
     expect(await readFile(skillFile, "utf8")).toBe(before);
   });
 
+  test("ignores hidden directories in the skills root", async () => {
+    const root = await fixture({ skills: { review: record } });
+    await mkdir(join(root, ".agents", "skills", ".stfolder"));
+    const found = await discoverInitProvenance(root);
+    expect(found.map((candidate) => candidate.name)).toEqual(["review"]);
+  });
+
   test("marks missing, malformed, and stale mappings source-unknown", async () => {
     const missing = await fixture(undefined);
     const malformed = await fixture("not a lockfile");

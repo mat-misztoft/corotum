@@ -90,7 +90,7 @@ export async function handlePutWorkspaceArtifact(
   workspaceId: string,
   hosted = false,
 ) {
-  const authenticated = await authenticateArtifactRequest(request, db, workspaceId, "mutation", hosted);
+  const authenticated = await authenticateArtifactRequest(request, db, workspaceId, "normal", hosted);
   if ("error" in authenticated) return authenticated.error;
   try {
     const transfer = readTransfer(request);

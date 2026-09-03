@@ -18,6 +18,7 @@ import { classifyGitInitError, GitCliError, InitError } from "./init-errors";
 import { registerInitCommand } from "./init-command";
 import { registerMigrateCommand } from "./migrate-command";
 import { registerRemoveCommands } from "./remove-command";
+import { registerResetCommand } from "./reset-command";
 import { registerRestoreCommand } from "./restore-command";
 import { registerSetRefCommand } from "./set-ref-command";
 import { registerSyncCommands } from "./sync-command";
@@ -30,7 +31,7 @@ import {
   type WelcomeDeps,
 } from "./welcome";
 
-export const CLI_VERSION = "0.4.0";
+export const CLI_VERSION = "0.5.0";
 
 export type CliOptions = Readonly<{
   json: boolean;
@@ -95,6 +96,7 @@ export function createCli(
   registerAgentsCommand(program, io);
   registerConfigCommand(program, io);
   registerCloudAuthCommands(program, io);
+  registerResetCommand(program, io);
   registerMigrateCommand(program, io);
 
   program.action(async () => {

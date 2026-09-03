@@ -164,7 +164,8 @@ export type DashboardMutation =
   | { type: "ADD"; source: string; skill: string; ref?: string; path?: string; targets?: "all" | string[] }
   | { type: "REMOVE"; skillId: string }
   | { type: "UPDATE"; skillId: string }
-  | { type: "SET_REF"; skillId: string; ref: string };
+  | { type: "SET_REF"; skillId: string; ref: string }
+  | { type: "CLEAR" };
 
 export { projectedDeviceSyncStatus } from "./device-target-status";
 
@@ -201,6 +202,16 @@ function mutateV2Dashboard(
   let skills = [...current.manifest.skills];
   let locks = [...current.lockfile.skills];
   let transition: RevisionTransition;
+  if (mutation.type === "CLEAR") {
+    return {
+      state: emptyV2State,
+      transition: {
+        type: "REMOVE",
+        skillId: skills[0]?.id ?? skillId("sk_clear"),
+        metadata: { origin: "clear" },
+      },
+    };
+  }
   if (mutation.type === "ADD") {
     rejectCredentialUrl(mutation.source);
     const repository = mutation.source.trim();
@@ -252,6 +263,16 @@ function mutateV1Dashboard(
   let skills = [...current.manifest.skills];
   let locks = [...current.lockfile.skills];
   let transition: RevisionTransition;
+  if (mutation.type === "CLEAR") {
+    return {
+      state: { manifest: { version: 1, skills: [] }, lockfile: { version: 1, skills: [] } },
+      transition: {
+        type: "REMOVE",
+        skillId: skills[0]?.id ?? skillId("sk_clear"),
+        metadata: { origin: "clear" },
+      },
+    };
+  }
   if (mutation.type === "ADD") {
     rejectCredentialUrl(mutation.source);
     const source = mutation.source.trim();

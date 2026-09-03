@@ -12,8 +12,7 @@ import { createCliV2GitStateProvider } from "./artifact-consent";
 import { CLI_VERSION, type CliIo } from "./cli";
 import {
   CloudAuthError,
-  cloudOriginFrom,
-  DEFAULT_CLOUD_ORIGIN,
+  resolveCloudOrigin,
 } from "./cloud-auth";
 import {
   ConfigStore,
@@ -171,9 +170,7 @@ async function mutationProvider(
       "AUTH_REQUIRED",
     );
   }
-  const origin = cloudOriginFrom(
-    process.env.COROTUM_CLOUD_ORIGIN?.trim() || DEFAULT_CLOUD_ORIGIN,
-  );
+  const origin = resolveCloudOrigin(undefined, config.origin);
   const cloud = new V2SaaSProvider({
     origin,
     deviceToken: credentials.cloudDeviceToken,

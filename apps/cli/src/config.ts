@@ -15,6 +15,7 @@ const configSchema = z
     gitStoragePath: z.string().min(1).nullable(),
     gitRepository: z.string().min(1).nullable().default(null),
     telemetry: z.boolean().nullable(),
+    origin: z.string().min(1).nullable().default(null),
     installationId: z.uuid().nullable(),
     agents: z.record(z.string(), z.object({ enabled: z.boolean() })),
   })
@@ -38,10 +39,11 @@ export const CONFIG_KEYS = [
   "gitStoragePath",
   "gitRepository",
   "telemetry",
+  "origin",
   "installationId",
   "agents",
 ] as const satisfies readonly ConfigKey[];
-export const SETTABLE_CONFIG_KEYS = ["telemetry"] as const satisfies readonly ConfigKey[];
+export const SETTABLE_CONFIG_KEYS = ["telemetry", "origin"] as const satisfies readonly ConfigKey[];
 
 export const defaultConfig = (): CorotumConfig => ({
   schemaVersion: 1,
@@ -52,6 +54,7 @@ export const defaultConfig = (): CorotumConfig => ({
   gitStoragePath: null,
   gitRepository: null,
   telemetry: null,
+  origin: null,
   installationId: null,
   agents: {},
 });

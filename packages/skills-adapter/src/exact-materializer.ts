@@ -81,11 +81,14 @@ export class ExactContentMaterializer {
       const expected = lock.materialization.kind === "source"
         ? lock.materialization.contentHash
         : lock.materialization.artifact.contentHash;
-      const scanned = await scanNormalizedContent(directory);
-      if (scanned.contentHash !== expected) {
-        throw new MaterializationError("CONTENT_HASH_MISMATCH", "Selected content does not match the locked content hash.");
+      if (lock.materialization.kind === "source") {
+        const scanned = await scanNormalizedContent(directory);
+        if (scanned.contentHash !== expected) {
+          throw new MaterializationError("CONTENT_HASH_MISMATCH", "Selected content does not match the locked content hash.");
+        }
+        return { directory, contentHash: scanned.contentHash, cleanup: () => rm(root, { force: true, recursive: true }) };
       }
-      return { directory, contentHash: scanned.contentHash, cleanup: () => rm(root, { force: true, recursive: true }) };
+      return { directory, contentHash: expected, cleanup: () => rm(root, { force: true, recursive: true }) };
     } catch (error) {
       await rm(root, { force: true, recursive: true });
       throw mapMaterializationError(error, lock.materialization.kind);

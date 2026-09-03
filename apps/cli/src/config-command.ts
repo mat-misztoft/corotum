@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import type { Command } from "commander";
 import type { CliIo } from "./cli";
 import { jsonEnvelope, type CliOutcome } from "./cli-contracts";
+import { cloudOriginFrom } from "./cloud-auth";
 import {
   CONFIG_KEYS,
   SETTABLE_CONFIG_KEYS,
@@ -46,16 +47,33 @@ export function registerConfigCommand(program: Command, io: CliIo): void {
     .command("set <key> <value>")
     .action(async (key: string, value: string) => {
       const typed = assertSettableKey(key);
-      if (typed !== "telemetry" || !["true", "false"].includes(value)) {
+      if (typed === "telemetry") {
+        if (!["true", "false"].includes(value)) {
+          throw new ConfigError("config set telemetry requires true or false.");
+        }
+        const next = value === "true";
+        await store().set("telemetry", next);
+        write(
+          io,
+          program,
+          { outcome: "SUCCESS", key, value: next },
+          `Set ${key}.\n`,
+        );
+        return;
+      }
+      let origin: string;
+      try {
+        origin = cloudOriginFrom(value);
+      } catch (error) {
         throw new ConfigError(
-          "Only config set telemetry <true|false> is currently supported.",
+          error instanceof Error ? error.message : "Cloud origin is invalid.",
         );
       }
-      await store().set("telemetry", value === "true");
+      await store().set("origin", origin);
       write(
         io,
         program,
-        { outcome: "SUCCESS", key, value: value === "true" },
+        { outcome: "SUCCESS", key, value: origin },
         `Set ${key}.\n`,
       );
     });
@@ -94,7 +112,7 @@ function assertSettableKey(key: string): ConfigKey {
     return key as ConfigKey;
   }
   throw new ConfigError(
-    `Config key ${key} is read-only from the CLI. Set telemetry with \`corotum config set telemetry <true|false>\`.`,
+    `Config key ${key} is read-only from the CLI. Set telemetry or origin with corotum config set.`,
   );
 }
 

@@ -453,17 +453,33 @@ function parseWorkspaceArtifactKey(workspaceId: string, key: string): ArtifactTr
   };
 }
 
+function ownedBytes(bytes: Uint8Array): Uint8Array {
+  if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
+    return bytes;
+  }
+  return bytes.slice();
+}
+
 async function decompressZstd(bytes: Uint8Array): Promise<Uint8Array> {
+  const owned = ownedBytes(bytes);
   const bun = (globalThis as { Bun?: { zstdDecompressSync?: (value: Uint8Array) => Uint8Array } }).Bun;
   if (typeof bun?.zstdDecompressSync === "function") {
     try {
-      return bun.zstdDecompressSync(bytes);
+      return bun.zstdDecompressSync(owned);
     } catch {
-      throw new ArtifactTransferError("ARTIFACT_UNAVAILABLE", "Artifact stream is corrupt or unavailable.");
+      // fall through — workerd may expose a stub that cannot decode
     }
   }
   try {
-    const stream = new Blob([arrayBufferOf(bytes)]).stream().pipeThrough(
+    const zlib = await import("node:zlib");
+    if (typeof zlib.zstdDecompressSync === "function") {
+      return new Uint8Array(zlib.zstdDecompressSync(owned));
+    }
+  } catch {
+    // no node:zlib zstd in this runtime
+  }
+  try {
+    const stream = new Blob([arrayBufferOf(owned)]).stream().pipeThrough(
       new DecompressionStream("zstd" as CompressionFormat),
     );
     return new Uint8Array(await new Response(stream).arrayBuffer());

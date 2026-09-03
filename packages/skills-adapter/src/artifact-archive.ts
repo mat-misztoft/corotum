@@ -56,6 +56,9 @@ export async function stageArtifactArchive(
   try { tar = Bun.zstdDecompressSync(bytes); }
   catch { throw unavailable("Artifact stream is corrupt or unavailable."); }
   const entries = parseTar(tar);
+  if (hashTarEntries(entries) !== expected.contentHash) {
+    throw mismatch("Extracted artifact content hash does not match.");
+  }
   await mkdir(stagingParent, { recursive: true });
   const staging = await mkdtemp(join(stagingParent, ".corotum-artifact-"));
   try {
@@ -64,8 +67,6 @@ export async function stageArtifactArchive(
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, entry.content, { mode: 0o644 });
     }
-    const scanned = await scanNormalizedContent(staging);
-    if (scanned.contentHash !== expected.contentHash) throw mismatch("Extracted artifact content hash does not match.");
     return staging;
   } catch (error) {
     await rm(staging, { force: true, recursive: true });
@@ -194,6 +195,15 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
   let offset = 0;
   for (const part of parts) { result.set(part, offset); offset += part.length; }
   return result;
+}
+function hashTarEntries(entries: readonly TarEntry[]): `sha256:${string}` {
+  const hasher = new Bun.CryptoHasher("sha256");
+  for (const entry of entries) {
+    hasher.update(`${entry.path}\0`);
+    hasher.update(entry.content);
+    hasher.update("\0");
+  }
+  return `sha256:${hasher.digest("hex")}`;
 }
 function sha256(value: Uint8Array): `sha256:${string}` {
   const hasher = new Bun.CryptoHasher("sha256"); hasher.update(value);

@@ -91,6 +91,19 @@ export function cloudOriginFrom(value: string): string {
   return url.origin;
 }
 
+/** env > --origin > config.origin > hosted default. */
+export function resolveCloudOrigin(
+  flag?: string | null,
+  stored?: string | null,
+): string {
+  return cloudOriginFrom(
+    process.env.COROTUM_CLOUD_ORIGIN?.trim() ||
+      flag?.trim() ||
+      stored?.trim() ||
+      DEFAULT_CLOUD_ORIGIN,
+  );
+}
+
 export function defaultCloudDevice(cliVersion: string): CloudDevice {
   const name = hostname().trim() || "corotum-device";
   return {
@@ -132,7 +145,7 @@ export class CloudAuthService {
     this.sleep = deps.sleep ?? defaultSleep;
     this.openUrl = deps.openUrl;
     this.logger = deps.logger;
-    this.device = deps.device ?? defaultCloudDevice("0.4.0");
+    this.device = deps.device ?? defaultCloudDevice("0.5.0");
     this.pollIntervalMs = deps.pollIntervalMs ?? PAIRING_POLL_INTERVAL_MS;
     this.openBrowser = deps.openBrowser ?? true;
     this.onPairing = deps.onPairing;
@@ -220,7 +233,10 @@ export class CloudAuthService {
       body: JSON.stringify(this.device),
     });
     if (response.status !== 201) {
-      throw await this.failure(response, "Unable to start Cloud pairing.");
+      throw await this.failure(
+        response,
+        `Unable to start Cloud pairing (${response.status} ${this.origin}).`,
+      );
     }
     const payload = (await response.json()) as Partial<PairingCreated>;
     if (

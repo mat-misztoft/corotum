@@ -130,7 +130,7 @@ Optional CLI-side variables, used on devices rather than the Worker:
 
 | Name | Purpose |
 | --- | --- |
-| `COROTUM_CLOUD_ORIGIN` | Cloud origin for `login`, `init cloud`, and `migrate` |
+| `COROTUM_CLOUD_ORIGIN` | Cloud origin for `login`, `init cloud`, and `migrate`. Also `corotum config set origin` |
 | `COROTUM_RELEASE_BASE` | CLI release origin for installers and `cli-update` |
 
 ## Deploy

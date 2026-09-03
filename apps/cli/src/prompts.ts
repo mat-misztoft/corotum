@@ -155,13 +155,13 @@ export async function textOption(message: string): Promise<string> {
 
 export async function withSpinner<T>(
   message: string,
-  work: () => Promise<T>,
+  work: (setMessage: (next: string) => void) => Promise<T>,
   done = message,
 ): Promise<T> {
-  const spin = spinner({ ...streams });
+  const spin = spinner({ ...streams, indicator: "timer" });
   spin.start(message);
   try {
-    const result = await work();
+    const result = await work((next) => spin.message(next));
     spin.stop(done);
     return result;
   } catch (error) {

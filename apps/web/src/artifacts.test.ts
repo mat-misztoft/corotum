@@ -464,3 +464,31 @@ test("corrupt archives are rejected on transfer and never published", async () =
   );
   expect(download.status).toBe(400);
 });
+
+test("upload verifies zstd without Bun.zstdDecompressSync", async () => {
+  const bun = globalThis.Bun as {
+    zstdDecompressSync?: (value: Uint8Array) => Uint8Array;
+  };
+  const previous = bun.zstdDecompressSync;
+  bun.zstdDecompressSync = undefined;
+  try {
+    const { db, sqlite } = await artifactDb();
+    const { issued, workspaceId } = await pairedDevice(db, sqlite);
+    const bucket = memoryArtifactBucket();
+    const archive = await pack({ "SKILL.md": "# workerd\n" });
+    const descriptor = transfer(workspaceId, skill, archive);
+    const uploaded = await handlePutWorkspaceArtifact(
+      artifactRequest(workspaceId, issued.token, descriptor, {
+        method: "PUT",
+        body: archive.bytes,
+      }),
+      db,
+      bucket,
+      workspaceId,
+    );
+    expect(uploaded.status).toBe(200);
+    expect(bucket.objects.has(descriptor.artifact.locator)).toBe(true);
+  } finally {
+    bun.zstdDecompressSync = previous;
+  }
+});

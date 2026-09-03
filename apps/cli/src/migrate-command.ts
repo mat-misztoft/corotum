@@ -9,7 +9,7 @@ import {
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { CLI_VERSION, type CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
-import { CloudAuthError, DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
+import { CloudAuthError } from "./cloud-auth";
 import { cloudAuthContext } from "./cloud-auth-command";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
 import {
@@ -42,12 +42,12 @@ export function registerMigrateCommand(program: Command, io: CliIo): void {
       "move desired state between Corotum Git Sync and Cloud, or migrate legacy ToolMirror state",
     )
     .option("--strategy <replace|merge|cancel>", "destination-state handling")
-    .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
+    .option("--origin <url>", "Cloud origin")
     .action(
       async (
         destination: string,
         repository: string | undefined,
-        options: { strategy?: string; origin: string },
+        options: { strategy?: string; origin?: string },
       ) => {
         await withGitCliErrors(async () => {
           if (destination === "legacy" || destination === "legacy-cleanup") {
@@ -72,7 +72,7 @@ export function registerMigrateCommand(program: Command, io: CliIo): void {
               "INVALID_ARGUMENT",
             );
           }
-          const { paths, origin } = cloudAuthContext(
+          const { paths, origin } = await cloudAuthContext(
             program,
             io,
             options.origin,

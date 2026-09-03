@@ -14,8 +14,7 @@ import { CLI_VERSION, type CliIo, isNonInteractive } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import {
   CloudAuthError,
-  cloudOriginFrom,
-  DEFAULT_CLOUD_ORIGIN,
+  resolveCloudOrigin,
 } from "./cloud-auth";
 import {
   CloudSyncReportService,
@@ -41,9 +40,11 @@ import { confirmOption, withSpinner } from "./prompts";
 import { LifecycleRecoveryStore } from "./v2-lifecycle";
 import { V2LocalApplier } from "./v2-local-applier";
 import {
+  type V2InspectResult,
   type V2SyncEnvelope,
   type V2SyncProviderPort,
   type V2SyncReportHook,
+  type V2SyncResult,
   V2SyncService,
   v2SyncStatusPayload,
 } from "./v2-sync";
@@ -86,13 +87,7 @@ async function inspectCommand(
   if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
     throw new Error(result.reason);
   }
-  const human =
-    result.kind === "ready"
-      ? kind === "STATUS"
-        ? `${result.snapshot.plan.classifications.length} skills inspected.\n`
-        : `${result.snapshot.plan.operations.length} operations planned.\n`
-      : `${String(payload.status)}: ${"reason" in result ? result.reason : ""}\n`;
-  write(io, program, payload, human);
+  write(io, program, payload, humanInspectResult(kind, result, payload.status));
   });
 }
 
@@ -133,7 +128,7 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
       program,
       io,
       "Syncing skills…",
-      "Synced",
+      "Finished sync",
       () => runtime.service.sync(),
     );
     const payload: Record<string, unknown> = {
@@ -145,13 +140,7 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
     if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
       throw new Error(result.reason);
     }
-    const human =
-      result.kind === "synced"
-        ? `Synced at revision ${result.snapshot.desired.revisionId}.\n`
-        : result.kind === "partial"
-          ? `Partial at revision ${result.snapshot.desired.revisionId}.\n`
-          : `${String(payload.status)}: ${"reason" in result ? result.reason : ""}\n`;
-    write(io, program, payload, human);
+    write(io, program, payload, humanSyncResult(result, payload.status));
   } finally {
     await release();
   }
@@ -170,8 +159,8 @@ async function createRuntime(
     platform: process.platform as "darwin" | "linux" | "win32",
     env: process.env,
   });
-  const origin = cloudOrigin();
   const config = loaded ?? (await new ConfigStore(paths).load());
+  const origin = resolveCloudOrigin(undefined, config.origin);
   if (config.mode !== "git" && config.mode !== "cloud") {
     throw notInitializedError("using status, diff, or sync");
   }
@@ -374,6 +363,104 @@ function busy<T>(
   return withSpinner(message, work, done);
 }
 
+function skillNames(
+  result: Extract<V2InspectResult, { kind: "ready" }> | Extract<V2SyncResult, { kind: "synced" | "partial" }>,
+): Map<string, string> {
+  return new Map(
+    result.snapshot.desired.state.manifest.skills.map((skill) => [
+      skill.id,
+      skill.name,
+    ]),
+  );
+}
+
+function blockerLines(
+  result: Extract<V2InspectResult, { kind: "ready" }> | Extract<V2SyncResult, { kind: "synced" | "partial" }>,
+): string[] {
+  const names = skillNames(result);
+  const grouped = new Map<string, string[]>();
+  for (const item of result.snapshot.plan.classifications) {
+    if (
+      !["DRIFTED", "LOCAL_CONFLICT", "PENDING_RESOLUTION", "MISSING"].includes(
+        item.classification,
+      )
+    ) {
+      continue;
+    }
+    const name = names.get(item.skillId) ?? item.skillId;
+    const bucket = grouped.get(item.classification) ?? [];
+    if (!bucket.includes(name)) bucket.push(name);
+    grouped.set(item.classification, bucket);
+  }
+  const lines: string[] = [];
+  for (const [label, bucket] of grouped) {
+    lines.push(`${label} (${bucket.length})`);
+    for (const name of bucket) lines.push(`  ${name}`);
+  }
+  return lines;
+}
+
+function humanInspectResult(
+  kind: "STATUS" | "DIFF",
+  result: V2InspectResult,
+  status: unknown,
+): string {
+  if (result.kind !== "ready") {
+    return `${String(status)}: ${"reason" in result ? result.reason : ""}\n`;
+  }
+  const blockers = blockerLines(result);
+  if (kind === "DIFF") {
+    const names = skillNames(result);
+    const ops = result.snapshot.plan.operations.map(
+      (operation) =>
+        `${operation.kind} ${names.get(operation.skill.id) ?? operation.skill.id}`,
+    );
+    return [`${ops.length} operations planned.`, ...ops, ...blockers].join("\n") + "\n";
+  }
+  const lines = [
+    `${String(status)} at revision ${result.snapshot.desired.revisionId}.`,
+    ...blockers,
+  ];
+  if (blockers.some((line) => line.startsWith("DRIFTED"))) {
+    lines.push(
+      "Local files differ from the Cloud lock. Sync does not overwrite them.",
+      "Restore one skill: corotum restore <name>",
+    );
+  }
+  if (blockers.length === 0) lines.push("Local skills match the lock.");
+  return `${lines.join("\n")}\n`;
+}
+
+function humanSyncResult(
+  result: V2SyncResult,
+  status: unknown,
+): string {
+  if (result.kind === "synced") {
+    return `Synced at revision ${result.snapshot.desired.revisionId}.\n`;
+  }
+  if (result.kind !== "partial") {
+    return `${String(status)}: ${"reason" in result ? result.reason : ""}\n`;
+  }
+  const names = skillNames(result);
+  const failed = result.operations
+    .filter((operation) => operation.status !== "SUCCESS")
+    .map(
+      (operation) =>
+        `${names.get(operation.skillId) ?? operation.skillId}: ${operation.status}${operation.error ? ` (${operation.error})` : ""}`,
+    );
+  const lines = [
+    `Partial at revision ${result.snapshot.desired.revisionId}.`,
+    ...blockerLines(result),
+    ...failed,
+  ];
+  if (blockerLines(result).some((line) => line.startsWith("DRIFTED"))) {
+    lines.push(
+      "Sync does not overwrite drifted files. Restore one skill with corotum restore <name>.",
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function write(
   io: CliIo,
   program: Command,
@@ -390,12 +477,6 @@ function processHomeDir(): string {
     process.env.HOME?.trim() ||
     process.env.USERPROFILE?.trim() ||
     homedir()
-  );
-}
-
-function cloudOrigin(): string {
-  return cloudOriginFrom(
-    process.env.COROTUM_CLOUD_ORIGIN?.trim() || DEFAULT_CLOUD_ORIGIN,
   );
 }
 

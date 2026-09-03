@@ -18,7 +18,8 @@ import {
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { formatCorotumBanner } from "./banner";
 import { CLI_VERSION, type CliIo } from "./cli";
-import { CloudAuthError, DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
+import { CloudAuthError, resolveCloudOrigin } from "./cloud-auth";
+import { CloudSyncReportService } from "./cloud-sync-report";
 import { cloudAuthContext } from "./cloud-auth-command";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
 import {
@@ -123,6 +124,9 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           let gitRepository: string | undefined;
           let enabledAgentIds: AgentId[] = [];
           let outcomes: Awaited<ReturnType<typeof decideInitAdoptions>> = [];
+          const progress = { update(_message: string) {} };
+          let cloudConnection: Awaited<ReturnType<typeof connectCloud>> | null =
+            null;
 
           if (marker?.backend === "git") {
             if (!nonInteractive) {
@@ -142,6 +146,19 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             }
             enabledAgentIds = (marker.enabledAgentIds ?? []) as AgentId[];
             await assertGitAvailable();
+          } else if (
+            marker?.backend === "cloud" &&
+            (marker.phase === "desired-persisted" ||
+              marker.phase === "locally-verified")
+          ) {
+            if (!nonInteractive) {
+              explain(
+                "Resuming init",
+                "Desired state is already saved to Cloud. Skipping skill selection and retrying local apply.",
+              );
+            }
+            cloud = true;
+            enabledAgentIds = (marker.enabledAgentIds ?? []) as AgentId[];
           } else {
           const selection = await resolveInitProvider({
             provider,
@@ -156,6 +173,17 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           });
           cloud = selection.kind === "cloud";
           gitRepository = selection.kind === "git" ? selection.repository : undefined;
+          if (cloud) {
+            cloudConnection = await connectCloud(
+              program,
+              io,
+              paths,
+              configStore,
+              options.origin,
+              nonInteractive,
+              progress,
+            );
+          }
 
           const detected = await detectAgents(homeDir, localAgentFileSystem);
           enabledAgentIds = detected
@@ -238,16 +266,17 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             }
           };
 
-          const cloudConnection = cloud
-            ? await connectCloud(
-                program,
-                io,
-                paths,
-                configStore,
-                options.origin,
-                nonInteractive,
-              )
-            : null;
+          if (cloud && !cloudConnection) {
+            cloudConnection = await connectCloud(
+              program,
+              io,
+              paths,
+              configStore,
+              options.origin,
+              nonInteractive,
+              progress,
+            );
+          }
           if (!cloud) await assertGitAvailable();
           const persistDesiredState = () =>
             cloudConnection
@@ -263,6 +292,9 @@ export function registerInitCommand(program: Command, io: CliIo): void {
                   canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
                   enabledAgentIds,
                   homeDir,
+                  downloadArtifact: (lock) =>
+                    cloudConnection.downloadArtifact(lock),
+                  onProgress: (message) => progress.update(message),
                 }).run({ outcomes })
               : new InitTransactionService({
                   provider: gitProvider(
@@ -282,19 +314,31 @@ export function registerInitCommand(program: Command, io: CliIo): void {
                   homeDir,
                   gitRepository,
                   gitStoragePath: storage.gitStoragePath,
+                  onProgress: (message) => progress.update(message),
                 }).run({ outcomes });
           let result;
           try {
+            const resumingCloud =
+              cloud &&
+              (marker?.phase === "desired-persisted" ||
+                marker?.phase === "locally-verified");
             result =
               opts.json || nonInteractive
                 ? await persistDesiredState()
                 : await withSpinner(
                     cloud
-                      ? "Saving desired state to Cloud…"
-                      : "Pushing desired state to Git…",
-                    persistDesiredState,
+                      ? resumingCloud
+                        ? "Applying Cloud skills locally"
+                        : "Saving desired state to Cloud"
+                      : "Pushing desired state to Git",
+                    async (setMessage) => {
+                      progress.update = setMessage;
+                      return persistDesiredState();
+                    },
                     cloud
-                      ? "Saved desired state to Cloud"
+                      ? resumingCloud
+                        ? "Applied Cloud skills locally"
+                        : "Saved desired state to Cloud"
                       : "Pushed desired state to Git",
                   );
           } catch (error) {
@@ -317,6 +361,27 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           }
           for (const outcome of unmanaged) {
             io.writeError(`${outcome.name}: ${outcome.reason}\n`);
+          }
+          if (cloud && result.kind === "initialized") {
+            const paired = await configStore.load();
+            if (paired.deviceId) {
+              try {
+                await new CloudSyncReportService({
+                  origin: resolveCloudOrigin(options.origin, paired.origin),
+                  deviceId: paired.deviceId,
+                  credentials: new CredentialsStore(paths),
+                  cliVersion: CLI_VERSION,
+                }).report({
+                  lastAppliedRevision: result.revision,
+                  appliedRevisionId: result.revision,
+                  aggregate: { status: "SYNCED" },
+                });
+              } catch {
+                io.writeError(
+                  "Initialized, but the dashboard sync report did not complete. Run corotum sync.\n",
+                );
+              }
+            }
           }
           io.writeOutput(
             cloud
@@ -390,11 +455,16 @@ async function connectCloud(
   config: ConfigStore,
   originOption: string | undefined,
   nonInteractive: boolean,
-): Promise<{ provider: InitV2Provider; workspaceId: string }> {
-  const { origin, service } = cloudAuthContext(
+  progress?: { update: (message: string) => void },
+): Promise<{
+  provider: InitV2Provider;
+  workspaceId: string;
+  downloadArtifact: V2SaaSProvider["downloadArtifact"];
+}> {
+  const { origin, service } = await cloudAuthContext(
     program,
     io,
-    originOption ?? DEFAULT_CLOUD_ORIGIN,
+    originOption,
   );
   const connected = await new CloudInitService({
     config,
@@ -415,6 +485,7 @@ async function connectCloud(
   }).connect();
   return {
     workspaceId: connected.workspaceId,
+    downloadArtifact: (lock) => connected.provider.downloadArtifact(lock),
     provider: {
       pull: async () => {
         const snapshot = await connected.provider.pull();
@@ -426,7 +497,11 @@ async function connectCloud(
       },
       push: async (input) => {
         const artifacts: Record<string, Uint8Array> = {};
-        for (const [id, directory] of Object.entries(input.artifacts)) {
+        const directories = Object.entries(input.artifacts);
+        let packed = 0;
+        for (const [id, directory] of directories) {
+          packed += 1;
+          progress?.update(`Packing artifacts ${packed}/${directories.length}`);
           artifacts[id] = (await createArtifactArchive(directory)).bytes;
         }
         const snapshot = await connected.provider.push({
@@ -435,6 +510,8 @@ async function connectCloud(
           baseRevision: input.baseRevision,
           artifacts,
           transitions: input.ledger.audit ?? [],
+          onArtifactUpload: (done, total) =>
+            progress?.update(`Uploading artifacts ${done}/${total}`),
         });
         if (!snapshot.revisionId) {
           throw new Error("Cloud did not return a revision.");

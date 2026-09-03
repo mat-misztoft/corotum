@@ -36,6 +36,7 @@ corotum --allow-artifacts <command>
 | `corotum init cloud [--origin <url>] [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Pair with Cloud if needed, then adopt selected local skills into Cloud |
 | `corotum login [--origin <url>]` | Pair this device in a browser |
 | `corotum logout [--origin <url>]` | Revoke this device token and delete local Cloud credentials |
+| `corotum reset [--yes]` | Delete Cloud desired-state skills, unlink this device, and clear local Corotum config |
 | `corotum add <source> [--skill <name>] [--ref <ref>]` | Add one Git-backed skill (Git Sync or Cloud) |
 | `corotum adopt <name> --source <source> [--skill <name>] [--ref <ref>]` | Adopt one local unmanaged skill (Git Sync or Cloud) |
 | `corotum remove <skill>` | Remove a managed skill from desired state and reconciled targets (Git Sync or Cloud) |
@@ -54,6 +55,7 @@ corotum --allow-artifacts <command>
 | `corotum config` / `corotum config list` | Print local `config.json` (Git and Cloud keys; no prompt) |
 | `corotum config get <key>` | Print one config value |
 | `corotum config set telemetry true\|false` | Set anonymous CLI telemetry consent |
+| `corotum config set origin <url>` | Persist Cloud origin (`http` or `https`, no credentials) |
 | `corotum migrate cloud --strategy <replace\|merge\|cancel>` | Copy Git desired state to Cloud |
 | `corotum migrate git <repository> --strategy <replace\|merge\|cancel>` | Copy Cloud desired state to Git |
 | `corotum migrate legacy` | Import recoverable ToolMirror state into Corotum v2 |
@@ -115,9 +117,9 @@ Status / diff / sync envelopes add `command`, `status`, `revision`, `appliedRevi
 
 Local configuration lives in `config.json`. Device Cloud tokens live in `credentials.json` with restrictive file permissions. The plaintext device token is never printed by `login`.
 
-`corotum config list` and `corotum config get` inspect Git Sync and Cloud keys without prompting and without requiring an enabled agent. Known keys include `mode`, `gitRepository`, `workspaceId`, `deviceId`, `skillsStoragePath`, `gitStoragePath`, `telemetry`, `installationId`, and `agents`.
+`corotum config list` and `corotum config get` inspect Git Sync and Cloud keys without prompting and without requiring an enabled agent. Known keys include `mode`, `gitRepository`, `workspaceId`, `deviceId`, `skillsStoragePath`, `gitStoragePath`, `telemetry`, `origin`, `installationId`, and `agents`.
 
-`corotum config set` currently supports only `telemetry` (`true` or `false`). Telemetry is anonymous, opt-in, and stored on the device. It is not a dashboard account setting.
+`corotum config set` supports `telemetry` (`true` or `false`) and `origin` (Cloud URL). Telemetry is anonymous, opt-in, and stored on the device. It is not a dashboard account setting.
 
 Default locations:
 
@@ -129,7 +131,7 @@ Default locations:
 
 ## Cloud origin
 
-Default Cloud origin is `https://corotum.com`. Override with `--origin` or `COROTUM_CLOUD_ORIGIN`. Origins must be `http` or `https` and must not include credentials.
+Default Cloud origin is `https://corotum.com`. Override with `COROTUM_CLOUD_ORIGIN`, `--origin`, or `corotum config set origin <url>` (env, then flag, then config, then default). Origins must be `http` or `https` and must not include credentials.
 
 ## Cloud Sync
 

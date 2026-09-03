@@ -137,6 +137,8 @@ export class InitTransactionService {
       homeDir?: string;
       gitRepository?: string;
       gitStoragePath?: string;
+      downloadArtifact?: (lock: V2LockedSkill) => Promise<Uint8Array>;
+      onProgress?: (message: string) => void;
     }>,
   ) {}
 
@@ -426,28 +428,40 @@ export class InitTransactionService {
     const targets = new AgentTargetManager();
     const materializer = new ExactContentMaterializer(
       undefined,
-      this.deps.gitStoragePath && this.deps.gitRepository
-        ? async (locator) =>
-            new Uint8Array(
-              await readFile(
-                `${this.deps.gitStoragePath}/${sourceKey(this.deps.gitRepository!)}/${locator}`,
-              ),
-            )
-        : undefined,
+      this.deps.downloadArtifact
+        ? async (locator) => {
+            const lock = state.lockfile.skills.find(
+              (skill) =>
+                skill.materialization.kind === "artifact" &&
+                skill.materialization.artifact.locator === locator,
+            );
+            if (!lock) throw new Error("Artifact locator is not in desired state.");
+            return this.deps.downloadArtifact!(lock);
+          }
+        : this.deps.gitStoragePath && this.deps.gitRepository
+          ? async (locator) =>
+              new Uint8Array(
+                await readFile(
+                  `${this.deps.gitStoragePath}/${sourceKey(this.deps.gitRepository!)}/${locator}`,
+                ),
+              )
+          : undefined,
     );
 
+    let installed = 0;
     for (const prepared of skills) {
       const lock = state.lockfile.skills.find((skill) => skill.id === prepared.id);
       const manifest = state.manifest.skills.find((skill) => skill.id === prepared.id);
       if (!lock || !manifest) throw new Error("Persisted skill is incomplete.");
+      installed += 1;
+      this.deps.onProgress?.(
+        `Installing ${installed}/${skills.length} ${lock.name}`,
+      );
       const expected =
         lock.materialization.kind === "source"
           ? lock.materialization.contentHash
           : lock.materialization.artifact.contentHash;
-      const staged =
-        prepared.kind === "source-backed"
-          ? await materializer.stage(lock)
-          : { directory: prepared.path, cleanup: async () => undefined };
+      const staged = await materializer.stage(lock);
       try {
         const canonicalPath = canonicalStore.pathFor(lock.name);
         const alreadyMatches =
@@ -468,9 +482,6 @@ export class InitTransactionService {
                 }
               : undefined,
           );
-          if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
-            throw new Error("Canonical skill content did not match the persisted lock.");
-          }
         }
         const exposed = await targets.expose({
           skillId: prepared.id,

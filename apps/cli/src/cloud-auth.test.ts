@@ -9,6 +9,7 @@ import {
   CloudAuthService,
   cloudOriginFrom,
   DEVICE_CODE_HEADER,
+  resolveCloudOrigin,
   verificationUrlFor,
 } from "./cloud-auth";
 import {
@@ -194,6 +195,27 @@ describe("cloud origin", () => {
     expect(() => cloudOriginFrom("https://user:secret@corotum.com")).toThrow(
       "Cloud origin must not include credentials.",
     );
+  });
+
+  test("prefers env, then flag, then config, then default", () => {
+    const previous = process.env.COROTUM_CLOUD_ORIGIN;
+    delete process.env.COROTUM_CLOUD_ORIGIN;
+    try {
+      expect(resolveCloudOrigin(undefined, undefined)).toBe("https://corotum.com");
+      expect(resolveCloudOrigin(undefined, "https://corotum.mixon.dev")).toBe(
+        "https://corotum.mixon.dev",
+      );
+      expect(
+        resolveCloudOrigin("https://flag.example", "https://corotum.mixon.dev"),
+      ).toBe("https://flag.example");
+      process.env.COROTUM_CLOUD_ORIGIN = "https://env.example";
+      expect(
+        resolveCloudOrigin("https://flag.example", "https://corotum.mixon.dev"),
+      ).toBe("https://env.example");
+    } finally {
+      if (previous === undefined) delete process.env.COROTUM_CLOUD_ORIGIN;
+      else process.env.COROTUM_CLOUD_ORIGIN = previous;
+    }
   });
 });
 

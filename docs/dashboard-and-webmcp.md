@@ -13,10 +13,10 @@ Sign in at the Cloud origin, then open:
 | Path | Contents |
 | --- | --- |
 | `/dashboard` | Desired skills, pending resolution, device reports |
-| `/dashboard/skills` | Skill id, ref, resolution, lock |
-| `/dashboard/devices` | Per-device sync status, target rows, revoke |
+| `/dashboard/skills` | Skill id, ref, resolution, add Git-backed skill, remove |
+| `/dashboard/devices` | Per-device sync status, target rows, remove device |
 | `/dashboard/billing` | Hosted Creem checkout/portal, or the self-hosted free notice |
-| `/settings` | Points at local CLI telemetry; telemetry is not an account setting |
+| `/settings` | Sign-in methods, delete Cloud desired-state skills, CLI telemetry pointer |
 
 Revoking a device invalidates only that device's Cloud token. Remote machine rows are kept.
 
@@ -24,7 +24,7 @@ Device status chips sit on machine panels. A machine is not `SYNCED` until it re
 
 Skills that dashboard or WebMCP add or retarget are `PENDING_RESOLUTION` until a device with repository access resolves the exact lock (CLI resolve on a machine with Git also works). The UI states that no remote sync is requested. Devices then install that locked SHA or artifact; they never follow upstream `HEAD` during `corotum sync`.
 
-Cloud skill mutations from the browser use same-origin `POST /api/v1/dashboard` with `baseRevisionId`, `idempotencyKey`, and a mutation object (`ADD`, `REMOVE`, `UPDATE`, `SET_REF`). A stale `baseRevisionId` returns HTTP `409`.
+Cloud skill mutations from the browser use same-origin `POST /api/v1/dashboard` with `baseRevisionId`, `idempotencyKey`, and a mutation object (`ADD`, `REMOVE`, `UPDATE`, `SET_REF`, `CLEAR`). A stale `baseRevisionId` returns HTTP `409`.
 
 ## WebMCP
 

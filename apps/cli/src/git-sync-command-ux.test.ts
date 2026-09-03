@@ -259,6 +259,33 @@ describe("corotum config Git Sync UX", () => {
       });
       expect(set.stderr).not.toMatch(/\?|Choice|Continue/);
 
+      const origin = await run(home, [
+        "--json",
+        "--non-interactive",
+        "config",
+        "set",
+        "origin",
+        "https://corotum.mixon.dev",
+      ]);
+      expect(origin.code).toBe(0);
+      expect(origin.json).toMatchObject({
+        outcome: "SUCCESS",
+        key: "origin",
+        value: "https://corotum.mixon.dev",
+      });
+      const gotOrigin = await run(home, [
+        "--json",
+        "--non-interactive",
+        "config",
+        "get",
+        "origin",
+      ]);
+      expect(gotOrigin.json).toMatchObject({
+        outcome: "SUCCESS",
+        key: "origin",
+        value: "https://corotum.mixon.dev",
+      });
+
       const readonly = await run(home, [
         "--json",
         "--non-interactive",

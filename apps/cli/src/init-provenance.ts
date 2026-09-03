@@ -65,7 +65,7 @@ export async function discoverInitProvenance(
 async function readDirectories(root: string) {
   try {
     return (await readdir(root, { encoding: "utf8", withFileTypes: true }))
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
       .sort((left, right) => left.name.localeCompare(right.name));
   } catch {
     return [];

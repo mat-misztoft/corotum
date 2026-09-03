@@ -9,9 +9,8 @@ import {
   CloudAuthService,
   type CloudLoginResult,
   type CloudLogoutResult,
-  cloudOriginFrom,
-  DEFAULT_CLOUD_ORIGIN,
   defaultCloudDevice,
+  resolveCloudOrigin,
 } from "./cloud-auth";
 import { ConfigStore, CredentialsStore } from "./config";
 import { SanitizedLogger } from "./logs";
@@ -22,9 +21,9 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
   program
     .command("login")
     .description("pair this device with Corotum Cloud in a browser")
-    .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
-    .action(async (options: { origin: string }) => {
-      const { service, paths, origin, nonInteractive } = cloudAuthContext(
+    .option("--origin <url>", "Cloud origin")
+    .action(async (options: { origin?: string }) => {
+      const { service, paths, origin, nonInteractive } = await cloudAuthContext(
         program,
         io,
         options.origin,
@@ -49,9 +48,13 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
   program
     .command("logout")
     .description("revoke this device token and remove local Cloud credentials")
-    .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
-    .action(async (options: { origin: string }) => {
-      const { service, paths } = cloudAuthContext(program, io, options.origin);
+    .option("--origin <url>", "Cloud origin")
+    .action(async (options: { origin?: string }) => {
+      const { service, paths } = await cloudAuthContext(
+        program,
+        io,
+        options.origin,
+      );
       const release = await new MutationLock(
         join(paths.stateDir, "process.lock"),
       ).acquire();
@@ -63,24 +66,25 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
     });
 }
 
-export function cloudAuthContext(
+export async function cloudAuthContext(
   program: Command,
   io: CliIo,
-  originOption: string,
-): {
+  originOption?: string,
+): Promise<{
   origin: string;
   nonInteractive: boolean;
   paths: ReturnType<typeof resolvePlatformPaths>;
   service: CloudAuthService;
-} {
-  const origin = cloudOriginFrom(
-    process.env.COROTUM_CLOUD_ORIGIN?.trim() || originOption,
-  );
+}> {
   const paths = resolvePlatformPaths({
     homeDir: processHomeDir(),
     platform: process.platform as "darwin" | "linux" | "win32",
     env: process.env,
   });
+  const origin = resolveCloudOrigin(
+    originOption,
+    (await new ConfigStore(paths).load()).origin,
+  );
   const json = program.opts<{ json?: boolean }>().json === true;
   const nonInteractive =
     program.opts<{ nonInteractive?: boolean }>().nonInteractive === true ||

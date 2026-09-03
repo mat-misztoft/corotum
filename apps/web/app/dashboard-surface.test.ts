@@ -40,12 +40,19 @@ test("billing and settings use the shared dashboard language without new control
   expect(surface).not.toContain("dashboard-legacy");
 });
 
-test("skills and devices use semantic status panels without new mutations", () => {
+test("skills and devices use semantic status panels and skill mutations", () => {
   expect(surface).toContain('if (view === "skills" || view === "devices")');
   expect(surface).toContain('className="dashboard-page-header"');
   expect(surface).toContain('className="dashboard-secondary-button"');
   expect(surface).not.toContain("<th>Lock</th>");
   expect(surface).toContain("Pair a device from the CLI with");
+  expect(surface).toContain('fetch("/api/v1/dashboard"');
+  expect(surface).toContain('type: "ADD"');
+  expect(surface).toContain('type: "REMOVE"');
+  expect(surface).toContain('type: "CLEAR"');
+  expect(surface).toContain("Delete Cloud skills");
+  expect(surface).toContain("Remove");
+  expect(surface).toContain("No remote sync is requested");
 });
 
 test("dashboard operate chrome uses frozen tokens and truthful status chips", () => {

@@ -35,6 +35,7 @@ export type V2CloudPushInput = Readonly<{
   ledger: DispositionLedger;
   baseRevision: string | null;
   artifacts?: Readonly<Record<string, Uint8Array>>;
+  onArtifactUpload?: (done: number, total: number) => void;
   idempotencyKey?: string;
   transition?: RevisionTransition;
   transitions?: readonly RevisionTransition[];
@@ -92,7 +93,9 @@ export class V2SaaSProvider {
     const state = validateV2DesiredState(input.state);
     const ledger = parseDispositionLedger(JSON.stringify(input.ledger));
     const idempotencyKey = input.idempotencyKey ?? crypto.randomUUID();
-    for (const [id, bytes] of Object.entries(input.artifacts ?? {})) {
+    const uploads = Object.entries(input.artifacts ?? {});
+    let uploaded = 0;
+    for (const [id, bytes] of uploads) {
       const lock = state.lockfile.skills.find((skill) => skill.id === id);
       if (!lock) {
         throw new V2CloudProviderError(
@@ -100,6 +103,8 @@ export class V2SaaSProvider {
           "Artifact supplied for a skill that is not in desired state.",
         );
       }
+      uploaded += 1;
+      input.onArtifactUpload?.(uploaded, uploads.length);
       await this.uploadArtifact(lock, bytes);
     }
     return this.readEnvelope(
