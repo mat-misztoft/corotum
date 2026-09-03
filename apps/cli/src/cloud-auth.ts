@@ -180,22 +180,22 @@ export class CloudAuthService {
     const token = (await this.deps.credentials.load()).cloudDeviceToken;
     if (!token) return { revoked: false, deviceId: null };
 
+    let deviceId: string | null = null;
+    let revokeError: unknown;
     try {
-      const result = await this.revokeToken(token);
-      await this.clearLocalCredentials();
-      await this.log("cloud.logout.completed", { deviceId: result.deviceId });
-      return { revoked: true, deviceId: result.deviceId };
+      deviceId = (await this.revokeToken(token)).deviceId;
     } catch (error) {
       if (
-        error instanceof CloudAuthError &&
-        error.outcome === "AUTH_REQUIRED"
+        !(error instanceof CloudAuthError) ||
+        error.outcome !== "AUTH_REQUIRED"
       ) {
-        await this.clearLocalCredentials();
-        await this.log("cloud.logout.completed", { deviceId: null });
-        return { revoked: true, deviceId: null };
+        revokeError = error;
       }
-      throw error;
     }
+    await this.clearLocalCredentials();
+    await this.log("cloud.logout.completed", { deviceId });
+    if (revokeError) throw revokeError;
+    return { revoked: true, deviceId };
   }
 
   private async persistLogin(issued: IssuedToken): Promise<void> {

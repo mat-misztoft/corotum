@@ -344,15 +344,20 @@ describe("CLI Cloud logout", () => {
     });
   });
 
-  test("keeps local credentials when logout cannot reach Cloud", async () => {
+  test("clears local credentials when logout cannot revoke on Cloud", async () => {
     const stores = memoryStores({
       credentials: { schemaVersion: 1, cloudDeviceToken: deviceToken },
+      config: { ...defaultConfig(), deviceId, workspaceId },
     });
     const { subject } = service(pairingCloud({ logoutStatus: 503 }), stores);
     await expect(subject.logout()).rejects.toMatchObject({
       outcome: "NETWORK_ERROR",
     });
-    expect(stores.credentials.snapshot().cloudDeviceToken).toBe(deviceToken);
+    expect(stores.credentials.snapshot()).toEqual({ schemaVersion: 1 });
+    expect(stores.config.snapshot()).toMatchObject({
+      deviceId: null,
+      workspaceId: null,
+    });
   });
 
   test("treats a logged-out CLI as already clean", async () => {

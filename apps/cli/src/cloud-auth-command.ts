@@ -5,6 +5,7 @@ import type { Command } from "commander";
 import { CLI_VERSION, type CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import {
+  CloudAuthError,
   CloudAuthService,
   type CloudLoginResult,
   type CloudLogoutResult,
@@ -23,11 +24,17 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
     .description("pair this device with Corotum Cloud in a browser")
     .option("--origin <url>", "Cloud origin", DEFAULT_CLOUD_ORIGIN)
     .action(async (options: { origin: string }) => {
-      const { service, paths, origin } = cloudAuthContext(
+      const { service, paths, origin, nonInteractive } = cloudAuthContext(
         program,
         io,
         options.origin,
       );
+      if (nonInteractive) {
+        throw new CloudAuthError(
+          "Cloud login requires an interactive terminal to display the pairing code. Re-run without --non-interactive.",
+          "GENERAL_ERROR",
+        );
+      }
       const release = await new MutationLock(
         join(paths.stateDir, "process.lock"),
       ).acquire();
@@ -62,6 +69,7 @@ export function cloudAuthContext(
   originOption: string,
 ): {
   origin: string;
+  nonInteractive: boolean;
   paths: ReturnType<typeof resolvePlatformPaths>;
   service: CloudAuthService;
 } {
@@ -69,7 +77,7 @@ export function cloudAuthContext(
     process.env.COROTUM_CLOUD_ORIGIN?.trim() || originOption,
   );
   const paths = resolvePlatformPaths({
-    homeDir: homedir(),
+    homeDir: processHomeDir(),
     platform: process.platform as "darwin" | "linux" | "win32",
     env: process.env,
   });
@@ -77,8 +85,10 @@ export function cloudAuthContext(
   const nonInteractive =
     program.opts<{ nonInteractive?: boolean }>().nonInteractive === true ||
     io.stdinIsTTY !== true;
+  const openBrowser = !nonInteractive && !json && !isLoopbackOrigin(origin);
   return {
     origin,
+    nonInteractive,
     paths,
     service: new CloudAuthService({
       origin,
@@ -86,8 +96,8 @@ export function cloudAuthContext(
       credentials: new CredentialsStore(paths),
       logger: new SanitizedLogger(join(paths.stateDir, "logs")),
       device: defaultCloudDevice(CLI_VERSION),
-      openBrowser: !nonInteractive,
-      openUrl: json || nonInteractive ? undefined : openUrl,
+      openBrowser,
+      openUrl: openBrowser ? openUrl : undefined,
       onPairing: ({ userCode, verificationUrl }) => {
         io.writeError(
           `Open ${verificationUrl} and approve this device.
@@ -97,6 +107,19 @@ Code: ${userCode}
       },
     }),
   };
+}
+
+function processHomeDir(): string {
+  return (
+    process.env.HOME?.trim() ||
+    process.env.USERPROFILE?.trim() ||
+    homedir()
+  );
+}
+
+function isLoopbackOrigin(origin: string): boolean {
+  const host = new URL(origin).hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 function writeLogin(
