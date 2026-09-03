@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   server: {
-    allowedHosts: ["corotum.mixon.dev"],
+    allowedHosts: ["corotum.com", "dev.corotum.com"],
   },
   plugins: [
     vinext(),

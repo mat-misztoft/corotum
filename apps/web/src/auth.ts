@@ -93,6 +93,7 @@ export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
   return betterAuth({
     appName: "Corotum",
     baseURL: env.BETTER_AUTH_URL,
+    trustedOrigins: ["https://corotum.com", "https://dev.corotum.com"],
     secret,
     advanced: { disableOriginCheck: false },
     database: drizzleAdapter(drizzle(env.DB, { schema }), {

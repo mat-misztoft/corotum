@@ -285,13 +285,13 @@ describe("corotum config Git Sync UX", () => {
         "config",
         "set",
         "origin",
-        "https://corotum.mixon.dev",
+        "https://dev.corotum.com",
       ]);
       expect(origin.code).toBe(0);
       expect(origin.json).toMatchObject({
         outcome: "SUCCESS",
         key: "origin",
-        value: "https://corotum.mixon.dev",
+        value: "https://dev.corotum.com",
       });
       const gotOrigin = await run(home, [
         "--json",
@@ -303,7 +303,7 @@ describe("corotum config Git Sync UX", () => {
       expect(gotOrigin.json).toMatchObject({
         outcome: "SUCCESS",
         key: "origin",
-        value: "https://corotum.mixon.dev",
+        value: "https://dev.corotum.com",
       });
 
       const readonly = await run(home, [

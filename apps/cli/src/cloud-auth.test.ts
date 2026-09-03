@@ -204,15 +204,15 @@ describe("cloud origin", () => {
       expect(resolveCloudOrigin(undefined, undefined)).toBe(
         "https://corotum.com",
       );
-      expect(resolveCloudOrigin(undefined, "https://corotum.mixon.dev")).toBe(
-        "https://corotum.mixon.dev",
+      expect(resolveCloudOrigin(undefined, "https://dev.corotum.com")).toBe(
+        "https://dev.corotum.com",
       );
       expect(
-        resolveCloudOrigin("https://flag.example", "https://corotum.mixon.dev"),
+        resolveCloudOrigin("https://flag.example", "https://dev.corotum.com"),
       ).toBe("https://flag.example");
       process.env.COROTUM_CLOUD_ORIGIN = "https://env.example";
       expect(
-        resolveCloudOrigin("https://flag.example", "https://corotum.mixon.dev"),
+        resolveCloudOrigin("https://flag.example", "https://dev.corotum.com"),
       ).toBe("https://env.example");
     } finally {
       if (previous === undefined) delete process.env.COROTUM_CLOUD_ORIGIN;
