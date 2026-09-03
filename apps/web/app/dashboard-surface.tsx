@@ -55,7 +55,8 @@ function statusClass(status: string) {
   if (status === "SYNCED" || status === "LOCKED" || status === "ACTIVE")
     return "status-synced";
   if (status === "DRIFTED") return "status-drifted";
-  if (status === "ERROR" || status === "AUTH_REQUIRED") return "status-error";
+  if (status === "ERROR" || status === "AUTH_REQUIRED" || status === "402")
+    return "status-error";
   return "status-attention";
 }
 
@@ -87,25 +88,39 @@ function DashboardShell({
 }) {
   return (
     <div className="dashboard dashboard-shell">
-      <div className="dashboard-brand-rule" />
-      <nav className="dashboard-nav" aria-label="Corotum">
-        <a className="wordmark" href="/dashboard">
-          Corotum
-        </a>
-        <div className="dashboard-nav-links">
-          {navItems.map((item) => (
-            <a
-              aria-current={view === item.view ? "page" : undefined}
-              href={item.href}
-              key={item.view}
-            >
-              {item.label}
-            </a>
-          ))}
-        </div>
-      </nav>
+      <header className="dashboard-chrome">
+        <div className="dashboard-brand-rule" />
+        <nav className="dashboard-nav" aria-label="Corotum">
+          <a className="wordmark" href="/dashboard">
+            Corotum
+          </a>
+          <div className="dashboard-nav-links">
+            {navItems.map((item) => (
+              <a
+                aria-current={view === item.view ? "page" : undefined}
+                href={item.href}
+                key={item.view}
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </nav>
+      </header>
       <main className="dashboard-content">{children}</main>
     </div>
+  );
+}
+
+function EntitlementPanel({ message }: { message: string }) {
+  return (
+    <section className="dashboard-panel" aria-labelledby="hosted-entitlement">
+      <h2 id="hosted-entitlement">Hosted Cloud</h2>
+      <p className="dashboard-pending">
+        <StatusLabel status="402" />
+        {message}
+      </p>
+    </section>
   );
 }
 
@@ -138,6 +153,7 @@ export function DashboardSurface({ view }: { view: View }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [entitlement, setEntitlement] = useState<string | null>(null);
   const [action, setAction] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/v1/dashboard")
@@ -147,6 +163,10 @@ export function DashboardSurface({ view }: { view: View }) {
           return;
         }
         const body = (await response.json()) as Dashboard & { error?: string };
+        if (response.status === 402) {
+          setEntitlement(body.error ?? "Hosted Cloud subscription required");
+          return;
+        }
         if (response.ok) setData(body);
         else setError(body.error ?? "Unable to load dashboard");
       })
@@ -159,6 +179,10 @@ export function DashboardSurface({ view }: { view: View }) {
             return;
           }
           const body = (await response.json()) as Settings & { error?: string };
+          if (response.status === 402) {
+            setEntitlement(body.error ?? "Hosted Cloud subscription required");
+            return;
+          }
           if (response.ok) setSettings(body);
           else setError(body.error ?? "Unable to load settings");
         })
@@ -213,6 +237,10 @@ export function DashboardSurface({ view }: { view: View }) {
         error?: string;
       };
       const url = body.checkoutUrl ?? body.portalUrl;
+      if (response.status === 402) {
+        setEntitlement(body.error ?? "Hosted Cloud subscription required");
+        return;
+      }
       if (!response.ok || !url)
         throw new Error(body.error ?? "Unable to open billing");
       window.location.assign(url);
@@ -232,6 +260,15 @@ export function DashboardSurface({ view }: { view: View }) {
           <h1>{titles[view]}</h1>
           <p>{error}</p>
         </div>
+      </DashboardShell>
+    );
+  if (entitlement && !data)
+    return (
+      <DashboardShell view={view}>
+        <header className="dashboard-page-header">
+          <h1>{titles[view]}</h1>
+        </header>
+        <EntitlementPanel message={entitlement} />
       </DashboardShell>
     );
   if (!data)
@@ -493,6 +530,12 @@ export function DashboardSurface({ view }: { view: View }) {
             aria-labelledby="billing-title"
           >
             <h2 id="billing-title">Corotum Cloud</h2>
+            {entitlement && (
+              <p className="dashboard-pending">
+                <StatusLabel status="402" />
+                {entitlement}
+              </p>
+            )}
             {settings.hosted ? (
               <>
                 <div className="dashboard-billing-summary">
