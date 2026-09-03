@@ -2,8 +2,6 @@
 title: Product reference
 ---
 
-# Product reference
-
 Corotum keeps global skills in `~/.agents/skills`. Zero installed or enabled agents is a valid state; agents only expose that shared directory when you choose to enable them.
 
 ## Sync modes

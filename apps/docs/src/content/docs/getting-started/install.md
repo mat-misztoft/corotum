@@ -2,8 +2,6 @@
 title: Install and cli-update
 ---
 
-# Install and cli-update
-
 Official installers are the only supported installation method. Release artifacts are public, but manual binary download is not an officially supported installation path. v0.5 binaries are unsigned. Installers and `cli-update` verify SHA-256 before replacing a binary.
 
 GitHub Actions rebuilds every release target from the tagged source, writes checksums and `releases/latest.json`, and publishes only after tests, installer smoke, and workerd endpoint checks pass. Pipeline-proof binaries from earlier CI are not reused.

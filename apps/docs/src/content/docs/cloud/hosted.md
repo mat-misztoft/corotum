@@ -2,8 +2,6 @@
 title: Hosted corotum.com
 ---
 
-# Hosted corotum.com
-
 This page is only for the hosted Corotum Cloud service at `https://corotum.com`. Self-hosted deployments must not follow the Creem steps here. See [self-hosting.md](/cloud/self-hosting/) instead.
 
 Hosted Cloud Sync, CLI Cloud skill mutations, dashboard Cloud mutations, and paid WebMCP Cloud operations require an active hosted Cloud entitlement. Login and device pairing are allowed without a subscription. The dashboard is a full product surface. Self-hosted Cloud does not use this Creem gate.

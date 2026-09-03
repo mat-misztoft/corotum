@@ -2,8 +2,6 @@
 title: Skills storage and v2 contracts
 ---
 
-# Skills storage and v2 contracts
-
 Managed skills live in a named shared root. Desired-state files use the Corotum v2 names `corotum.yaml`, `corotum.lock`, and `corotum.transitions.json`. Sync installs the exact locked revision. It never substitutes upstream `HEAD`.
 
 v0.5 binaries are unsigned. Official installers are the only supported installation path. There is no daemon and no remote forced sync.

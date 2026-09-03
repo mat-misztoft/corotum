@@ -2,8 +2,6 @@
 title: Troubleshooting
 ---
 
-# Troubleshooting
-
 ## A skill is pending resolution
 
 `PENDING_RESOLUTION` means a device with repository access must resolve the source. Run `corotum sync` from that device. The dashboard records desired state, but never requests a remote sync.

@@ -2,8 +2,6 @@
 title: Git Sync
 ---
 
-# Git Sync
-
 Git Sync / Free remains a fully documented Git-backed backend. No Corotum account is required. Cloud Sync is the current workstream; Git Sync is not hidden or removed. System Git must be installed. If Git is missing, Corotum stops before partial mutation and tells you to install Git.
 
 Zero installed or enabled agents is valid. Global skills live in `~/.agents/skills`. Agents are optional local exposure, not a prerequisite for init, skill management, or sync.

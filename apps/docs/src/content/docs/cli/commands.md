@@ -2,8 +2,6 @@
 title: CLI
 ---
 
-# CLI
-
 The compiled `corotum` binary is the v0.5 client. Cloud Sync is the current workstream. Git Sync / Free remains documented. Desired-state mutations use the same CLI skill commands in both modes. The [dashboard and WebMCP](/webmcp/dashboard-and-webmcp/) can also mutate Cloud desired state. Local reconcile (`status`, `diff`, `sync`) works in both modes. After Cloud `sync`, the device reports the applied revision.
 
 Contracts for named storage, source versus artifact, denylist, typed errors, and non-interactive consent are in [skills.md](/concepts/skills/).
@@ -31,53 +29,174 @@ corotum --allow-artifacts <command>
 
 `--allow-artifacts` is the non-interactive consent to commit exact local artifact files to Git. Without it, those writes fail with `CONFIRMATION_REQUIRED` in JSON.
 
-## Commands
+## init
 
-| Command | What it does |
-| --- | --- |
-| `corotum init` | On a TTY, interactive Git Sync vs Cloud, skill gates, then initialize. Agents are not required |
-| `corotum init repository <git-url> [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Initialize Git Sync and adopt selected local skills from `~/.agents/skills` |
-| `corotum init cloud [--origin <url>] [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Pair with Cloud if needed, then adopt selected local skills into Cloud |
-| `corotum login [--origin <url>]` | Pair this device in a browser |
-| `corotum logout [--origin <url>]` | Revoke this device token and delete local Cloud credentials |
-| `corotum reset [--yes]` | Delete Cloud desired-state skills, unlink this device, and clear local Corotum config |
-| `corotum add <source> [--skill <name>] [--ref <ref>]` | Add one Git-backed skill (Git Sync or Cloud) |
-| `corotum adopt <name> --source <source> [--skill <name>] [--ref <ref>]` | Adopt one local unmanaged skill (Git Sync or Cloud) |
-| `corotum remove <skill>` | Remove a managed skill from desired state and reconciled targets (Git Sync or Cloud) |
-| `corotum unmanage <skill>` | Stop managing a skill and leave local copies in place (Git Sync or Cloud) |
-| `corotum restore <skill>` | Restore one managed skill from its exact lock (Git Sync or Cloud) |
-| `corotum update [skill]` | Update exact locks from upstream (Git Sync or Cloud) |
-| `corotum update --check` | Report upstream status without changing state |
-| `corotum set-ref <skill> <ref>` | Change a managed skill ref and lock exact content (Git Sync or Cloud) |
-| `corotum status` | Show local reconciliation status (Git or Cloud) |
-| `corotum diff` | Show the exact-lock reconciliation plan (Git or Cloud) |
-| `corotum sync` | Reconcile local skills to the exact locked state (Git or Cloud). Cloud then reports the applied revision |
-| `corotum agents` | List optional local agents and whether they are detected or enabled |
-| `corotum agents scan` | Detect installed agents without enabling them |
-| `corotum agents enable <agent>` | Enable local exposure for one agent on this device |
-| `corotum agents disable <agent>` | Remove local exposure only; global skills and shared desired state stay |
-| `corotum config` / `corotum config list` | Print local `config.json` (Git and Cloud keys; no prompt) |
-| `corotum config get <key>` | Print one config value |
-| `corotum config set telemetry true\|false` | Set anonymous CLI telemetry consent |
-| `corotum config set origin <url>` | Persist Cloud origin (`http` or `https`, no credentials) |
-| `corotum migrate cloud --strategy <replace\|merge\|cancel>` | Copy Git desired state to Cloud |
-| `corotum migrate git <repository> --strategy <replace\|merge\|cancel>` | Copy Cloud desired state to Git |
-| `corotum migrate legacy` | Import recoverable ToolMirror state into Corotum v2 |
-| `corotum migrate legacy-cleanup` | Delete verified ToolMirror backup files after a successful import |
-| `corotum cli-update` | Update the Corotum executable |
-| `corotum cli-update --check` | Report CLI release availability |
+```bash
+corotum init
+corotum init repository <git-url> [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>] [--origin <url>]
+corotum init cloud [--origin <url>] [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>] 
+corotum --non-interactive init repository <git-url>
+corotum --non-interactive init cloud
+```
 
-`corotum update` updates skills. `corotum cli-update` updates the Corotum executable.
+Initialize Git Sync or Corotum Cloud and adopt selected local skills from `~/.agents/skills`. Agents are not required.
 
-On a TTY, `corotum init` uses arrow-key prompts (`@clack/prompts`). After Git Sync vs Cloud (and a Git URL when needed) it may ask to enable detected agents, then which local skills to check against upstream. Checking uses one shallow clone per unique Git source and a progress bar. Batch decisions are **Skip all** (default except the first local-skills gate), **All (N)**, or **Choose…**: unknown provenance (adopt as artifacts), unavailable/private sources (keep as artifacts), and modified skills (replace / keep / skip). Git push shows a spinner. `status`, `diff`, and `sync` show a spinner on a TTY.
+On a TTY, uses arrow-key prompts (`@clack/prompts`). After Git Sync vs Cloud (and a Git URL when needed) it may ask to enable detected agents, then which local skills to check against upstream. Checking uses one shallow clone per unique Git source and a progress bar. Batch decisions are **Skip all** (default except the first local-skills gate), **All (N)**, or **Choose…**: unknown provenance (adopt as artifacts), unavailable/private sources (keep as artifacts), and modified skills (replace / keep / skip). Git push shows a spinner.
 
 If a previous TTY init committed desired state but the Git push failed, `corotum init` resumes: it skips skill selection, retries the push, then finishes local apply and config. Empty Git remotes (no commits / no `@{upstream}`) are valid; Corotum creates the first commit and `push -u`.
 
+`--non-interactive` never prompts. Missing provider is an actionable error: pass `repository` or `cloud`. Missing Git repository URL for Git Sync is also an actionable error.
+
+## login
+
+```bash
+corotum login [--origin <url>]
+```
+
+Pair this device with Corotum Cloud in a browser. On a TTY it prints the verification URL and user code. It never prints the device token. `--non-interactive` and a missing TTY fail instead of waiting for a browser.
+
+## logout
+
+```bash
+corotum logout [--origin <url>]
+```
+
+Revoke this device token when possible and always delete local Cloud credentials.
+
+## reset
+
+```bash
+corotum reset [--yes]
+```
+
+Delete Cloud desired-state skills, unlink this device, and clear local Corotum config. `--yes` skips the prompt.
+
+## add
+
+```bash
+corotum add <source> [--skill <name>] [--ref <ref>]
+```
+
+Resolve and add one Git-backed skill (Git Sync or Cloud). `--ref` defaults to `HEAD` as the follow ref for later updates. The lock stores the resolved commit SHA. `sync` never installs `HEAD`.
+
+## adopt
+
+```bash
+corotum adopt <name> --source <source> [--skill <name>] [--ref <ref>]
+```
+
+Adopt one local unmanaged skill from a matching Git source. `--source` is required. `--skill` is the source name when it differs from the local name. `--ref` defaults to `HEAD` as the follow ref; the lock stores the resolved SHA.
+
+## remove
+
+```bash
+corotum remove <skill>
+```
+
+Remove a managed skill from desired state and reconciled targets (Git Sync or Cloud).
+
+## unmanage
+
+```bash
+corotum unmanage <skill>
+```
+
+Stop managing a skill and leave local copies in place (Git Sync or Cloud).
+
+## restore
+
+```bash
+corotum restore <skill>
+```
+
+Restore one managed skill from its exact lock (Git Sync or Cloud).
+
+## update
+
+```bash
+corotum update [skill]
+corotum update --check
+```
+
+Update exact locks from upstream (Git Sync or Cloud). `--check` reports upstream status without changing state. This updates skills, not the CLI binary.
+
+## set-ref
+
+```bash
+corotum set-ref <skill> <ref>
+```
+
+Change a managed skill ref and lock exact content (Git Sync or Cloud).
+
+## status
+
+```bash
+corotum status
+```
+
+Show local reconciliation status (Git or Cloud). Spinner on a TTY.
+
+## diff
+
+```bash
+corotum diff
+```
+
+Show the exact-lock reconciliation plan (Git or Cloud). Spinner on a TTY.
+
+## sync
+
+```bash
+corotum sync
+```
+
+Reconcile local skills to the exact locked state (Git or Cloud). Cloud then reports the applied revision. Spinner on a TTY. Never installs upstream `HEAD`.
+
 Git failures (auth, missing Git, bad repository, unreachable remote) are classified on every command. Interactive Git never waits on a credential prompt (`GIT_TERMINAL_PROMPT=0`). After auth failure on a pending push, sign in with system Git (`gh auth login` or a credential helper) and retry `corotum init` (resume) or `corotum sync` if already initialized.
 
-Non-interactive `corotum --non-interactive init` never prompts. Missing provider is an actionable error: pass `repository` or `cloud`. Missing Git repository URL for Git Sync is also an actionable error.
+## agents
 
-`add` / `adopt` `--ref` defaults to `HEAD` as the *follow* ref for later updates. The lock stores the resolved commit SHA. `sync` never installs `HEAD`.
+```bash
+corotum agents
+corotum agents scan
+corotum agents enable <agent>
+corotum agents disable <agent>
+```
+
+List optional local agents. `scan` detects without enabling. `enable` exposes global skills for one agent on this device. `disable` removes only local exposure; `~/.agents/skills` and shared desired state stay.
+
+## config
+
+```bash
+corotum config
+corotum config list
+corotum config get <key>
+corotum config set telemetry true
+corotum config set telemetry false
+corotum config set origin <url>
+```
+
+Inspect or set local `config.json`. `list` (also the default) prints Git and Cloud keys without prompting. `set` supports only `telemetry` (`true` or `false`) and `origin` (`http` or `https`, no credentials).
+
+## migrate
+
+```bash
+corotum migrate cloud --strategy <replace|merge|cancel> [--origin <url>]
+corotum migrate git <repository> --strategy <replace|merge|cancel>
+corotum migrate legacy
+corotum migrate legacy-cleanup
+```
+
+`cloud` copies Git desired state to Cloud. `git` copies Cloud desired state to a Git repository. `legacy` imports recoverable ToolMirror state into Corotum v2. `legacy-cleanup` deletes verified ToolMirror backup files after a successful import. `--strategy` is required for Git ↔ Cloud.
+
+## cli-update
+
+```bash
+corotum cli-update
+corotum cli-update --check
+```
+
+Update the Corotum executable from official release metadata. `--check` reports availability without replacing the binary. `cli-update --check` does not take the mutation lock.
 
 ## Exit codes
 

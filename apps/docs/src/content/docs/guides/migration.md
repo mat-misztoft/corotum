@@ -2,8 +2,6 @@
 title: Migration
 ---
 
-# Migration
-
 v0.5 copies desired state between Git Sync and Cloud, and can import recoverable ToolMirror files into Corotum v2. Skill id, source, ref, lock revision, hash, materialization, and targets are preserved. The named local store is not rewritten by Git ↔ Cloud migrate.
 
 You must already be initialized (`corotum init`) and, for any Cloud side, logged in (`corotum login`) before Git ↔ Cloud migrate. Hosted corotum.com migrate-in is entitlement-gated (HTTP `402` without a subscription). Self-hosted Cloud does not require Creem. Unmanaged local files are not destroyed. Same mode already active is a typed no-op error.

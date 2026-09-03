@@ -2,8 +2,6 @@
 title: Self-hosted Corotum Cloud
 ---
 
-# Self-hosted Corotum Cloud
-
 Self-hosted Corotum Cloud is free under AGPLv3. Hosted Corotum billing is not required for self-hosted Cloud. Creem is not required. Do not configure Creem. Auth and OAuth are configured independently from hosted billing.
 
 There is no daemon and no remote forced sync. Devices pair in a browser and apply or report state only when the CLI runs on that device.

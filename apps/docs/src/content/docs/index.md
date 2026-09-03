@@ -2,8 +2,6 @@
 title: Corotum documentation
 ---
 
-# Corotum documentation
-
 Public documentation for Corotum v0.5. These pages describe only commands and behavior that exist in this repository.
 
 Cloud Sync is the current workstream. Git Sync / Free remains documented and available. Zero installed or enabled agents is valid. Global skill management does not require an agent. The Cloud dashboard is a full product surface.

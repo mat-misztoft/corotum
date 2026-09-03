@@ -10,7 +10,6 @@ export default defineConfig({
       title: "Corotum Docs",
       description: "Documentation for Corotum skill management, Git Sync, and Corotum Cloud.",
       favicon: "/favicon.svg",
-      customCss: ["./src/styles/corotum.css"],
       social: [
         {
           icon: "github",
