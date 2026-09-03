@@ -1,5 +1,6 @@
 import { BillingToggle } from "./billing-toggle";
 import { FlowStory } from "./landing-flow-story";
+import { SiteFooter } from "./site-footer";
 
 const deviceTargets = [
   { device: "Desktop", agent: "Codex", status: "SYNCED" },
@@ -399,6 +400,7 @@ export default function Home() {
           curl -fsSL https://corotum.com/install.sh | sh
         </code>
       </section>
+      <SiteFooter />
     </main>
   );
 }

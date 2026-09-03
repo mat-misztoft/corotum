@@ -71,6 +71,7 @@ test("landing keeps keyboard focus and overflow-safe diagrams", () => {
   expect(styles).toContain("overflow-x: clip");
   expect(styles).toContain(".landing-header nav");
   expect(styles).toContain("user-select: all");
+  expect(page).toContain("<SiteFooter />");
   expect(page).toContain("<caption>TARGET STATUS / AFTER CLI SYNC</caption>");
   expect(page).toContain(
     "<caption>SKILL EXPOSURE / SUPPORTED AGENTS</caption>",

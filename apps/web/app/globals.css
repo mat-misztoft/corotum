@@ -32,9 +32,14 @@ a {
 }
 
 .landing {
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
   border-top: 14px solid var(--vermillion);
   overflow-x: clip;
+}
+.landing > * {
+  width: 100%;
 }
 
 .landing-header {
@@ -1209,6 +1214,31 @@ a {
 .final-cta .install-command {
   margin-top: 36px;
 }
+.site-footer {
+  align-items: baseline;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 26%, transparent);
+  color: var(--graphite);
+  display: flex;
+  font: 700 9px / 1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  gap: 24px;
+  justify-content: space-between;
+  letter-spacing: 0.07em;
+  margin: auto auto 0;
+  max-width: 1440px;
+  padding: 17px 42px 20px;
+  text-transform: uppercase;
+  width: 100%;
+}
+.site-footer p {
+  margin: 0;
+}
+.site-footer nav {
+  display: flex;
+  gap: 24px;
+}
+.site-footer a {
+  text-underline-offset: 4px;
+}
 
 @media (max-width: 1100px) {
   .agent-matrix thead {
@@ -1306,6 +1336,11 @@ a {
   }
   .final-cta {
     padding: 72px 20px 96px;
+  }
+  .site-footer {
+    flex-direction: column;
+    padding-left: 20px;
+    padding-right: 20px;
   }
   .install-command {
     width: 100%;
@@ -1668,7 +1703,10 @@ a {
   .sign-in-panel button:active:not(:disabled) { transform: none; }
 }
 
-.dashboard-shell { min-height: 100dvh; overflow-x: clip; }
+.dashboard-shell { display: flex; flex-direction: column; min-height: 100dvh; overflow-x: clip; }
+.dashboard-chrome,
+.dashboard-content { width: 100%; }
+.dashboard-shell .site-footer { max-width: 1120px; }
 .dashboard-chrome { background: var(--paper); border-bottom: 1px solid color-mix(in srgb, var(--ink) 26%, transparent); position: sticky; top: 0; z-index: 2; }
 .dashboard-brand-rule { background: var(--vermillion); height: 4px; }
 .dashboard-chrome { border-bottom: 2px solid var(--ink); }

@@ -64,6 +64,7 @@ test("dashboard operate chrome uses frozen tokens and truthful status chips", ()
   expect(surface).toContain("Sign out");
   expect(surface).toContain("authClient.signOut()");
   expect(surface).toContain('className="dashboard-chrome"');
+  expect(surface).toContain("<SiteFooter />");
   expect(surface).not.toContain("/dashboard/history");
   expect(surface).not.toContain("dark-mode");
   expect(surface).toContain('StatusLabel status="402"');

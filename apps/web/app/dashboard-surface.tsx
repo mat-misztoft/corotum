@@ -1,6 +1,7 @@
 "use client";
 import { type FormEvent, useEffect, useState } from "react";
 import { authClient } from "../src/auth-client";
+import { SiteFooter } from "./site-footer";
 import { validEmail } from "./sign-in/sign-in-form";
 
 type View = "overview" | "skills" | "devices" | "billing" | "settings";
@@ -130,6 +131,7 @@ function DashboardShell({
         </nav>
       </header>
       <main className="dashboard-content">{children}</main>
+      <SiteFooter />
     </div>
   );
 }
