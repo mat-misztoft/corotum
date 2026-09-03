@@ -114,6 +114,7 @@ export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
     },
     user: {
       changeEmail: { enabled: true },
+      deleteUser: { enabled: true },
     },
     emailVerification: emailService
       ? {

@@ -40,6 +40,14 @@ test("billing and settings use the shared dashboard language without new control
   expect(surface).toContain("authClient.linkSocial(");
   expect(surface).toContain("authClient.changeEmail(");
   expect(surface).toContain("Magic link email");
+  expect(surface).toContain("Danger zone");
+  expect(surface).toContain(
+    "Delete your account and all Cloud skills and paired devices?",
+  );
+  expect(surface).toContain("authClient.deleteUser({");
+  expect(surface).toContain('callbackURL: "/sign-in"');
+  expect(css).toContain(".dashboard-danger-zone {");
+  expect(css).toContain("background: var(--vermillion);");
   expect(surface).not.toContain("dashboard-legacy");
 });
 

@@ -185,6 +185,7 @@ export function DashboardSurface({ view }: { view: View }) {
   const [entitlement, setEntitlement] = useState<string | null>(null);
   const [action, setAction] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   useEffect(() => {
@@ -408,6 +409,26 @@ export function DashboardSurface({ view }: { view: View }) {
     } catch {
       setAccountError("Unable to change email. Try again.");
     } finally {
+      setAction(null);
+    }
+  }
+
+  async function deleteAccount() {
+    if (
+      !window.confirm(
+        "Delete your account and all Cloud skills and paired devices? This cannot be undone.",
+      )
+    )
+      return;
+    setAction("delete-account");
+    setDeleteError(null);
+    try {
+      const { error } = await authClient.deleteUser({
+        callbackURL: "/sign-in",
+      });
+      if (error) throw new Error(error.message);
+    } catch {
+      setDeleteError("Unable to delete your account. Try again.");
       setAction(null);
     }
   }
@@ -1026,6 +1047,26 @@ export function DashboardSurface({ view }: { view: View }) {
               onClick={() => clearCloudData()}
             >
               {action === "clear-cloud" ? "Deleting…" : "Delete Cloud skills"}
+            </button>
+          </section>
+          <section
+            className="dashboard-panel dashboard-settings-panel dashboard-danger-zone"
+            aria-labelledby="danger-zone-heading"
+          >
+            <h2 id="danger-zone-heading">Danger zone</h2>
+            <p>
+              Delete your account, all Cloud desired-state skills, and every
+              paired device. Local skill files are not deleted.
+            </p>
+            {deleteError && <p role="alert">{deleteError}</p>}
+            <button
+              type="button"
+              disabled={action !== null}
+              onClick={deleteAccount}
+            >
+              {action === "delete-account"
+                ? "Deleting account…"
+                : "Delete account"}
             </button>
           </section>
         </>

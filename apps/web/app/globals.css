@@ -2445,6 +2445,31 @@ a {
 .dashboard-settings-panel .dashboard-settings-instruction {
   margin-top: 20px;
 }
+.dashboard-danger-zone {
+  background: var(--vermillion);
+}
+.dashboard-danger-zone h2,
+.dashboard-danger-zone > p {
+  color: var(--paper);
+}
+.dashboard-danger-zone button {
+  align-self: flex-start;
+  background: var(--paper);
+  border: 1px solid var(--paper);
+  color: var(--vermillion);
+  cursor: pointer;
+  font:
+    700 12px Arial,
+    Helvetica,
+    sans-serif;
+  margin-top: 16px;
+  min-height: 40px;
+  padding: 10px 12px;
+}
+.dashboard-danger-zone button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
 .dashboard-account-row {
   align-items: center;
   display: flex;
