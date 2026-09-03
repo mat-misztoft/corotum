@@ -87,9 +87,9 @@ test("email-auth integration: real sign-in form posts a magic link and confirms"
     await page.getByLabel("Email address").fill("ada@example.com");
     await page.getByRole("button", { name: "Continue with email" }).click();
     await page.getByRole("heading", { name: "Check your inbox" }).waitFor();
-    expect(await page.getByText("We sent you a sign-in link.").textContent()).toBe(
-      "We sent you a sign-in link.",
-    );
+    expect(
+      await page.getByText("We sent you a sign-in link.").textContent(),
+    ).toBe("We sent you a sign-in link.");
     expect(magicLinkRequests).toBe(1);
     expect(messages).toHaveLength(1);
     expect(messages[0]?.to).toBe("ada@example.com");

@@ -14,10 +14,10 @@ import {
 } from "./cloud-auth";
 import {
   ConfigStore,
+  type CorotumConfig,
   type Credentials,
   CredentialsStore,
   defaultConfig,
-  type CorotumConfig,
 } from "./config";
 import { SanitizedLogger } from "./logs";
 import type { CorotumPaths } from "./platform";
@@ -201,7 +201,9 @@ describe("cloud origin", () => {
     const previous = process.env.COROTUM_CLOUD_ORIGIN;
     delete process.env.COROTUM_CLOUD_ORIGIN;
     try {
-      expect(resolveCloudOrigin(undefined, undefined)).toBe("https://corotum.com");
+      expect(resolveCloudOrigin(undefined, undefined)).toBe(
+        "https://corotum.com",
+      );
       expect(resolveCloudOrigin(undefined, "https://corotum.mixon.dev")).toBe(
         "https://corotum.mixon.dev",
       );

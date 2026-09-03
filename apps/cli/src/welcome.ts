@@ -12,7 +12,7 @@ import {
   runSystemGit,
 } from "../../../packages/skills-adapter/src/git-source";
 import { formatCorotumBanner } from "./banner";
-import { resolvePlatformPaths, type Platform } from "./platform";
+import { type Platform, resolvePlatformPaths } from "./platform";
 
 export type WelcomeAgent = Readonly<{
   id: AgentId;

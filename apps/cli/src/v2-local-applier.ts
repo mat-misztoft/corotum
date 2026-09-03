@@ -7,9 +7,13 @@ import {
   type ManagedTarget,
   type TargetOutcome,
 } from "../../../packages/agent-targets/src/targets";
-import { skillId, type SkillId, type V2DesiredState } from "../../../packages/core/src/index";
 import {
-  CanonicalSkillStore,
+  type SkillId,
+  skillId,
+  type V2DesiredState,
+} from "../../../packages/core/src/index";
+import {
+  type CanonicalSkillStore,
   hashSkillDirectory,
 } from "../../../packages/skills-adapter/src/canonical-store";
 import {
@@ -17,13 +21,13 @@ import {
   ExactContentMaterializer,
 } from "../../../packages/skills-adapter/src/exact-materializer";
 import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
-import type { V2LocalApplier as V2LocalApplierContract } from "./v2-mutations";
 import {
   type LocalOperationalState,
   type LocalOperationalStateStore,
   type LocalTargetState,
   managedTargetsFromState,
 } from "./local-state";
+import type { V2LocalApplier as V2LocalApplierContract } from "./v2-mutations";
 
 export class V2LocalApplyError extends Error {
   readonly name = "V2LocalApplyError";
@@ -50,12 +54,14 @@ export class V2LocalApplier implements V2LocalApplierContract {
     private readonly targets = new AgentTargetManager(),
   ) {}
 
-  async apply(input: Readonly<{
-    state: V2DesiredState;
-    revisionId: string;
-    skillIds: readonly SkillId[];
-    advanceRevision?: boolean;
-  }>): Promise<void> {
+  async apply(
+    input: Readonly<{
+      state: V2DesiredState;
+      revisionId: string;
+      skillIds: readonly SkillId[];
+      advanceRevision?: boolean;
+    }>,
+  ): Promise<void> {
     const saved = (await this.stateStore.load()) ?? {
       schemaVersion: 2 as const,
       lastAppliedRevision: null,
@@ -65,17 +71,21 @@ export class V2LocalApplier implements V2LocalApplierContract {
     let ownership = managedTargetsFromState(saved);
     for (const id of input.skillIds) {
       const lock = input.state.lockfile.skills.find((skill) => skill.id === id);
-      const manifest = input.state.manifest.skills.find((skill) => skill.id === id);
+      const manifest = input.state.manifest.skills.find(
+        (skill) => skill.id === id,
+      );
       if (!lock || !manifest) throw new Error("Persisted skill is incomplete.");
-      const expected = lock.materialization.kind === "source"
-        ? lock.materialization.contentHash
-        : lock.materialization.artifact.contentHash;
+      const expected =
+        lock.materialization.kind === "source"
+          ? lock.materialization.contentHash
+          : lock.materialization.artifact.contentHash;
       const canonicalPath = this.canonicalStore.pathFor(lock.name);
       let prior = skills[id];
       if (!prior && (await pathExists(canonicalPath))) {
         let existingHash: string;
         try {
-          existingHash = (await scanNormalizedContent(canonicalPath)).contentHash;
+          existingHash = (await scanNormalizedContent(canonicalPath))
+            .contentHash;
         } catch {
           throw new V2LocalApplyError(
             "Unmanaged or unreadable named canonical skill blocked install.",
@@ -97,9 +107,12 @@ export class V2LocalApplier implements V2LocalApplierContract {
         };
       }
       if (prior && (await pathExists(prior.canonicalPath))) {
-        const priorHash = (await scanNormalizedContent(prior.canonicalPath)).contentHash;
+        const priorHash = (await scanNormalizedContent(prior.canonicalPath))
+          .contentHash;
         if (priorHash !== prior.contentHash && priorHash !== expected) {
-          throw new Error("Canonical content differs from the last verified copy.");
+          throw new Error(
+            "Canonical content differs from the last verified copy.",
+          );
         }
         if (priorHash === expected) {
           const exposed = await this.targets.expose({
@@ -119,10 +132,19 @@ export class V2LocalApplier implements V2LocalApplierContract {
             canonicalPath,
             contentHash: expected,
             ownership: "verified",
-            targets: Object.fromEntries(exposed.ownership.filter((target) => target.skillId === id).map((target) => [
-              `${target.agentId}\0${target.path}`,
-              { agentId: target.agentId, mode: target.mode, path: target.path, expectedHash: target.expectedHash },
-            ])),
+            targets: Object.fromEntries(
+              exposed.ownership
+                .filter((target) => target.skillId === id)
+                .map((target) => [
+                  `${target.agentId}\0${target.path}`,
+                  {
+                    agentId: target.agentId,
+                    mode: target.mode,
+                    path: target.path,
+                    expectedHash: target.expectedHash,
+                  },
+                ]),
+            ),
           };
           continue;
         }
@@ -134,10 +156,16 @@ export class V2LocalApplier implements V2LocalApplierContract {
           lock.name,
           staged.directory,
           await hashSkillDirectory(staged.directory),
-          prior ? { skillId: id, contentHash: prior.contentHash, allowDrift: true } : undefined,
+          prior
+            ? { skillId: id, contentHash: prior.contentHash, allowDrift: true }
+            : undefined,
         );
-        if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
-          throw new Error("Canonical skill content did not match the persisted lock.");
+        if (
+          (await scanNormalizedContent(canonicalPath)).contentHash !== expected
+        ) {
+          throw new Error(
+            "Canonical skill content did not match the persisted lock.",
+          );
         }
         const exposed = await this.targets.expose({
           skillId: id,
@@ -149,15 +177,25 @@ export class V2LocalApplier implements V2LocalApplierContract {
           ownership,
           expectedContentHash: expected,
         });
-        if (exposed.outcomes.some((outcome) => outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT")) {
-          const conflict = exposed.outcomes.find((outcome) => outcome.status === "LOCAL_CONFLICT");
+        if (
+          exposed.outcomes.some(
+            (outcome) =>
+              outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT",
+          )
+        ) {
+          const conflict = exposed.outcomes.find(
+            (outcome) => outcome.status === "LOCAL_CONFLICT",
+          );
           if (conflict) {
             throw new V2LocalApplyError(
               `Unmanaged or ambiguous target exists at ${conflict.path}.`,
               "LOCAL_CONFLICT",
             );
           }
-          throw new Error(exposed.outcomes.find((outcome) => outcome.error)?.error ?? "Local target application failed.");
+          throw new Error(
+            exposed.outcomes.find((outcome) => outcome.error)?.error ??
+              "Local target application failed.",
+          );
         }
         ownership = exposed.ownership;
         skills[id] = {
@@ -165,10 +203,19 @@ export class V2LocalApplier implements V2LocalApplierContract {
           canonicalPath,
           contentHash: expected,
           ownership: "verified",
-          targets: Object.fromEntries(exposed.ownership.filter((target) => target.skillId === id).map((target) => [
-            `${target.agentId}\0${target.path}`,
-            { agentId: target.agentId, mode: target.mode, path: target.path, expectedHash: target.expectedHash },
-          ])),
+          targets: Object.fromEntries(
+            exposed.ownership
+              .filter((target) => target.skillId === id)
+              .map((target) => [
+                `${target.agentId}\0${target.path}`,
+                {
+                  agentId: target.agentId,
+                  mode: target.mode,
+                  path: target.path,
+                  expectedHash: target.expectedHash,
+                },
+              ]),
+          ),
         };
       } finally {
         await staged.cleanup();
@@ -184,7 +231,9 @@ export class V2LocalApplier implements V2LocalApplierContract {
   }
 
   /** Exposes managed canonical skills to currently enabled agents. Desired state is unchanged. */
-  async applyEnableAgent(desired?: V2DesiredState): Promise<readonly TargetOutcome[]> {
+  async applyEnableAgent(
+    desired?: V2DesiredState,
+  ): Promise<readonly TargetOutcome[]> {
     const saved = await this.loadState();
     let ownership = managedTargetsFromState(saved);
     const skills = { ...saved.skills };
@@ -228,7 +277,11 @@ export class V2LocalApplier implements V2LocalApplierContract {
     const outcomes: TargetOutcome[] = [];
     for (const id of Object.keys(skills)) {
       const currentId = skillId(id);
-      const disabled = await this.targets.disable(currentId, agentId, ownership);
+      const disabled = await this.targets.disable(
+        currentId,
+        agentId,
+        ownership,
+      );
       this.assertTargetSuccess(disabled.outcomes);
       ownership = disabled.ownership;
       outcomes.push(...disabled.outcomes);
@@ -267,7 +320,11 @@ export class V2LocalApplier implements V2LocalApplierContract {
     if (!skill) return saved;
     const ownership = managedTargetsFromState(saved);
     const targets = ownership.filter((target) => target.skillId === skillId);
-    await this.assertSafeDestructiveTargets(skill.canonicalPath, skill.contentHash, targets);
+    await this.assertSafeDestructiveTargets(
+      skill.canonicalPath,
+      skill.contentHash,
+      targets,
+    );
     const removed = await this.targets.remove(skillId, ownership);
     this.assertTargetSuccess(removed.outcomes);
     if (await pathExists(skill.canonicalPath)) {
@@ -279,7 +336,11 @@ export class V2LocalApplier implements V2LocalApplierContract {
     }
     const skills = { ...saved.skills };
     delete skills[skillId];
-    return { schemaVersion: 2, lastAppliedRevision: saved.lastAppliedRevision, skills };
+    return {
+      schemaVersion: 2,
+      lastAppliedRevision: saved.lastAppliedRevision,
+      skills,
+    };
   }
 
   /** Converts verified symlinks to copies, then drops Corotum ownership. */
@@ -289,35 +350,55 @@ export class V2LocalApplier implements V2LocalApplierContract {
     if (!skill) return saved;
     const ownership = managedTargetsFromState(saved);
     const targets = ownership.filter((target) => target.skillId === skillId);
-    await this.assertSafeDestructiveTargets(skill.canonicalPath, skill.contentHash, targets);
+    await this.assertSafeDestructiveTargets(
+      skill.canonicalPath,
+      skill.contentHash,
+      targets,
+    );
     const unmanaged = await this.targets.unmanage(skillId, ownership);
     this.assertTargetSuccess(unmanaged.outcomes);
     const skills = { ...saved.skills };
     delete skills[skillId];
-    return { schemaVersion: 2, lastAppliedRevision: saved.lastAppliedRevision, skills };
+    return {
+      schemaVersion: 2,
+      lastAppliedRevision: saved.lastAppliedRevision,
+      skills,
+    };
   }
 
   /** Repairs recorded/recovered verified targets from the exact persisted lock. */
-  async applyRestore(input: Readonly<{
-    state: V2DesiredState;
-    skillId: SkillId;
-  }>): Promise<LocalOperationalState> {
+  async applyRestore(
+    input: Readonly<{
+      state: V2DesiredState;
+      skillId: SkillId;
+    }>,
+  ): Promise<LocalOperationalState> {
     const saved = await this.loadState();
     const recorded = saved.skills[input.skillId];
-    if (!recorded || (recorded.ownership !== "verified" && recorded.ownership !== "recovered")) {
+    if (
+      !recorded ||
+      (recorded.ownership !== "verified" && recorded.ownership !== "recovered")
+    ) {
       throw new V2LocalApplyError(
         "Restore will not claim an unrecorded or unverified skill.",
         "LOCAL_CONFLICT",
       );
     }
-    const lock = input.state.lockfile.skills.find((skill) => skill.id === input.skillId);
-    const manifest = input.state.manifest.skills.find((skill) => skill.id === input.skillId);
+    const lock = input.state.lockfile.skills.find(
+      (skill) => skill.id === input.skillId,
+    );
+    const manifest = input.state.manifest.skills.find(
+      (skill) => skill.id === input.skillId,
+    );
     if (!lock || !manifest) throw new Error("Persisted skill is incomplete.");
-    const expected = lock.materialization.kind === "source"
-      ? lock.materialization.contentHash
-      : lock.materialization.artifact.contentHash;
+    const expected =
+      lock.materialization.kind === "source"
+        ? lock.materialization.contentHash
+        : lock.materialization.artifact.contentHash;
     const ownership = managedTargetsFromState(saved);
-    const targets = ownership.filter((target) => target.skillId === input.skillId);
+    const targets = ownership.filter(
+      (target) => target.skillId === input.skillId,
+    );
     for (const target of targets) {
       if (!(await pathExists(target.path))) continue;
       if (!(await this.isVerifiedTarget(target))) {
@@ -334,13 +415,25 @@ export class V2LocalApplier implements V2LocalApplierContract {
         lock.name,
         staged.directory,
         await hashSkillDirectory(staged.directory),
-        { skillId: input.skillId, contentHash: recorded.contentHash, allowDrift: true },
+        {
+          skillId: input.skillId,
+          contentHash: recorded.contentHash,
+          allowDrift: true,
+        },
       );
       const canonicalPath = this.canonicalStore.pathFor(lock.name);
-      if ((await scanNormalizedContent(canonicalPath)).contentHash !== expected) {
-        throw new Error("Canonical skill content did not match the persisted lock.");
+      if (
+        (await scanNormalizedContent(canonicalPath)).contentHash !== expected
+      ) {
+        throw new Error(
+          "Canonical skill content did not match the persisted lock.",
+        );
       }
-      const restored = await this.targets.restore(input.skillId, canonicalPath, ownership);
+      const restored = await this.targets.restore(
+        input.skillId,
+        canonicalPath,
+        ownership,
+      );
       this.assertTargetSuccess(restored.outcomes);
       const skills = {
         ...saved.skills,
@@ -354,23 +447,34 @@ export class V2LocalApplier implements V2LocalApplierContract {
               .filter((target) => target.skillId === input.skillId)
               .map((target) => [
                 `${target.agentId}\0${target.path}`,
-                { agentId: target.agentId, mode: target.mode, path: target.path, expectedHash: expected },
+                {
+                  agentId: target.agentId,
+                  mode: target.mode,
+                  path: target.path,
+                  expectedHash: expected,
+                },
               ]),
           ),
         },
       };
-      return { schemaVersion: 2, lastAppliedRevision: saved.lastAppliedRevision, skills };
+      return {
+        schemaVersion: 2,
+        lastAppliedRevision: saved.lastAppliedRevision,
+        skills,
+      };
     } finally {
       await staged.cleanup();
     }
   }
 
   private async loadState(): Promise<LocalOperationalState> {
-    return (await this.stateStore.load()) ?? {
-      schemaVersion: 2,
-      lastAppliedRevision: null,
-      skills: {},
-    };
+    return (
+      (await this.stateStore.load()) ?? {
+        schemaVersion: 2,
+        lastAppliedRevision: null,
+        skills: {},
+      }
+    );
   }
 
   private async assertSafeDestructiveTargets(
@@ -414,11 +518,19 @@ export class V2LocalApplier implements V2LocalApplierContract {
     }
   }
 
-  private assertTargetSuccess(outcomes: readonly { status: string; error?: string }[]): void {
-    const failed = outcomes.find((outcome) => outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT");
+  private assertTargetSuccess(
+    outcomes: readonly { status: string; error?: string }[],
+  ): void {
+    const failed = outcomes.find(
+      (outcome) =>
+        outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT",
+    );
     if (!failed) return;
     if (failed.status === "LOCAL_CONFLICT") {
-      throw new V2LocalApplyError("Unmanaged or ambiguous target blocked the operation.", "LOCAL_CONFLICT");
+      throw new V2LocalApplyError(
+        "Unmanaged or ambiguous target blocked the operation.",
+        "LOCAL_CONFLICT",
+      );
     }
     throw new Error(failed.error ?? "Local target application failed.");
   }

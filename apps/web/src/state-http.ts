@@ -344,24 +344,33 @@ export async function handlePutWorkspaceState(
 
   try {
     const rawState = payload.state as { manifest?: { version?: unknown } };
-    const state = rawState.manifest?.version === 2
-      ? validateV2DesiredState(payload.state as never)
-      : validateDesiredState(payload.state as never, "cloud");
+    const state =
+      rawState.manifest?.version === 2
+        ? validateV2DesiredState(payload.state as never)
+        : validateDesiredState(payload.state as never, "cloud");
     const sources = isV2CloudState(state)
       ? [
-          ...state.manifest.skills.flatMap((skill) => skill.source ? [skill.source.repository] : []),
-          ...state.lockfile.skills.flatMap((skill) => skill.source ? [skill.source.repository] : []),
+          ...state.manifest.skills.flatMap((skill) =>
+            skill.source ? [skill.source.repository] : [],
+          ),
+          ...state.lockfile.skills.flatMap((skill) =>
+            skill.source ? [skill.source.repository] : [],
+          ),
         ]
       : [
           ...state.manifest.skills.map((skill) => skill.source),
-          ...state.lockfile.skills.flatMap((skill) => [skill.source, skill.repository]),
+          ...state.lockfile.skills.flatMap((skill) => [
+            skill.source,
+            skill.repository,
+          ]),
         ];
     if (sources.some((value) => containsEmbeddedCredentials(value))) {
       return jsonError("Repository must not include credentials", 400);
     }
-    const dispositionLedger = payload.dispositionLedger === undefined
-      ? undefined
-      : parseDispositionLedger(JSON.stringify(payload.dispositionLedger));
+    const dispositionLedger =
+      payload.dispositionLedger === undefined
+        ? undefined
+        : parseDispositionLedger(JSON.stringify(payload.dispositionLedger));
     const revision = await mutateDesiredState(db as never, {
       workspaceId,
       userId: authenticated.device.userId,

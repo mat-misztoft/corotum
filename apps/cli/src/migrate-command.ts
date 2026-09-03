@@ -23,7 +23,7 @@ import {
   withGitCliErrors,
 } from "./init-errors";
 import { LegacyMigrator } from "./legacy-migration";
-import { type MigrationStrategy } from "./migrate";
+import type { MigrationStrategy } from "./migrate";
 import { MutationLock } from "./mutation-lock";
 import { resolveLegacyPlatformPaths, resolvePlatformPaths } from "./platform";
 import {
@@ -211,10 +211,7 @@ function parseStrategy(value: string | undefined): MigrationStrategy {
 }
 
 function classifyMigrateCloudError(error: unknown): never {
-  if (
-    error instanceof V2CloudProviderError &&
-    error.code === "AUTH_REQUIRED"
-  ) {
+  if (error instanceof V2CloudProviderError && error.code === "AUTH_REQUIRED") {
     throw new CloudAuthError(
       "Cloud device authentication failed. Run corotum login.",
       "AUTH_REQUIRED",

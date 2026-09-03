@@ -1,11 +1,11 @@
 import { DomainValidationError } from "../../../packages/core/src/index";
 import { jsonError } from "./api";
 import {
+  type ArtifactBucket,
   ArtifactGcAmbiguousError,
   ArtifactMetadataError,
-  ArtifactTransferError,
-  type ArtifactBucket,
   type ArtifactTransfer,
+  ArtifactTransferError,
   garbageCollectWorkspaceArtifacts,
   getWorkspaceArtifact,
   parseArtifactTransfer,
@@ -31,17 +31,25 @@ import {
 export const ARTIFACT_DESCRIPTOR_HEADER = "x-corotum-artifact";
 
 function artifactError(error: unknown) {
-  if (error instanceof DeviceUnauthorizedError) return jsonError(error.message, 401);
-  if (error instanceof HostedEntitlementRequiredError) return jsonError(error.message, 402);
-  if (error instanceof WorkspaceAccessError) return jsonError(error.message, 404);
-  if (error instanceof RevisionConflictError) return jsonError(error.message, 409);
-  if (error instanceof ArtifactGcAmbiguousError) return jsonError(error.message, 409);
-  if (error instanceof ArtifactMetadataError) return jsonError(error.message, 503);
+  if (error instanceof DeviceUnauthorizedError)
+    return jsonError(error.message, 401);
+  if (error instanceof HostedEntitlementRequiredError)
+    return jsonError(error.message, 402);
+  if (error instanceof WorkspaceAccessError)
+    return jsonError(error.message, 404);
+  if (error instanceof RevisionConflictError)
+    return jsonError(error.message, 409);
+  if (error instanceof ArtifactGcAmbiguousError)
+    return jsonError(error.message, 409);
+  if (error instanceof ArtifactMetadataError)
+    return jsonError(error.message, 503);
   if (error instanceof ArtifactTransferError) {
-    if (error.code === "ARTIFACT_UNAVAILABLE") return jsonError(error.message, 404);
+    if (error.code === "ARTIFACT_UNAVAILABLE")
+      return jsonError(error.message, 404);
     return jsonError(error.message, 400);
   }
-  if (error instanceof DomainValidationError) return jsonError(error.message, 400);
+  if (error instanceof DomainValidationError)
+    return jsonError(error.message, 400);
   throw error;
 }
 
@@ -52,7 +60,10 @@ async function authenticateArtifactRequest(
   kind: "normal" | "mutation",
   hosted: boolean,
 ) {
-  const blocked = await protectCloudRequest(request, db, { kind, requireCli: true });
+  const blocked = await protectCloudRequest(request, db, {
+    kind,
+    requireCli: true,
+  });
   if (blocked) return { error: blocked };
   const token = deviceTokenFrom(request);
   if (!token) return { error: jsonError("Device token is required", 401) };
@@ -74,12 +85,23 @@ function arrayBufferOf(bytes: Uint8Array): ArrayBuffer {
 
 function readTransfer(request: Request): ArtifactTransfer {
   const raw = request.headers.get(ARTIFACT_DESCRIPTOR_HEADER);
-  if (!raw) throw new ArtifactTransferError("VALIDATION_ERROR", "An artifact-backed descriptor is required.");
+  if (!raw)
+    throw new ArtifactTransferError(
+      "VALIDATION_ERROR",
+      "An artifact-backed descriptor is required.",
+    );
   try {
     return parseArtifactTransfer(JSON.parse(raw) as unknown);
   } catch (error) {
-    if (error instanceof ArtifactTransferError || error instanceof DomainValidationError) throw error;
-    throw new ArtifactTransferError("VALIDATION_ERROR", "An artifact-backed descriptor is required.");
+    if (
+      error instanceof ArtifactTransferError ||
+      error instanceof DomainValidationError
+    )
+      throw error;
+    throw new ArtifactTransferError(
+      "VALIDATION_ERROR",
+      "An artifact-backed descriptor is required.",
+    );
   }
 }
 
@@ -90,7 +112,13 @@ export async function handlePutWorkspaceArtifact(
   workspaceId: string,
   hosted = false,
 ) {
-  const authenticated = await authenticateArtifactRequest(request, db, workspaceId, "normal", hosted);
+  const authenticated = await authenticateArtifactRequest(
+    request,
+    db,
+    workspaceId,
+    "normal",
+    hosted,
+  );
   if ("error" in authenticated) return authenticated.error;
   try {
     const transfer = readTransfer(request);
@@ -114,7 +142,13 @@ export async function handleGetWorkspaceArtifact(
   workspaceId: string,
   hosted = false,
 ) {
-  const authenticated = await authenticateArtifactRequest(request, db, workspaceId, "normal", hosted);
+  const authenticated = await authenticateArtifactRequest(
+    request,
+    db,
+    workspaceId,
+    "normal",
+    hosted,
+  );
   if ("error" in authenticated) return authenticated.error;
   try {
     const transfer = readTransfer(request);
@@ -138,11 +172,21 @@ export async function handlePostWorkspaceArtifactGc(
   workspaceId: string,
   hosted = false,
 ) {
-  const authenticated = await authenticateArtifactRequest(request, db, workspaceId, "mutation", hosted);
+  const authenticated = await authenticateArtifactRequest(
+    request,
+    db,
+    workspaceId,
+    "mutation",
+    hosted,
+  );
   if ("error" in authenticated) return authenticated.error;
   try {
     await loadCurrentDesiredState(db, authenticated.device.userId, workspaceId);
-    const deleted = await garbageCollectWorkspaceArtifacts(db, bucket, workspaceId);
+    const deleted = await garbageCollectWorkspaceArtifacts(
+      db,
+      bucket,
+      workspaceId,
+    );
     return Response.json({ deleted });
   } catch (error) {
     return artifactError(error);

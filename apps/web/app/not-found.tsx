@@ -18,8 +18,8 @@ export default function NotFound() {
             <p className="not-found-kicker">ROUTE UNAVAILABLE</p>
             <h1 id="not-found-title">Page not found</h1>
             <p>
-              This route does not exist, or it may have moved. Return to
-              Corotum to continue.
+              This route does not exist, or it may have moved. Return to Corotum
+              to continue.
             </p>
             <div className="not-found-actions">
               <a className="not-found-primary" href="/">

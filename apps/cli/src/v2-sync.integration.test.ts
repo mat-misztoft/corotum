@@ -30,12 +30,17 @@ import {
 const directories: string[] = [];
 afterEach(async () => {
   await Promise.all(
-    directories.splice(0).map((path) => rm(path, { force: true, recursive: true })),
+    directories
+      .splice(0)
+      .map((path) => rm(path, { force: true, recursive: true })),
   );
 });
 
 async function git(args: string[]): Promise<string> {
-  const process = Bun.spawn(["git", ...args], { stdout: "pipe", stderr: "pipe" });
+  const process = Bun.spawn(["git", ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(process.stdout).text(),
     new Response(process.stderr).text(),
@@ -56,14 +61,21 @@ const emptyLedger: DispositionLedger = { version: 2, activeDispositions: {} };
 async function skillSource(root: string, body = "# Exact\n") {
   const repository = join(root, "source.git");
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await mkdir(join(repository, "demo"));
   await writeFile(join(repository, "demo", "SKILL.md"), body);
   await git(["-C", repository, "add", "."]);
   await git(["-C", repository, "commit", "-m", "skill"]);
   const revision = await git(["-C", repository, "rev-parse", "HEAD"]);
-  const contentHash = (await scanNormalizedContent(join(repository, "demo"))).contentHash;
+  const contentHash = (await scanNormalizedContent(join(repository, "demo")))
+    .contentHash;
   return { repository, revision, contentHash };
 }
 
@@ -149,7 +161,9 @@ async function homeRuntime(
 ) {
   const homeDir = join(root, "home");
   const skillsStoragePath = join(homeDir, "canonical");
-  const stateStore = new LocalOperationalStateStore(join(homeDir, "state.json"));
+  const stateStore = new LocalOperationalStateStore(
+    join(homeDir, "state.json"),
+  );
   const applier = new V2LocalApplier(
     stateStore,
     new CanonicalSkillStore(skillsStoragePath),
@@ -186,14 +200,25 @@ describe("v2 CLI sync/reconcile integration", () => {
       ledger: emptyLedger,
       baseRevision: empty.revisionId,
     });
-    const { homeDir, service, stateStore } = await homeRuntime(root, gitPort(gitProvider));
+    const { homeDir, service, stateStore } = await homeRuntime(
+      root,
+      gitPort(gitProvider),
+    );
     await mkdir(join(homeDir, ".pi", "agent", "skills"), { recursive: true });
 
     const result = await service.sync();
     expect(result.kind).toBe("synced");
-    expect(await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8")).toBe("# Exact\n");
-    expect((await lstat(join(homeDir, ".pi", "agent", "skills", "demo"))).isSymbolicLink()).toBe(true);
-    expect((await stateStore.load())?.lastAppliedRevision).toBe(published.revisionId);
+    expect(
+      await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8"),
+    ).toBe("# Exact\n");
+    expect(
+      (
+        await lstat(join(homeDir, ".pi", "agent", "skills", "demo"))
+      ).isSymbolicLink(),
+    ).toBe(true);
+    expect((await stateStore.load())?.lastAppliedRevision).toBe(
+      published.revisionId,
+    );
     const status = await service.inspect();
     expect(status.kind).toBe("ready");
     if (status.kind === "ready") {
@@ -213,14 +238,20 @@ describe("v2 CLI sync/reconcile integration", () => {
     const root = await temp("recover");
     const source = await skillSource(root);
     const bare = await gitStateRemote(root);
-    const gitProvider = new V2GitStateProvider(join(root, "git-cache"), bare, undefined, async () => undefined);
+    const gitProvider = new V2GitStateProvider(
+      join(root, "git-cache"),
+      bare,
+      undefined,
+      async () => undefined,
+    );
     const empty = await gitProvider.pullAllowEmpty();
     await gitProvider.push({
       state: desiredFor(source),
       ledger: emptyLedger,
       baseRevision: empty.revisionId,
     });
-    const { homeDir, service, stateStore, skillsStoragePath } = await homeRuntime(root, gitPort(gitProvider));
+    const { homeDir, service, stateStore, skillsStoragePath } =
+      await homeRuntime(root, gitPort(gitProvider));
     await mkdir(join(homeDir, ".pi", "agent", "skills"), { recursive: true });
     expect((await service.sync()).kind).toBe("synced");
 
@@ -228,21 +259,33 @@ describe("v2 CLI sync/reconcile integration", () => {
     const recovered = await service.inspect();
     expect(recovered.kind).toBe("ready");
     if (recovered.kind === "ready") {
-      expect(recovered.state.skills[skillId("sk_demo")]?.ownership).toBe("recovered");
-      expect(recovered.snapshot.plan.classifications[0]?.classification).toBe("MANAGED_SYNCED");
+      expect(recovered.state.skills[skillId("sk_demo")]?.ownership).toBe(
+        "recovered",
+      );
+      expect(recovered.snapshot.plan.classifications[0]?.classification).toBe(
+        "MANAGED_SYNCED",
+      );
     }
 
     await writeFile(join(homeDir, "state.json"), "{not-json");
     const afterCorrupt = await service.inspect();
     expect(afterCorrupt.kind).toBe("ready");
-    expect((await scanNormalizedContent(join(skillsStoragePath, "demo"))).contentHash).toBe(source.contentHash);
+    expect(
+      (await scanNormalizedContent(join(skillsStoragePath, "demo")))
+        .contentHash,
+    ).toBe(source.contentHash);
   });
 
   test("does not overwrite copy or symlink drift and leaves unmanaged collisions untouched", async () => {
     const root = await temp("drift");
     const source = await skillSource(root);
     const bare = await gitStateRemote(root);
-    const gitProvider = new V2GitStateProvider(join(root, "git-cache"), bare, undefined, async () => undefined);
+    const gitProvider = new V2GitStateProvider(
+      join(root, "git-cache"),
+      bare,
+      undefined,
+      async () => undefined,
+    );
     const empty = await gitProvider.pullAllowEmpty();
     await gitProvider.push({
       state: desiredFor(source),
@@ -253,10 +296,15 @@ describe("v2 CLI sync/reconcile integration", () => {
     await mkdir(join(homeDir, ".pi", "agent", "skills"), { recursive: true });
     expect((await service.sync()).kind).toBe("synced");
 
-    await writeFile(join(homeDir, "canonical", "demo", "SKILL.md"), "# Drifted canonical\n");
+    await writeFile(
+      join(homeDir, "canonical", "demo", "SKILL.md"),
+      "# Drifted canonical\n",
+    );
     const drifted = await service.sync();
     expect(drifted.kind).toBe("partial");
-    expect(await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8")).toBe("# Drifted canonical\n");
+    expect(
+      await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8"),
+    ).toBe("# Drifted canonical\n");
     if (drifted.kind === "partial") {
       expect(drifted.kind).toBe("partial");
       expect(v2SyncStatusPayload(drifted).status).toBe("DRIFTED");
@@ -265,7 +313,12 @@ describe("v2 CLI sync/reconcile integration", () => {
     const collisionRoot = await temp("collision");
     const collisionSource = await skillSource(collisionRoot);
     const collisionBare = await gitStateRemote(collisionRoot);
-    const collisionGit = new V2GitStateProvider(join(collisionRoot, "git-cache"), collisionBare, undefined, async () => undefined);
+    const collisionGit = new V2GitStateProvider(
+      join(collisionRoot, "git-cache"),
+      collisionBare,
+      undefined,
+      async () => undefined,
+    );
     const collisionEmpty = await collisionGit.pullAllowEmpty();
     await collisionGit.push({
       state: desiredFor(collisionSource),
@@ -273,11 +326,21 @@ describe("v2 CLI sync/reconcile integration", () => {
       baseRevision: collisionEmpty.revisionId,
     });
     const collision = await homeRuntime(collisionRoot, gitPort(collisionGit));
-    await mkdir(join(collision.homeDir, "canonical", "demo"), { recursive: true });
-    await writeFile(join(collision.homeDir, "canonical", "demo", "SKILL.md"), "# Local only\n");
+    await mkdir(join(collision.homeDir, "canonical", "demo"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(collision.homeDir, "canonical", "demo", "SKILL.md"),
+      "# Local only\n",
+    );
     const blocked = await collision.service.sync();
     expect(blocked.kind).toBe("partial");
-    expect(await readFile(join(collision.homeDir, "canonical", "demo", "SKILL.md"), "utf8")).toBe("# Local only\n");
+    expect(
+      await readFile(
+        join(collision.homeDir, "canonical", "demo", "SKILL.md"),
+        "utf8",
+      ),
+    ).toBe("# Local only\n");
     if (blocked.kind === "partial") {
       expect(v2SyncStatusPayload(blocked).status).toBe("LOCAL_CONFLICT");
     }
@@ -287,14 +350,22 @@ describe("v2 CLI sync/reconcile integration", () => {
     const root = await temp("ledger");
     const source = await skillSource(root);
     const bare = await gitStateRemote(root);
-    const gitProvider = new V2GitStateProvider(join(root, "git-cache"), bare, undefined, async () => undefined);
+    const gitProvider = new V2GitStateProvider(
+      join(root, "git-cache"),
+      bare,
+      undefined,
+      async () => undefined,
+    );
     const empty = await gitProvider.pullAllowEmpty();
     const installed = await gitProvider.push({
       state: desiredFor(source),
       ledger: emptyLedger,
       baseRevision: empty.revisionId,
     });
-    const { homeDir, service, stateStore } = await homeRuntime(root, gitPort(gitProvider));
+    const { homeDir, service, stateStore } = await homeRuntime(
+      root,
+      gitPort(gitProvider),
+    );
     await mkdir(join(homeDir, ".pi", "agent", "skills"), { recursive: true });
     expect((await service.sync()).kind).toBe("synced");
 
@@ -319,13 +390,22 @@ describe("v2 CLI sync/reconcile integration", () => {
     });
     const unmanaged = await service.sync();
     expect(unmanaged.kind).toBe("synced");
-    expect(await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8")).toBe("# Exact\n");
-    expect((await stateStore.load())?.skills[skillId("sk_demo")]).toBeUndefined();
+    expect(
+      await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8"),
+    ).toBe("# Exact\n");
+    expect(
+      (await stateStore.load())?.skills[skillId("sk_demo")],
+    ).toBeUndefined();
 
     const removeRoot = await temp("remove");
     const removeSource = await skillSource(removeRoot);
     const removeBare = await gitStateRemote(removeRoot);
-    const removeGit = new V2GitStateProvider(join(removeRoot, "git-cache"), removeBare, undefined, async () => undefined);
+    const removeGit = new V2GitStateProvider(
+      join(removeRoot, "git-cache"),
+      removeBare,
+      undefined,
+      async () => undefined,
+    );
     const removeEmpty = await removeGit.pullAllowEmpty();
     const removeInstalled = await removeGit.push({
       state: desiredFor(removeSource),
@@ -333,7 +413,9 @@ describe("v2 CLI sync/reconcile integration", () => {
       baseRevision: removeEmpty.revisionId,
     });
     const removeHome = await homeRuntime(removeRoot, gitPort(removeGit));
-    await mkdir(join(removeHome.homeDir, ".pi", "agent", "skills"), { recursive: true });
+    await mkdir(join(removeHome.homeDir, ".pi", "agent", "skills"), {
+      recursive: true,
+    });
     expect((await removeHome.service.sync()).kind).toBe("synced");
     await removeGit.push({
       state: removedState,
@@ -351,11 +433,18 @@ describe("v2 CLI sync/reconcile integration", () => {
       baseRevision: removeInstalled.revisionId,
     });
     expect((await removeHome.service.sync()).kind).toBe("synced");
-    await expect(readFile(join(removeHome.homeDir, "canonical", "demo", "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(
+        join(removeHome.homeDir, "canonical", "demo", "SKILL.md"),
+        "utf8",
+      ),
+    ).rejects.toThrow();
   });
 
   test("git pending push stays explicitly recoverable on status and sync", async () => {
-    const pending = new Error("A previous v2 desired-state change is waiting to be pushed.");
+    const pending = new Error(
+      "A previous v2 desired-state change is waiting to be pushed.",
+    );
     const port: V2SyncProviderPort = {
       peekPendingPush: async () => true,
       pull: async () => {
@@ -363,7 +452,10 @@ describe("v2 CLI sync/reconcile integration", () => {
       },
       pullReadOnly: async () => ({
         revisionId: "rev-local",
-        state: { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } },
+        state: {
+          manifest: { version: 2, skills: [] },
+          lockfile: { version: 2, skills: [] },
+        },
         ledger: emptyLedger,
       }),
     };
@@ -389,12 +481,16 @@ describe("v2 CLI sync/reconcile integration", () => {
     };
     const cloud = memoryCloud(envelope);
     const reports: unknown[] = [];
-    const { homeDir, service, stateStore } = await homeRuntime(root, cloud, async (input) => {
-      reports.push({
-        applied: input.state.lastAppliedRevision,
-        kind: input.kind,
-      });
-    });
+    const { homeDir, service, stateStore } = await homeRuntime(
+      root,
+      cloud,
+      async (input) => {
+        reports.push({
+          applied: input.state.lastAppliedRevision,
+          kind: input.kind,
+        });
+      },
+    );
     await mkdir(join(homeDir, ".pi", "agent", "skills"), { recursive: true });
     const first = await service.sync();
     expect(first.kind).toBe("synced");
@@ -402,19 +498,27 @@ describe("v2 CLI sync/reconcile integration", () => {
     expect((await stateStore.load())?.lastAppliedRevision).toBe("cloud-rev-1");
 
     reports.length = 0;
-    await writeFile(join(homeDir, "canonical", "demo", "SKILL.md"), "# Local edit\n");
+    await writeFile(
+      join(homeDir, "canonical", "demo", "SKILL.md"),
+      "# Local edit\n",
+    );
     const failedLocal = memoryCloud({
       revisionId: "cloud-rev-2",
       state: desiredFor(source),
       ledger: emptyLedger,
     });
     const retryHome = await homeRuntime(root, failedLocal, async (input) => {
-      reports.push({ applied: input.state.lastAppliedRevision, kind: input.kind });
+      reports.push({
+        applied: input.state.lastAppliedRevision,
+        kind: input.kind,
+      });
     });
     const retry = retryHome.service;
     const partial = await retry.sync();
     expect(partial.kind).toBe("partial");
-    expect(await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8")).toBe("# Local edit\n");
+    expect(
+      await readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8"),
+    ).toBe("# Local edit\n");
     if (partial.kind === "partial") {
       expect(partial.state.lastAppliedRevision).toBe("cloud-rev-1");
       expect(reports[0]).toEqual({ applied: "cloud-rev-1", kind: "partial" });
@@ -423,7 +527,11 @@ describe("v2 CLI sync/reconcile integration", () => {
     const inspect = await retry.inspect();
     expect(inspect.kind).toBe("ready");
     if (inspect.kind === "ready") {
-      expect(inspect.snapshot.plan.classifications.some((item) => item.classification === "DRIFTED")).toBe(true);
+      expect(
+        inspect.snapshot.plan.classifications.some(
+          (item) => item.classification === "DRIFTED",
+        ),
+      ).toBe(true);
     }
   });
 
@@ -431,7 +539,9 @@ describe("v2 CLI sync/reconcile integration", () => {
     const root = await temp("partial");
     const source = await skillSource(root);
     const collision = join(root, "home", ".pi", "agent", "skills", "demo");
-    await mkdir(join(root, "home", ".pi", "agent", "skills"), { recursive: true });
+    await mkdir(join(root, "home", ".pi", "agent", "skills"), {
+      recursive: true,
+    });
     await mkdir(collision);
     await writeFile(join(collision, "SKILL.md"), "# Unmanaged target\n");
     const cloud = memoryCloud({
@@ -443,7 +553,9 @@ describe("v2 CLI sync/reconcile integration", () => {
     const result = await service.sync();
     expect(result.kind).toBe("partial");
     expect((await stateStore.load())?.lastAppliedRevision).toBeNull();
-    expect(await readFile(join(collision, "SKILL.md"), "utf8")).toBe("# Unmanaged target\n");
+    expect(await readFile(join(collision, "SKILL.md"), "utf8")).toBe(
+      "# Unmanaged target\n",
+    );
     await expect(
       readFile(join(homeDir, "canonical", "demo", "SKILL.md"), "utf8"),
     ).rejects.toThrow();
@@ -453,7 +565,10 @@ describe("v2 CLI sync/reconcile integration", () => {
   test("typed JSON outcomes include schema-versioned classifications for inspect", async () => {
     const port = memoryCloud({
       revisionId: "rev",
-      state: { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } },
+      state: {
+        manifest: { version: 2, skills: [] },
+        lockfile: { version: 2, skills: [] },
+      },
       ledger: emptyLedger,
     });
     const { service } = await homeRuntime(await temp("json"), port);

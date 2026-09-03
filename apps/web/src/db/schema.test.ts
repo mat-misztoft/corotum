@@ -11,25 +11,66 @@ const migration = await Bun.file(
 test("v1 workspace rows roll forward without rewriting their snapshots", async () => {
   const db = new Database(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
-  const directory = fileURLToPath(new URL("../../migrations/", import.meta.url));
-  for (const file of readdirSync(directory).filter((file) => file.endsWith(".sql") && file < "0011_yummy_annihilus.sql").sort()) {
+  const directory = fileURLToPath(
+    new URL("../../migrations/", import.meta.url),
+  );
+  for (const file of readdirSync(directory)
+    .filter(
+      (file) => file.endsWith(".sql") && file < "0011_yummy_annihilus.sql",
+    )
+    .sort()) {
     const sql = await Bun.file(join(directory, file)).text();
-    for (const statement of sql.split("--> statement-breakpoint")) if (statement.trim()) db.exec(statement);
+    for (const statement of sql.split("--> statement-breakpoint"))
+      if (statement.trim()) db.exec(statement);
   }
-  db.query("INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES ('u1', 'Ada', 'ada@example.com', 1, 1, 1)").run();
-  db.query("INSERT INTO workspaces (id, owner_user_id, name, current_revision_sequence, created_at, updated_at) VALUES ('w1', 'u1', 'Default', 1, 1, 1)").run();
-  db.query("INSERT INTO workspace_revisions (id, workspace_id, revision_sequence, manifest_json, lockfile_json, created_at, created_by_type, created_by_id, operation_type, operation_metadata_json) VALUES ('r1', 'w1', 1, '{\"version\":1,\"skills\":[]}', '{\"version\":1,\"skills\":[]}', 1, 'user', 'u1', 'ADD', '{}')").run();
-  db.query("INSERT INTO workspace_skills (workspace_id, skill_id, source, skill_name, ref, targets_json, resolution_status, updated_at) VALUES ('w1', 'sk_01JV1Skill', 'https://example.test/skills.git', 'Review', 'main', '\"all\"', 'RESOLVED', 1)").run();
-  const upgrade = await Bun.file(join(directory, "0011_yummy_annihilus.sql")).text();
-  for (const statement of upgrade.split("--> statement-breakpoint")) if (statement.trim()) db.exec(statement);
-  expect(db.query("SELECT manifest_json AS manifest, disposition_ledger_json AS ledger FROM workspace_revisions").get()).toEqual({
-    manifest: '{"version":1,"skills":[]}', ledger: '{"version":2,"activeDispositions":{}}',
+  db.query(
+    "INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES ('u1', 'Ada', 'ada@example.com', 1, 1, 1)",
+  ).run();
+  db.query(
+    "INSERT INTO workspaces (id, owner_user_id, name, current_revision_sequence, created_at, updated_at) VALUES ('w1', 'u1', 'Default', 1, 1, 1)",
+  ).run();
+  db.query(
+    "INSERT INTO workspace_revisions (id, workspace_id, revision_sequence, manifest_json, lockfile_json, created_at, created_by_type, created_by_id, operation_type, operation_metadata_json) VALUES ('r1', 'w1', 1, '{\"version\":1,\"skills\":[]}', '{\"version\":1,\"skills\":[]}', 1, 'user', 'u1', 'ADD', '{}')",
+  ).run();
+  db.query(
+    "INSERT INTO workspace_skills (workspace_id, skill_id, source, skill_name, ref, targets_json, resolution_status, updated_at) VALUES ('w1', 'sk_01JV1Skill', 'https://example.test/skills.git', 'Review', 'main', '\"all\"', 'RESOLVED', 1)",
+  ).run();
+  const upgrade = await Bun.file(
+    join(directory, "0011_yummy_annihilus.sql"),
+  ).text();
+  for (const statement of upgrade.split("--> statement-breakpoint"))
+    if (statement.trim()) db.exec(statement);
+  expect(
+    db
+      .query(
+        "SELECT manifest_json AS manifest, disposition_ledger_json AS ledger FROM workspace_revisions",
+      )
+      .get(),
+  ).toEqual({
+    manifest: '{"version":1,"skills":[]}',
+    ledger: '{"version":2,"activeDispositions":{}}',
   });
-  expect(db.query("SELECT source, skill_name AS skillName, ref FROM workspace_skills").get()).toEqual({
-    source: "https://example.test/skills.git", skillName: "Review", ref: "main",
+  expect(
+    db
+      .query(
+        "SELECT source, skill_name AS skillName, ref FROM workspace_skills",
+      )
+      .get(),
+  ).toEqual({
+    source: "https://example.test/skills.git",
+    skillName: "Review",
+    ref: "main",
   });
-  expect(() => db.query("INSERT INTO workspace_skills (workspace_id, skill_id, source, skill_name, ref, targets_json, resolution_status, updated_at) VALUES ('w1', 'sk_01JDuplicate', NULL, 'review', NULL, '\"all\"', 'RESOLVED', 2)").run()).toThrow();
-  expect(db.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get()).toEqual({ count: 0 });
+  expect(() =>
+    db
+      .query(
+        "INSERT INTO workspace_skills (workspace_id, skill_id, source, skill_name, ref, targets_json, resolution_status, updated_at) VALUES ('w1', 'sk_01JDuplicate', NULL, 'review', NULL, '\"all\"', 'RESOLVED', 2)",
+      )
+      .run(),
+  ).toThrow();
+  expect(
+    db.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get(),
+  ).toEqual({ count: 0 });
 });
 
 test("device memberships allow history but enforce one active workspace", () => {

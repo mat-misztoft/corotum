@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { V2DesiredState } from "../../../packages/core/src/index";
-import { V2CloudProviderError, type V2SaaSProvider } from "../../../packages/saas-provider/src/index";
+import {
+  V2CloudProviderError,
+  type V2SaaSProvider,
+} from "../../../packages/saas-provider/src/index";
 import { CloudInitService } from "./init-cloud";
 
 const empty: V2DesiredState = {

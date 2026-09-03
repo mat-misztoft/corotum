@@ -13,7 +13,9 @@ test("sign-in keeps GitHub, Google, and a keyboard-operable email path", () => {
   expect(form).toContain('id="email"');
   expect(form).toContain('autoComplete="email"');
   expect(form).toContain('type="email"');
-  expect(form).toContain("callbackURL: signInCallbackURL(window.location.search)");
+  expect(form).toContain(
+    "callbackURL: signInCallbackURL(window.location.search)",
+  );
 });
 
 test("email validation and request states retain disclosure-safe messaging", () => {

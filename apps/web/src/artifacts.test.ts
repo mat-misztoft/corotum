@@ -1,16 +1,16 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { skillId } from "../../../packages/core/src/index";
-import { createArtifactArchive } from "../../../packages/skills-adapter/src/artifact-archive";
 import {
   CLI_VERSION_HEADER,
   DEVICE_TOKEN_HEADER,
 } from "../../../packages/saas-provider/src/index";
+import { createArtifactArchive } from "../../../packages/skills-adapter/src/artifact-archive";
 import {
   type ArtifactBucket,
   cloudArtifactLocator,
@@ -26,7 +26,9 @@ import { approvePairing, createPairing } from "./pairings";
 import { handlePutWorkspaceState } from "./state-http";
 import { issueDeviceToken, type TokenDatabase } from "./tokens";
 
-const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
+const migrationsDirectory = fileURLToPath(
+  new URL("../migrations/", import.meta.url),
+);
 const migrationFiles = readdirSync(migrationsDirectory)
   .filter((file) => file.endsWith(".sql"))
   .sort();
@@ -101,11 +103,20 @@ async function pairedDevice(
     .run(user.id, "Ada", user.email, Date.now(), Date.now());
   const pairing = await createPairing(db, device, 1_000);
   await approvePairing(db, user.id, pairing.id, pairing.userCode, 2_000);
-  const issued = await issueDeviceToken(db, pairing.id, pairing.deviceCode, 3_000);
+  const issued = await issueDeviceToken(
+    db,
+    pairing.id,
+    pairing.deviceCode,
+    3_000,
+  );
   return { issued, workspaceId: issued.workspaceId as string };
 }
 
-function apiRequest(path: string, token: string, init?: ConstructorParameters<typeof Request>[1]) {
+function apiRequest(
+  path: string,
+  token: string,
+  init?: ConstructorParameters<typeof Request>[1],
+) {
   return new Request(`https://corotum.com${path}`, {
     ...init,
     headers: {
@@ -137,7 +148,11 @@ function transfer(
       kind: "r2-tar-zst" as const,
       contentHash: archive.contentHash,
       integrityHash: archive.integrityHash,
-      locator: cloudArtifactLocator(workspaceId, skillId, archive.integrityHash),
+      locator: cloudArtifactLocator(
+        workspaceId,
+        skillId,
+        archive.integrityHash,
+      ),
       sizeBytes: archive.sizeBytes,
     },
   };
@@ -162,41 +177,70 @@ const source = "https://github.com/example/skills.git";
 const sourceState = {
   manifest: {
     version: 2 as const,
-    skills: [{
-      id: skill,
-      name: "review",
-      targets: "all" as const,
-      source: { repository: source, path: "skills/review", ref: "main" },
-      resolutionStatus: "RESOLVED" as const,
-    }],
+    skills: [
+      {
+        id: skill,
+        name: "review",
+        targets: "all" as const,
+        source: { repository: source, path: "skills/review", ref: "main" },
+        resolutionStatus: "RESOLVED" as const,
+      },
+    ],
   },
   lockfile: {
     version: 2 as const,
-    skills: [{
-      id: skill,
-      name: "review",
-      source: { repository: source, path: "skills/review", ref: "main", revision: "a".repeat(40), contentHash: `sha256:${"b".repeat(64)}` as const },
-      materialization: { kind: "source" as const, contentHash: `sha256:${"b".repeat(64)}` as const },
-    }],
+    skills: [
+      {
+        id: skill,
+        name: "review",
+        source: {
+          repository: source,
+          path: "skills/review",
+          ref: "main",
+          revision: "a".repeat(40),
+          contentHash: `sha256:${"b".repeat(64)}` as const,
+        },
+        materialization: {
+          kind: "source" as const,
+          contentHash: `sha256:${"b".repeat(64)}` as const,
+        },
+      },
+    ],
   },
 };
 
-function artifactState(workspaceId: string, skillId: string, archive: Awaited<ReturnType<typeof pack>>) {
+function artifactState(
+  workspaceId: string,
+  skillId: string,
+  archive: Awaited<ReturnType<typeof pack>>,
+) {
   const descriptor = transfer(workspaceId, skillId, archive);
   return {
     descriptor,
     state: {
       manifest: {
         version: 2 as const,
-        skills: [{ id: skillId, name: skillId === skill ? "review" : "notes", targets: "all" as const, resolutionStatus: "RESOLVED" as const }],
+        skills: [
+          {
+            id: skillId,
+            name: skillId === skill ? "review" : "notes",
+            targets: "all" as const,
+            resolutionStatus: "RESOLVED" as const,
+          },
+        ],
       },
       lockfile: {
         version: 2 as const,
-        skills: [{
-          id: skillId,
-          name: skillId === skill ? "review" : "notes",
-          materialization: { kind: "artifact" as const, artifact: descriptor.artifact },
-        }],
+        skills: [
+          {
+            id: skillId,
+            name: skillId === skill ? "review" : "notes",
+            materialization: {
+              kind: "artifact" as const,
+              artifact: descriptor.artifact,
+            },
+          },
+        ],
       },
     },
   };
@@ -228,21 +272,31 @@ async function publish(
 test("authenticated upload and download verify hashes, isolate workspaces, and reject source locks", async () => {
   const { sqlite, db } = await artifactDb();
   const first = await pairedDevice(db, sqlite);
-  const second = await pairedDevice(db, sqlite, { id: "user_2", email: "bob@example.com" });
+  const second = await pairedDevice(db, sqlite, {
+    id: "user_2",
+    email: "bob@example.com",
+  });
   const bucket = memoryArtifactBucket();
   const archive = await pack({ "SKILL.md": "# review\n" });
   const descriptor = transfer(first.workspaceId, skill, archive);
 
   const uploaded = await handlePutWorkspaceArtifact(
-    artifactRequest(first.workspaceId, first.issued.token, descriptor, { method: "PUT", body: archive.bytes }),
+    artifactRequest(first.workspaceId, first.issued.token, descriptor, {
+      method: "PUT",
+      body: archive.bytes,
+    }),
     db,
     bucket,
     first.workspaceId,
   );
   expect(uploaded.status).toBe(200);
   expect(await uploaded.json()).toEqual(descriptor);
-  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get()).toEqual({ count: 1 });
-  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get()).toEqual({ count: 0 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get(),
+  ).toEqual({ count: 1 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get(),
+  ).toEqual({ count: 0 });
 
   const downloaded = await handleGetWorkspaceArtifact(
     artifactRequest(first.workspaceId, first.issued.token, descriptor),
@@ -251,12 +305,21 @@ test("authenticated upload and download verify hashes, isolate workspaces, and r
     first.workspaceId,
   );
   expect(downloaded.status).toBe(200);
-  expect(hash(new Uint8Array(await downloaded.arrayBuffer()))).toBe(archive.integrityHash);
+  expect(hash(new Uint8Array(await downloaded.arrayBuffer()))).toBe(
+    archive.integrityHash,
+  );
 
   const crossed = await handleGetWorkspaceArtifact(
     artifactRequest(second.workspaceId, second.issued.token, {
       ...descriptor,
-      artifact: { ...descriptor.artifact, locator: cloudArtifactLocator(second.workspaceId, skill, archive.integrityHash) },
+      artifact: {
+        ...descriptor.artifact,
+        locator: cloudArtifactLocator(
+          second.workspaceId,
+          skill,
+          archive.integrityHash,
+        ),
+      },
     }),
     db,
     bucket,
@@ -264,7 +327,11 @@ test("authenticated upload and download verify hashes, isolate workspaces, and r
   );
   expect(crossed.status).toBe(404);
   expect(bucket.objects.has(descriptor.artifact.locator)).toBe(true);
-  expect(bucket.objects.has(cloudArtifactLocator(second.workspaceId, skill, archive.integrityHash))).toBe(false);
+  expect(
+    bucket.objects.has(
+      cloudArtifactLocator(second.workspaceId, skill, archive.integrityHash),
+    ),
+  ).toBe(false);
 
   const stolen = await handleGetWorkspaceArtifact(
     artifactRequest(first.workspaceId, second.issued.token, descriptor),
@@ -274,9 +341,19 @@ test("authenticated upload and download verify hashes, isolate workspaces, and r
   );
   expect(stolen.status).toBe(404);
 
-  await publish(db, first.workspaceId, first.issued.token, sourceState, null, "source-1");
+  await publish(
+    db,
+    first.workspaceId,
+    first.issued.token,
+    sourceState,
+    null,
+    "source-1",
+  );
   const sourceUpload = await handlePutWorkspaceArtifact(
-    artifactRequest(first.workspaceId, first.issued.token, descriptor, { method: "PUT", body: archive.bytes }),
+    artifactRequest(first.workspaceId, first.issued.token, descriptor, {
+      method: "PUT",
+      body: archive.bytes,
+    }),
     db,
     bucket,
     first.workspaceId,
@@ -296,13 +373,22 @@ test("upload failure leaves no published reference and a metadata retry is idemp
   let failMetadata = true;
   const flaky: TokenDatabase = {
     prepare(query: string) {
-      if (failMetadata && query.includes("INSERT OR IGNORE INTO workspace_artifacts")) {
+      if (
+        failMetadata &&
+        query.includes("INSERT OR IGNORE INTO workspace_artifacts")
+      ) {
         return {
           bind() {
             return {
-              async first() { return null; },
-              async run() { throw new Error("metadata write failed"); },
-              async all() { return { results: [] }; },
+              async first() {
+                return null;
+              },
+              async run() {
+                throw new Error("metadata write failed");
+              },
+              async all() {
+                return { results: [] };
+              },
             };
           },
         };
@@ -313,27 +399,39 @@ test("upload failure leaves no published reference and a metadata retry is idemp
   };
 
   const failed = await handlePutWorkspaceArtifact(
-    artifactRequest(workspaceId, issued.token, descriptor, { method: "PUT", body: archive.bytes }),
+    artifactRequest(workspaceId, issued.token, descriptor, {
+      method: "PUT",
+      body: archive.bytes,
+    }),
     flaky,
     bucket,
     workspaceId,
   );
   expect(failed.status).toBe(503);
   expect(bucket.objects.has(descriptor.artifact.locator)).toBe(true);
-  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get()).toEqual({ count: 0 });
-  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get()).toEqual({ count: 0 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get(),
+  ).toEqual({ count: 0 });
 
   failMetadata = false;
   const retried = await handlePutWorkspaceArtifact(
-    artifactRequest(workspaceId, issued.token, descriptor, { method: "PUT", body: archive.bytes }),
+    artifactRequest(workspaceId, issued.token, descriptor, {
+      method: "PUT",
+      body: archive.bytes,
+    }),
     db,
     bucket,
     workspaceId,
   );
   expect(retried.status).toBe(200);
-  expect(sqlite.query("SELECT locator FROM workspace_artifacts").get()).toEqual({
-    locator: descriptor.artifact.locator,
-  });
+  expect(sqlite.query("SELECT locator FROM workspace_artifacts").get()).toEqual(
+    {
+      locator: descriptor.artifact.locator,
+    },
+  );
 });
 
 test("GC retains current plus previous artifacts and deletes nothing when listing or references are ambiguous", async () => {
@@ -355,25 +453,55 @@ test("GC retains current plus previous artifacts and deletes nothing when listin
     { archive: thirdArchive, descriptor: third.descriptor },
     { archive: unpublished, descriptor: pending },
   ]) {
-    expect((await handlePutWorkspaceArtifact(
-      artifactRequest(workspaceId, issued.token, item.descriptor, { method: "PUT", body: item.archive.bytes }),
-      db,
-      bucket,
-      workspaceId,
-    )).status).toBe(200);
+    expect(
+      (
+        await handlePutWorkspaceArtifact(
+          artifactRequest(workspaceId, issued.token, item.descriptor, {
+            method: "PUT",
+            body: item.archive.bytes,
+          }),
+          db,
+          bucket,
+          workspaceId,
+        )
+      ).status,
+    ).toBe(200);
   }
 
-  const rev1 = await publish(db, workspaceId, issued.token, first.state, null, "art-1");
+  const rev1 = await publish(
+    db,
+    workspaceId,
+    issued.token,
+    first.state,
+    null,
+    "art-1",
+  );
   expect(rev1.status).toBe(200);
-  const rev1Body = await rev1.json() as { revisionId: string };
-  const rev2 = await publish(db, workspaceId, issued.token, second.state, rev1Body.revisionId, "art-2");
+  const rev1Body = (await rev1.json()) as { revisionId: string };
+  const rev2 = await publish(
+    db,
+    workspaceId,
+    issued.token,
+    second.state,
+    rev1Body.revisionId,
+    "art-2",
+  );
   expect(rev2.status).toBe(200);
-  const rev2Body = await rev2.json() as { revisionId: string };
-  const rev3 = await publish(db, workspaceId, issued.token, third.state, rev2Body.revisionId, "art-3");
+  const rev2Body = (await rev2.json()) as { revisionId: string };
+  const rev3 = await publish(
+    db,
+    workspaceId,
+    issued.token,
+    third.state,
+    rev2Body.revisionId,
+    "art-3",
+  );
   expect(rev3.status).toBe(200);
 
   const collected = await handlePostWorkspaceArtifactGc(
-    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, { method: "POST" }),
+    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, {
+      method: "POST",
+    }),
     db,
     bucket,
     workspaceId,
@@ -386,41 +514,68 @@ test("GC retains current plus previous artifacts and deletes nothing when listin
   expect(bucket.objects.has(pending.artifact.locator)).toBe(true);
   expect(
     new Set(
-      sqlite.query("SELECT integrity_hash AS hash FROM workspace_artifacts").all().map((row) => (row as { hash: string }).hash),
+      sqlite
+        .query("SELECT integrity_hash AS hash FROM workspace_artifacts")
+        .all()
+        .map((row) => (row as { hash: string }).hash),
     ),
-  ).toEqual(new Set([secondArchive.integrityHash, thirdArchive.integrityHash, unpublished.integrityHash]));
+  ).toEqual(
+    new Set([
+      secondArchive.integrityHash,
+      thirdArchive.integrityHash,
+      unpublished.integrityHash,
+    ]),
+  );
 
   const missingRetained = memoryArtifactBucket();
-  missingRetained.objects.set(second.descriptor.artifact.locator, secondArchive.bytes.slice());
+  missingRetained.objects.set(
+    second.descriptor.artifact.locator,
+    secondArchive.bytes.slice(),
+  );
   const ambiguousMissing = await handlePostWorkspaceArtifactGc(
-    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, { method: "POST" }),
+    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, {
+      method: "POST",
+    }),
     db,
     missingRetained,
     workspaceId,
   );
   expect(ambiguousMissing.status).toBe(409);
-  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get()).toEqual({ count: 3 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get(),
+  ).toEqual({ count: 3 });
 
   const truncated: ArtifactBucket = {
     async put() {},
-    async get() { return null; },
-    async list() { return { keys: [], truncated: true }; },
-    async delete() { throw new Error("must not delete"); },
+    async get() {
+      return null;
+    },
+    async list() {
+      return { keys: [], truncated: true };
+    },
+    async delete() {
+      throw new Error("must not delete");
+    },
   };
   const ambiguousList = await handlePostWorkspaceArtifactGc(
-    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, { method: "POST" }),
+    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, {
+      method: "POST",
+    }),
     db,
     truncated,
     workspaceId,
   );
   expect(ambiguousList.status).toBe(409);
 
-  sqlite.query("UPDATE workspace_artifacts SET locator = ? WHERE integrity_hash = ?").run(
-    "workspaces/other/artifacts/x",
-    thirdArchive.integrityHash,
-  );
+  sqlite
+    .query(
+      "UPDATE workspace_artifacts SET locator = ? WHERE integrity_hash = ?",
+    )
+    .run("workspaces/other/artifacts/x", thirdArchive.integrityHash);
   const ambiguousLocator = await handlePostWorkspaceArtifactGc(
-    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, { method: "POST" }),
+    apiRequest(`/api/v1/workspaces/${workspaceId}/artifacts/gc`, issued.token, {
+      method: "POST",
+    }),
     db,
     bucket,
     workspaceId,
@@ -440,21 +595,33 @@ test("corrupt archives are rejected on transfer and never published", async () =
   corrupt[0] ^= 1;
 
   const upload = await handlePutWorkspaceArtifact(
-    artifactRequest(workspaceId, issued.token, descriptor, { method: "PUT", body: corrupt }),
+    artifactRequest(workspaceId, issued.token, descriptor, {
+      method: "PUT",
+      body: corrupt,
+    }),
     db,
     bucket,
     workspaceId,
   );
   expect(upload.status).toBe(400);
   expect(bucket.objects.size).toBe(0);
-  expect(sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get()).toEqual({ count: 0 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_artifacts").get(),
+  ).toEqual({ count: 0 });
 
-  expect((await handlePutWorkspaceArtifact(
-    artifactRequest(workspaceId, issued.token, descriptor, { method: "PUT", body: archive.bytes }),
-    db,
-    bucket,
-    workspaceId,
-  )).status).toBe(200);
+  expect(
+    (
+      await handlePutWorkspaceArtifact(
+        artifactRequest(workspaceId, issued.token, descriptor, {
+          method: "PUT",
+          body: archive.bytes,
+        }),
+        db,
+        bucket,
+        workspaceId,
+      )
+    ).status,
+  ).toBe(200);
   bucket.objects.set(descriptor.artifact.locator, corrupt);
   const download = await handleGetWorkspaceArtifact(
     artifactRequest(workspaceId, issued.token, descriptor),

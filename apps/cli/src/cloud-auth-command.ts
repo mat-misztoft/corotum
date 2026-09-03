@@ -115,9 +115,7 @@ Code: ${userCode}
 
 function processHomeDir(): string {
   return (
-    process.env.HOME?.trim() ||
-    process.env.USERPROFILE?.trim() ||
-    homedir()
+    process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || homedir()
   );
 }
 

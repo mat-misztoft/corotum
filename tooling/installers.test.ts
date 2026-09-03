@@ -164,9 +164,7 @@ async function runWindowsInstallerFixture(
     const expected = checksums
       .split(/\r?\n/)
       .map((line) =>
-        /^([a-f0-9]{64}) {2}binaries\/corotum-windows-x64\.tar\.gz$/.exec(
-          line,
-        ),
+        /^([a-f0-9]{64}) {2}binaries\/corotum-windows-x64\.tar\.gz$/.exec(line),
       )
       .find((match) => match)?.[1];
     if (!expected) throw new Error("checksums.txt is missing windows-x64");
@@ -283,12 +281,7 @@ describe("official installers", () => {
           expect(result.code).toBe(0);
           expect(result.stdout).toContain("Official Corotum installer");
           expect(result.stdout).toContain("Installed");
-          const dest = join(
-            localAppData,
-            "ToolMirror",
-            "bin",
-            "corotum.exe",
-          );
+          const dest = join(localAppData, "ToolMirror", "bin", "corotum.exe");
           const version = Bun.spawn(["sh", dest, "--version"], {
             stdout: "pipe",
             stderr: "pipe",
@@ -349,14 +342,8 @@ describe("official installers", () => {
       join(work, "archives-tampered"),
       (next) => {
         const junk = new TextEncoder().encode("tampered-archive");
-        next.set(
-          "releases/v0.1.0/binaries/corotum-darwin-arm64.tar.gz",
-          junk,
-        );
-        next.set(
-          "releases/v0.1.0/binaries/corotum-windows-x64.tar.gz",
-          junk,
-        );
+        next.set("releases/v0.1.0/binaries/corotum-darwin-arm64.tar.gz", junk);
+        next.set("releases/v0.1.0/binaries/corotum-windows-x64.tar.gz", junk);
       },
     );
     const bad = startReleaseServer(tampered);

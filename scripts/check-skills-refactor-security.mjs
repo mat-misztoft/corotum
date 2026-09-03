@@ -20,8 +20,11 @@ const test = Bun.spawn(["bun", "test", ...files], {
 const testCode = await test.exited;
 if (testCode !== 0) process.exit(testCode);
 
-const boundaries = Bun.spawn(["bun", "./scripts/check-architecture-boundaries.mjs"], {
-  stdout: "inherit",
-  stderr: "inherit",
-});
+const boundaries = Bun.spawn(
+  ["bun", "./scripts/check-architecture-boundaries.mjs"],
+  {
+    stdout: "inherit",
+    stderr: "inherit",
+  },
+);
 process.exit(await boundaries.exited);

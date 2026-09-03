@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmod,
   cp,
-  mkdtemp,
   mkdir,
+  mkdtemp,
   readdir,
   readFile,
   rm,
@@ -21,7 +21,12 @@ import {
   skillId,
   type V2DesiredState,
 } from "../../core/src/index";
-import { GitStateProvider, GitStorageMigrator, gitTreeHash, V2GitStateProvider } from "./index";
+import {
+  GitStateProvider,
+  GitStorageMigrator,
+  gitTreeHash,
+  V2GitStateProvider,
+} from "./index";
 
 const temporaryDirectories: string[] = [];
 
@@ -41,13 +46,7 @@ async function fixture(): Promise<
   const worktree = join(root, "worktree");
   const bare = join(root, "remote.git");
   await git(["init", "--initial-branch=main", worktree]);
-  await git([
-    "-C",
-    worktree,
-    "config",
-    "user.email",
-    "tests@corotum.invalid",
-  ]);
+  await git(["-C", worktree, "config", "user.email", "tests@corotum.invalid"]);
   await git(["-C", worktree, "config", "user.name", "Corotum tests"]);
   await git(["-C", worktree, "commit", "--allow-empty", "-m", "initial"]);
   await git(["init", "--bare", bare]);
@@ -110,15 +109,60 @@ async function git(args: readonly string[]): Promise<string> {
   return stdout;
 }
 
-function v2State(kind: "source" | "artifact", hash: `sha256:${string}`, integrity = hash): V2DesiredState {
+function v2State(
+  kind: "source" | "artifact",
+  hash: `sha256:${string}`,
+  integrity = hash,
+): V2DesiredState {
   const id = skillId("sk_gitV2");
-  const source = { repository: "https://github.com/example/skills.git", path: "review", ref: "main" };
+  const source = {
+    repository: "https://github.com/example/skills.git",
+    path: "review",
+    ref: "main",
+  };
   return {
-    manifest: { version: 2, skills: [{ id, name: "review", targets: "all", source, resolutionStatus: "RESOLVED" }] },
-    lockfile: { version: 2, skills: [kind === "source"
-      ? { id, name: "review", source: { ...source, revision: "a".repeat(40), contentHash: hash }, materialization: { kind, contentHash: hash } }
-      : { id, name: "review", materialization: { kind, artifact: { kind: "git-tree", contentHash: hash, integrityHash: integrity, locator: `artifacts/${id}/${integrity.slice(7)}`, sizeBytes: 1 } } },
-    ] },
+    manifest: {
+      version: 2,
+      skills: [
+        {
+          id,
+          name: "review",
+          targets: "all",
+          source,
+          resolutionStatus: "RESOLVED",
+        },
+      ],
+    },
+    lockfile: {
+      version: 2,
+      skills: [
+        kind === "source"
+          ? {
+              id,
+              name: "review",
+              source: {
+                ...source,
+                revision: "a".repeat(40),
+                contentHash: hash,
+              },
+              materialization: { kind, contentHash: hash },
+            }
+          : {
+              id,
+              name: "review",
+              materialization: {
+                kind,
+                artifact: {
+                  kind: "git-tree",
+                  contentHash: hash,
+                  integrityHash: integrity,
+                  locator: `artifacts/${id}/${integrity.slice(7)}`,
+                  sizeBytes: 1,
+                },
+              },
+            },
+      ],
+    },
   };
 }
 
@@ -127,8 +171,14 @@ function v2WithRef(hash: `sha256:${string}`, ref: string): V2DesiredState {
   const skill = state.manifest.skills[0]!;
   const lock = state.lockfile.skills[0]!;
   return {
-    manifest: { version: 2, skills: [{ ...skill, source: { ...skill.source!, ref } }] },
-    lockfile: { version: 2, skills: [{ ...lock, source: { ...lock.source!, ref } }] },
+    manifest: {
+      version: 2,
+      skills: [{ ...skill, source: { ...skill.source!, ref } }],
+    },
+    lockfile: {
+      version: 2,
+      skills: [{ ...lock, source: { ...lock.source!, ref } }],
+    },
   };
 }
 
@@ -142,7 +192,10 @@ describe("V2GitStateProvider", () => {
     const pulled = await provider.pullAllowEmpty();
     expect(pulled).toMatchObject({
       revisionId: "",
-      state: { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } },
+      state: {
+        manifest: { version: 2, skills: [] },
+        lockfile: { version: 2, skills: [] },
+      },
     });
     const empty = {
       manifest: { version: 2 as const, skills: [] },
@@ -154,79 +207,284 @@ describe("V2GitStateProvider", () => {
       baseRevision: "",
     });
     expect(pushed.revisionId).toMatch(/^[a-f0-9]{40}$/);
-    expect((await git(["--git-dir", bare, "rev-parse", "HEAD"])).trim()).toMatch(/^[a-f0-9]{40}$/);
+    expect(
+      (await git(["--git-dir", bare, "rev-parse", "HEAD"])).trim(),
+    ).toMatch(/^[a-f0-9]{40}$/);
   });
 
   test("commits v2 state atomically and never writes an artifact for a source lock", async () => {
-    const source = await fixture(); const provider = new V2GitStateProvider(join(source.worktree, "v2-cache"), source.bare);
-    const base = (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(); const hash = `sha256:${"a".repeat(64)}` as const;
-    const pushed = await provider.push({ state: v2State("source", hash), ledger: { version: 2, activeDispositions: {} }, baseRevision: base });
-    const cache = join(source.worktree, "v2-cache", (await readdir(join(source.worktree, "v2-cache")))[0] as string);
-    expect(await readFile(join(cache, "corotum.yaml"), "utf8")).toContain("version: 2");
+    const source = await fixture();
+    const provider = new V2GitStateProvider(
+      join(source.worktree, "v2-cache"),
+      source.bare,
+    );
+    const base = (
+      await git(["-C", source.worktree, "rev-parse", "HEAD"])
+    ).trim();
+    const hash = `sha256:${"a".repeat(64)}` as const;
+    const pushed = await provider.push({
+      state: v2State("source", hash),
+      ledger: { version: 2, activeDispositions: {} },
+      baseRevision: base,
+    });
+    const cache = join(
+      source.worktree,
+      "v2-cache",
+      (await readdir(join(source.worktree, "v2-cache")))[0] as string,
+    );
+    expect(await readFile(join(cache, "corotum.yaml"), "utf8")).toContain(
+      "version: 2",
+    );
     await expect(stat(join(cache, "artifacts"))).rejects.toThrow();
     expect((await provider.pull()).state).toEqual(pushed.state);
   });
 
   test("writes scanner-approved artifact trees and verifies their hashes on readback", async () => {
-    const source = await fixture(); const root = await mkdtemp(join(tmpdir(), "corotum-git-artifact-")); temporaryDirectories.push(root);
-    await writeFile(join(root, "SKILL.md"), "# Review\\n"); await mkdir(join(root, "templates")); await writeFile(join(root, "templates", "x.txt"), "x");
-    const { scanNormalizedContent } = await import("../../skills-adapter/src/normalized-content"); const hash = (await scanNormalizedContent(root)).contentHash; const integrity = await gitTreeHash(root);
-    const provider = new V2GitStateProvider(join(source.worktree, "v2-cache"), source.bare, undefined, async () => undefined); const base = (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim();
-    const pushed = await provider.push({ state: v2State("artifact", hash, integrity), ledger: { version: 2, activeDispositions: { [skillId("sk_old")]: { skillId: skillId("sk_old"), name: "old", disposition: "UNMANAGE", effectiveSequence: 1 } } }, baseRevision: base, artifacts: { [skillId("sk_gitV2")]: root } });
-    expect(pushed.ledger.activeDispositions[skillId("sk_old")]?.disposition).toBe("UNMANAGE");
-    expect((await provider.pull()).state.lockfile.skills[0]?.materialization.kind).toBe("artifact");
-    const cache = join(source.worktree, "v2-cache", (await readdir(join(source.worktree, "v2-cache")))[0] as string);
-    await writeFile(join(cache, "artifacts", skillId("sk_gitV2"), integrity.slice(7), "SKILL.md"), "changed");
-    await expect(provider.pull()).rejects.toThrow("readback verification failed");
+    const source = await fixture();
+    const root = await mkdtemp(join(tmpdir(), "corotum-git-artifact-"));
+    temporaryDirectories.push(root);
+    await writeFile(join(root, "SKILL.md"), "# Review\\n");
+    await mkdir(join(root, "templates"));
+    await writeFile(join(root, "templates", "x.txt"), "x");
+    const { scanNormalizedContent } = await import(
+      "../../skills-adapter/src/normalized-content"
+    );
+    const hash = (await scanNormalizedContent(root)).contentHash;
+    const integrity = await gitTreeHash(root);
+    const provider = new V2GitStateProvider(
+      join(source.worktree, "v2-cache"),
+      source.bare,
+      undefined,
+      async () => undefined,
+    );
+    const base = (
+      await git(["-C", source.worktree, "rev-parse", "HEAD"])
+    ).trim();
+    const pushed = await provider.push({
+      state: v2State("artifact", hash, integrity),
+      ledger: {
+        version: 2,
+        activeDispositions: {
+          [skillId("sk_old")]: {
+            skillId: skillId("sk_old"),
+            name: "old",
+            disposition: "UNMANAGE",
+            effectiveSequence: 1,
+          },
+        },
+      },
+      baseRevision: base,
+      artifacts: { [skillId("sk_gitV2")]: root },
+    });
+    expect(
+      pushed.ledger.activeDispositions[skillId("sk_old")]?.disposition,
+    ).toBe("UNMANAGE");
+    expect(
+      (await provider.pull()).state.lockfile.skills[0]?.materialization.kind,
+    ).toBe("artifact");
+    const cache = join(
+      source.worktree,
+      "v2-cache",
+      (await readdir(join(source.worktree, "v2-cache")))[0] as string,
+    );
+    await writeFile(
+      join(
+        cache,
+        "artifacts",
+        skillId("sk_gitV2"),
+        integrity.slice(7),
+        "SKILL.md",
+      ),
+      "changed",
+    );
+    await expect(provider.pull()).rejects.toThrow(
+      "readback verification failed",
+    );
   });
 
   test("exports only a verified artifact tree as a deterministic archive", async () => {
-    const source = await fixture(); const root = await mkdtemp(join(tmpdir(), "corotum-git-export-")); temporaryDirectories.push(root);
+    const source = await fixture();
+    const root = await mkdtemp(join(tmpdir(), "corotum-git-export-"));
+    temporaryDirectories.push(root);
     await writeFile(join(root, "SKILL.md"), "# Exported\n");
-    const { scanNormalizedContent } = await import("../../skills-adapter/src/normalized-content"); const contentHash = (await scanNormalizedContent(root)).contentHash; const integrityHash = await gitTreeHash(root);
-    const provider = new V2GitStateProvider(join(source.worktree, "v2-cache"), source.bare, undefined, async () => undefined);
-    const pushed = await provider.push({ state: v2State("artifact", contentHash, integrityHash), ledger: { version: 2, activeDispositions: {} }, baseRevision: (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim(), artifacts: { [skillId("sk_gitV2")]: root } });
+    const { scanNormalizedContent } = await import(
+      "../../skills-adapter/src/normalized-content"
+    );
+    const contentHash = (await scanNormalizedContent(root)).contentHash;
+    const integrityHash = await gitTreeHash(root);
+    const provider = new V2GitStateProvider(
+      join(source.worktree, "v2-cache"),
+      source.bare,
+      undefined,
+      async () => undefined,
+    );
+    const pushed = await provider.push({
+      state: v2State("artifact", contentHash, integrityHash),
+      ledger: { version: 2, activeDispositions: {} },
+      baseRevision: (
+        await git(["-C", source.worktree, "rev-parse", "HEAD"])
+      ).trim(),
+      artifacts: { [skillId("sk_gitV2")]: root },
+    });
     const lock = pushed.state.lockfile.skills[0]!;
     const archive = await provider.readArtifact(lock);
     expect(archive.contentHash).toBe(contentHash);
     expect(archive.integrityHash).toMatch(/^sha256:/);
-    await expect(provider.readArtifact({ ...lock, materialization: { ...lock.materialization, artifact: { ...lock.materialization.artifact, contentHash: `sha256:${"b".repeat(64)}` } } })).rejects.toThrow("does not match");
+    await expect(
+      provider.readArtifact({
+        ...lock,
+        materialization: {
+          ...lock.materialization,
+          artifact: {
+            ...lock.materialization.artifact,
+            contentHash: `sha256:${"b".repeat(64)}`,
+          },
+        },
+      }),
+    ).rejects.toThrow("does not match");
   });
 
   test("replays a pending change and preserves an unrelated UNMANAGE tombstone", async () => {
-    const source = await fixture(); const hash = `sha256:${"b".repeat(64)}` as const;
-    const local = new V2GitStateProvider(join(source.worktree, "v2-a"), source.bare);
-    const initial = await local.push({ state: v2State("source", hash), ledger: { version: 2, activeDispositions: {} }, baseRevision: (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim() });
-    const hook = join(source.bare, "hooks", "pre-receive"); await writeFile(hook, "#!/bin/sh\nexit 1\n"); await chmod(hook, 0o755);
-    await expect(local.push({ state: initial.state, ledger: { version: 2, activeDispositions: { [skillId("sk_old")]: { skillId: skillId("sk_old"), name: "old", disposition: "UNMANAGE", effectiveSequence: 1 } } }, baseRevision: initial.revisionId })).rejects.toThrow("waiting to be pushed");
+    const source = await fixture();
+    const hash = `sha256:${"b".repeat(64)}` as const;
+    const local = new V2GitStateProvider(
+      join(source.worktree, "v2-a"),
+      source.bare,
+    );
+    const initial = await local.push({
+      state: v2State("source", hash),
+      ledger: { version: 2, activeDispositions: {} },
+      baseRevision: (
+        await git(["-C", source.worktree, "rev-parse", "HEAD"])
+      ).trim(),
+    });
+    const hook = join(source.bare, "hooks", "pre-receive");
+    await writeFile(hook, "#!/bin/sh\nexit 1\n");
+    await chmod(hook, 0o755);
+    await expect(
+      local.push({
+        state: initial.state,
+        ledger: {
+          version: 2,
+          activeDispositions: {
+            [skillId("sk_old")]: {
+              skillId: skillId("sk_old"),
+              name: "old",
+              disposition: "UNMANAGE",
+              effectiveSequence: 1,
+            },
+          },
+        },
+        baseRevision: initial.revisionId,
+      }),
+    ).rejects.toThrow("waiting to be pushed");
     await rm(hook);
-    const remote = new V2GitStateProvider(join(source.worktree, "v2-b"), source.bare);
-    await remote.push({ state: v2WithRef(hash, "remote"), ledger: { version: 2, activeDispositions: {} }, baseRevision: initial.revisionId });
+    const remote = new V2GitStateProvider(
+      join(source.worktree, "v2-b"),
+      source.bare,
+    );
+    await remote.push({
+      state: v2WithRef(hash, "remote"),
+      ledger: { version: 2, activeDispositions: {} },
+      baseRevision: initial.revisionId,
+    });
     const replayed = await local.pull();
     expect(replayed.state.manifest.skills[0]?.source?.ref).toBe("remote");
-    expect(replayed.ledger.activeDispositions[skillId("sk_old")]?.disposition).toBe("UNMANAGE");
+    expect(
+      replayed.ledger.activeDispositions[skillId("sk_old")]?.disposition,
+    ).toBe("UNMANAGE");
   });
 
   test("replays independent pending artifact content with the remote state", async () => {
-    const source = await fixture(); const hash = `sha256:${"c".repeat(64)}` as const;
-    const root = await mkdtemp(join(tmpdir(), "corotum-git-replay-artifact-")); temporaryDirectories.push(root);
+    const source = await fixture();
+    const hash = `sha256:${"c".repeat(64)}` as const;
+    const root = await mkdtemp(join(tmpdir(), "corotum-git-replay-artifact-"));
+    temporaryDirectories.push(root);
     await writeFile(join(root, "SKILL.md"), "# Local artifact\n");
-    const { scanNormalizedContent } = await import("../../skills-adapter/src/normalized-content"); const contentHash = (await scanNormalizedContent(root)).contentHash; const integrityHash = await gitTreeHash(root);
+    const { scanNormalizedContent } = await import(
+      "../../skills-adapter/src/normalized-content"
+    );
+    const contentHash = (await scanNormalizedContent(root)).contentHash;
+    const integrityHash = await gitTreeHash(root);
     const artifactId = skillId("sk_replayArtifact");
-    const local = new V2GitStateProvider(join(source.worktree, "v2-a"), source.bare, undefined, async () => undefined);
-    const initial = await local.push({ state: v2State("source", hash), ledger: { version: 2, activeDispositions: {} }, baseRevision: (await git(["-C", source.worktree, "rev-parse", "HEAD"])).trim() });
+    const local = new V2GitStateProvider(
+      join(source.worktree, "v2-a"),
+      source.bare,
+      undefined,
+      async () => undefined,
+    );
+    const initial = await local.push({
+      state: v2State("source", hash),
+      ledger: { version: 2, activeDispositions: {} },
+      baseRevision: (
+        await git(["-C", source.worktree, "rev-parse", "HEAD"])
+      ).trim(),
+    });
     const localState: V2DesiredState = {
-      manifest: { version: 2, skills: [...initial.state.manifest.skills, { id: artifactId, name: "local-artifact", targets: "all", resolutionStatus: "RESOLVED" }] },
-      lockfile: { version: 2, skills: [...initial.state.lockfile.skills, { id: artifactId, name: "local-artifact", materialization: { kind: "artifact", artifact: { kind: "git-tree", contentHash, integrityHash, locator: `artifacts/${artifactId}/${integrityHash.slice(7)}`, sizeBytes: 1 } } }] },
+      manifest: {
+        version: 2,
+        skills: [
+          ...initial.state.manifest.skills,
+          {
+            id: artifactId,
+            name: "local-artifact",
+            targets: "all",
+            resolutionStatus: "RESOLVED",
+          },
+        ],
+      },
+      lockfile: {
+        version: 2,
+        skills: [
+          ...initial.state.lockfile.skills,
+          {
+            id: artifactId,
+            name: "local-artifact",
+            materialization: {
+              kind: "artifact",
+              artifact: {
+                kind: "git-tree",
+                contentHash,
+                integrityHash,
+                locator: `artifacts/${artifactId}/${integrityHash.slice(7)}`,
+                sizeBytes: 1,
+              },
+            },
+          },
+        ],
+      },
     };
-    const hook = join(source.bare, "hooks", "pre-receive"); await writeFile(hook, "#!/bin/sh\nexit 1\n"); await chmod(hook, 0o755);
-    await expect(local.push({ state: localState, ledger: { version: 2, activeDispositions: {} }, baseRevision: initial.revisionId, artifacts: { [artifactId]: root } })).rejects.toThrow("waiting to be pushed");
+    const hook = join(source.bare, "hooks", "pre-receive");
+    await writeFile(hook, "#!/bin/sh\nexit 1\n");
+    await chmod(hook, 0o755);
+    await expect(
+      local.push({
+        state: localState,
+        ledger: { version: 2, activeDispositions: {} },
+        baseRevision: initial.revisionId,
+        artifacts: { [artifactId]: root },
+      }),
+    ).rejects.toThrow("waiting to be pushed");
     await rm(hook);
-    const remote = new V2GitStateProvider(join(source.worktree, "v2-b"), source.bare);
-    await remote.push({ state: v2WithRef(hash, "remote"), ledger: { version: 2, activeDispositions: {} }, baseRevision: initial.revisionId });
+    const remote = new V2GitStateProvider(
+      join(source.worktree, "v2-b"),
+      source.bare,
+    );
+    await remote.push({
+      state: v2WithRef(hash, "remote"),
+      ledger: { version: 2, activeDispositions: {} },
+      baseRevision: initial.revisionId,
+    });
     const replayed = await local.pull();
-    expect(replayed.state.manifest.skills.find((skill) => skill.id === skillId("sk_gitV2"))?.source?.ref).toBe("remote");
-    expect(replayed.state.lockfile.skills.find((skill) => skill.id === artifactId)?.materialization.kind).toBe("artifact");
+    expect(
+      replayed.state.manifest.skills.find(
+        (skill) => skill.id === skillId("sk_gitV2"),
+      )?.source?.ref,
+    ).toBe("remote");
+    expect(
+      replayed.state.lockfile.skills.find((skill) => skill.id === artifactId)
+        ?.materialization.kind,
+    ).toBe("artifact");
   });
 });
 

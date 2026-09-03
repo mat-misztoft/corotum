@@ -7,8 +7,8 @@ import {
   checkDocs,
   cliCommandsFromSource,
   documentedToolmirrorCommands,
-  recommendsGlobalInitSource,
   REQUIRED_DOC_FILES,
+  recommendsGlobalInitSource,
   withoutUpgradeSection,
 } from "./docs-check";
 
@@ -41,9 +41,9 @@ describe("docs-check", () => {
   });
 
   test("new-format docs do not recommend legacy write formats or global init --source", () => {
-    expect(recommendsGlobalInitSource("`corotum init --source owner/skills`")).toBe(
-      true,
-    );
+    expect(
+      recommendsGlobalInitSource("`corotum init --source owner/skills`"),
+    ).toBe(true);
     expect(
       recommendsGlobalInitSource(
         "`corotum adopt review --source owner/skills`",

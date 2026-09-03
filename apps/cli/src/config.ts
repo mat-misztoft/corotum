@@ -43,7 +43,10 @@ export const CONFIG_KEYS = [
   "installationId",
   "agents",
 ] as const satisfies readonly ConfigKey[];
-export const SETTABLE_CONFIG_KEYS = ["telemetry", "origin"] as const satisfies readonly ConfigKey[];
+export const SETTABLE_CONFIG_KEYS = [
+  "telemetry",
+  "origin",
+] as const satisfies readonly ConfigKey[];
 
 export const defaultConfig = (): CorotumConfig => ({
   schemaVersion: 1,

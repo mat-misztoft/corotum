@@ -347,7 +347,9 @@ test("security: unsigned webhooks, rate limits, and old CLIs cannot mutate Cloud
     hostedEnv,
   );
   expect(forged.status).toBe(401);
-  expect(await hasHostedCloudAccess(db as never, "user_1", true, launchEnd)).toBe(false);
+  expect(
+    await hasHostedCloudAccess(db as never, "user_1", true, launchEnd),
+  ).toBe(false);
 
   const signed = await handleCreemWebhook(
     new Request("https://corotum.com/api/v1/webhooks/creem", {

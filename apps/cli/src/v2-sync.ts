@@ -26,11 +26,11 @@ import {
   type LocalOperationalStateStore,
   recoverV2LocalOperationalState,
 } from "./local-state";
-import { V2LocalApplyError, type V2LocalApplier } from "./v2-local-applier";
 import type {
   LifecycleRecoveryStore,
   V2LifecycleRecoveryMarker,
 } from "./v2-lifecycle";
+import { type V2LocalApplier, V2LocalApplyError } from "./v2-local-applier";
 
 export type V2SyncEnvelope = Readonly<{
   revisionId: string;
@@ -57,12 +57,14 @@ export type V2SyncSnapshot = Readonly<{
   plan: V2ReconcilePlan;
 }>;
 
-export type V2SyncReportHook = (input: Readonly<{
-  state: LocalOperationalState;
-  snapshot: V2SyncSnapshot;
-  kind: "synced" | "partial";
-  operations: readonly V2SyncOperationResult[];
-}>) => Promise<void>;
+export type V2SyncReportHook = (
+  input: Readonly<{
+    state: LocalOperationalState;
+    snapshot: V2SyncSnapshot;
+    kind: "synced" | "partial";
+    operations: readonly V2SyncOperationResult[];
+  }>,
+) => Promise<void>;
 
 export type V2InspectResult =
   | Readonly<{
@@ -178,8 +180,7 @@ export class V2SyncService {
       operations.push(await this.applyOperation(operation, desired));
     }
 
-    const persisted =
-      (await this.stateStore.load()) ?? recovered;
+    const persisted = (await this.stateStore.load()) ?? recovered;
     const verifiedActual = await discoverV2ActualState({
       desired: desired.state,
       state: persisted,
@@ -197,7 +198,9 @@ export class V2SyncService {
         item.classification,
       ),
     );
-    const failedOp = operations.some((operation) => operation.status !== "SUCCESS");
+    const failedOp = operations.some(
+      (operation) => operation.status !== "SUCCESS",
+    );
     const synced =
       !failedOp && !blocking && verifiedPlan.operations.length === 0;
     const nextState: LocalOperationalState = {
@@ -211,7 +214,9 @@ export class V2SyncService {
     if (
       recovery &&
       !nextState.skills[recovery.skillId] &&
-      !desired.state.manifest.skills.some((skill) => skill.id === recovery.skillId)
+      !desired.state.manifest.skills.some(
+        (skill) => skill.id === recovery.skillId,
+      )
     ) {
       await this.options.recovery?.clear();
     }
@@ -224,7 +229,12 @@ export class V2SyncService {
     const kind = synced ? "synced" : "partial";
     let reportError: string | undefined;
     try {
-      await this.options.reporter?.({ state: nextState, snapshot, kind, operations });
+      await this.options.reporter?.({
+        state: nextState,
+        snapshot,
+        kind,
+        operations,
+      });
     } catch (error) {
       reportError =
         error instanceof Error ? error.message : "Cloud sync report failed.";
@@ -291,7 +301,10 @@ export class V2SyncService {
       }
       return { kind: operation.kind, skillId, status: "SUCCESS" };
     } catch (error) {
-      if (error instanceof MaterializationError && error.code === "AUTH_REQUIRED") {
+      if (
+        error instanceof MaterializationError &&
+        error.code === "AUTH_REQUIRED"
+      ) {
         return {
           kind: operation.kind,
           skillId,
@@ -312,7 +325,9 @@ export class V2SyncService {
         skillId,
         status: "ERROR",
         error:
-          error instanceof Error ? error.message : "Reconcile operation failed.",
+          error instanceof Error
+            ? error.message
+            : "Reconcile operation failed.",
       };
     }
   }
@@ -335,8 +350,8 @@ export async function discoverV2ActualState(
 
   for (const lock of input.desired.lockfile.skills) {
     const recorded = input.state.skills[lock.id];
-    const canonicalPath = recorded?.canonicalPath ??
-      join(input.skillsStoragePath, lock.name);
+    const canonicalPath =
+      recorded?.canonicalPath ?? join(input.skillsStoragePath, lock.name);
     const contentHash = await scanHash(canonicalPath);
     const managed = recorded !== undefined;
     const targets = await collectTargets({
@@ -403,7 +418,9 @@ export function v2SyncStatusPayload(
     };
   }
   const classifications = result.snapshot.plan.classifications;
-  const drifted = classifications.some((item) => item.classification === "DRIFTED");
+  const drifted = classifications.some(
+    (item) => item.classification === "DRIFTED",
+  );
   const conflict = classifications.some(
     (item) => item.classification === "LOCAL_CONFLICT",
   );
@@ -423,7 +440,11 @@ export function v2SyncStatusPayload(
     outcome = "AUTH_REQUIRED";
   } else if ("kind" in result && result.kind === "synced") status = "SYNCED";
   else if ("kind" in result && result.kind === "partial") {
-    status = conflict ? "LOCAL_CONFLICT" : drifted ? "DRIFTED" : "PARTIALLY_SYNCED";
+    status = conflict
+      ? "LOCAL_CONFLICT"
+      : drifted
+        ? "DRIFTED"
+        : "PARTIALLY_SYNCED";
     outcome = conflict ? "CONFLICT" : "PARTIAL_SUCCESS";
   } else if (pendingPush) {
     status = "PENDING_PUSH";
@@ -452,23 +473,29 @@ export function v2SyncStatusPayload(
   };
 }
 
-async function collectTargets(input: Readonly<{
-  skillId: SkillId;
-  name: string;
-  canonicalPath: string;
-  recorded?: LocalOperationalState["skills"][SkillId];
-  desired: V2DesiredState;
-  homeDir: string;
-  enabledAgentIds: readonly AgentId[];
-  adapters: readonly AgentAdapter[];
-}>): Promise<readonly ActualTargetState[]> {
+async function collectTargets(
+  input: Readonly<{
+    skillId: SkillId;
+    name: string;
+    canonicalPath: string;
+    recorded?: LocalOperationalState["skills"][SkillId];
+    desired: V2DesiredState;
+    homeDir: string;
+    enabledAgentIds: readonly AgentId[];
+    adapters: readonly AgentAdapter[];
+  }>,
+): Promise<readonly ActualTargetState[]> {
   const seen = new Map<string, ActualTargetState>();
   if (input.recorded) {
     for (const target of Object.values(input.recorded.targets)) {
       seen.set(`${target.agentId}\0${target.path}`, {
         agentId: target.agentId,
         path: target.path,
-        contentHash: await targetHash(target.path, input.canonicalPath, target.mode),
+        contentHash: await targetHash(
+          target.path,
+          input.canonicalPath,
+          target.mode,
+        ),
         expectedContentHash: target.expectedHash,
         managed: true,
       });
@@ -482,7 +509,9 @@ async function collectTargets(input: Readonly<{
       manifest.targets,
       input.enabledAgentIds,
     )) {
-      const adapter = input.adapters.find((candidate) => candidate.id === agentId);
+      const adapter = input.adapters.find(
+        (candidate) => candidate.id === agentId,
+      );
       if (!adapter) continue;
       for (const parent of adapter.globalSkillPaths(input.homeDir)) {
         const path = join(parent, input.name);
@@ -500,7 +529,9 @@ async function collectTargets(input: Readonly<{
     }
   }
   return [...seen.values()].sort((left, right) =>
-    `${left.agentId}\0${left.path}`.localeCompare(`${right.agentId}\0${right.path}`),
+    `${left.agentId}\0${left.path}`.localeCompare(
+      `${right.agentId}\0${right.path}`,
+    ),
   );
 }
 

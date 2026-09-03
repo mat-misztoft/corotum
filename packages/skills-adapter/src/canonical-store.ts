@@ -48,8 +48,14 @@ export class CanonicalSkillStore {
   ): Promise<string> {
     skillId(id as string);
     const destination = this.pathFor(name);
-    const staging = join(this.root, `.${basename(destination)}.${crypto.randomUUID()}.staging`);
-    const backup = join(this.root, `.${basename(destination)}.${crypto.randomUUID()}.backup`);
+    const staging = join(
+      this.root,
+      `.${basename(destination)}.${crypto.randomUUID()}.staging`,
+    );
+    const backup = join(
+      this.root,
+      `.${basename(destination)}.${crypto.randomUUID()}.backup`,
+    );
 
     await mkdir(this.root, { recursive: true });
     let replaced = false;
@@ -76,7 +82,9 @@ export class CanonicalSkillStore {
       await cp(source, staging, { errorOnExist: true, recursive: true });
       const actualContentHash = await hashSkillDirectory(staging);
       if (actualContentHash !== expectedContentHash) {
-        throw new CanonicalStoreError("Skill content does not match its expected hash.");
+        throw new CanonicalStoreError(
+          "Skill content does not match its expected hash.",
+        );
       }
       await replaceDirectory(staging, destination, backup);
       replaced = true;
@@ -118,7 +126,10 @@ export async function hashSkillDirectory(directory: string): Promise<string> {
   for (const file of files) {
     const path = relative(directory, file).replaceAll("\\", "/");
     const metadata = await lstat(file);
-    if (!metadata.isFile()) throw new CanonicalStoreError("Skill directories may contain only files and directories.");
+    if (!metadata.isFile())
+      throw new CanonicalStoreError(
+        "Skill directories may contain only files and directories.",
+      );
     hasher.update(`${path}\0`);
     hasher.update(await readFile(file));
     hasher.update("\0");
@@ -129,36 +140,65 @@ export async function hashSkillDirectory(directory: string): Promise<string> {
 async function filesIn(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
   const files: string[] = [];
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+  for (const entry of entries.sort((left, right) =>
+    left.name.localeCompare(right.name),
+  )) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) files.push(...(await filesIn(path)));
     else if (entry.isFile()) files.push(path);
-    else throw new CanonicalStoreError("Skill directories may contain only files and directories.");
+    else
+      throw new CanonicalStoreError(
+        "Skill directories may contain only files and directories.",
+      );
   }
   return files;
 }
 
 async function exists(path: string): Promise<boolean> {
-  try { await lstat(path); return true; } catch { return false; }
+  try {
+    await lstat(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function hasCaseCollision(root: string, name: string): Promise<boolean> {
   const normalized = name.toLocaleLowerCase("en-US");
   const entries = await readdir(root, { withFileTypes: true });
-  return entries.some((entry) =>
-    entry.name !== name && entry.name.toLocaleLowerCase("en-US") === normalized,
+  return entries.some(
+    (entry) =>
+      entry.name !== name &&
+      entry.name.toLocaleLowerCase("en-US") === normalized,
   );
 }
 
-async function replaceDirectory(staging: string, destination: string, backup: string): Promise<void> {
+async function replaceDirectory(
+  staging: string,
+  destination: string,
+  backup: string,
+): Promise<void> {
   let previousMoved = false;
-  try { await rename(destination, backup); previousMoved = true; }
-  catch (error) { if (!isNotFound(error)) throw error; }
-  try { await rename(staging, destination); }
-  catch (error) { if (previousMoved) await rename(backup, destination); throw error; }
+  try {
+    await rename(destination, backup);
+    previousMoved = true;
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+  try {
+    await rename(staging, destination);
+  } catch (error) {
+    if (previousMoved) await rename(backup, destination);
+    throw error;
+  }
   if (previousMoved) await rm(backup, { force: true, recursive: true });
 }
 
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }

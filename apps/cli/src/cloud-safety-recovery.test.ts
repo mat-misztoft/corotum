@@ -172,7 +172,13 @@ async function skillRepo(
 ): Promise<{ repository: string; revision: string; contentHash: string }> {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await writeSkill(join(repository, "skills", name), body);
   await git(["-C", repository, "add", "."]);
@@ -180,9 +186,8 @@ async function skillRepo(
   return {
     repository,
     revision: await git(["-C", repository, "rev-parse", "HEAD"]),
-    contentHash: (
-      await scanNormalizedContent(join(repository, "skills", name))
-    ).contentHash,
+    contentHash: (await scanNormalizedContent(join(repository, "skills", name)))
+      .contentHash,
   };
 }
 
@@ -433,7 +438,9 @@ describe("Cloud safety and recovery", () => {
           env,
         );
         expect(status.code).toBe(ExitCode.GENERAL_ERROR);
-        expect(combined(status)).toContain("Hosted Cloud subscription required");
+        expect(combined(status)).toContain(
+          "Hosted Cloud subscription required",
+        );
         expect(combined(status)).not.toContain(deviceToken);
 
         const added = await spawnCli(
@@ -485,7 +492,10 @@ describe("Cloud safety and recovery", () => {
           env,
         );
         expect(installed.json?.status).toBe("SYNCED");
-        await writeFile(join(namedSkill(home, "notes"), "SKILL.md"), "# Drifted\n");
+        await writeFile(
+          join(namedSkill(home, "notes"), "SKILL.md"),
+          "# Drifted\n",
+        );
         const drifted = await spawnCli(
           home,
           ["--json", "--non-interactive", "status"],
@@ -675,15 +685,20 @@ describe("Cloud safety and recovery", () => {
           sourceState("sk_classified0001", "classified", classified),
           "rev_private",
         );
-        await writeSkill(namedSkill(home, "classified"), "# Local classified\n");
+        await writeSkill(
+          namedSkill(home, "classified"),
+          "# Local classified\n",
+        );
         const auth = await spawnCli(
           home,
           ["--json", "--non-interactive", "sync"],
           env,
         );
-        expect(["AUTH_REQUIRED", "PARTIALLY_SYNCED", "LOCAL_CONFLICT"]).toContain(
-          auth.json?.status,
-        );
+        expect([
+          "AUTH_REQUIRED",
+          "PARTIALLY_SYNCED",
+          "LOCAL_CONFLICT",
+        ]).toContain(auth.json?.status);
         expect(
           await readFile(
             join(namedSkill(home, "classified"), "SKILL.md"),

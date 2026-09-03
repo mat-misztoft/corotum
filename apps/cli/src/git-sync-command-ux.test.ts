@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -142,7 +149,13 @@ async function skillRepo(
 ): Promise<{ repository: string; contentHash: string }> {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await writeSkill(join(repository, "skills", name), body);
   await git(["-C", repository, "add", "."]);
@@ -214,9 +227,16 @@ describe("corotum config Git Sync UX", () => {
         },
       });
 
-      const implicit = await run(home, ["--json", "--non-interactive", "config"]);
+      const implicit = await run(home, [
+        "--json",
+        "--non-interactive",
+        "config",
+      ]);
       expect(implicit.code).toBe(0);
-      expect(implicit.json).toMatchObject({ outcome: "SUCCESS", config: { mode: "git" } });
+      expect(implicit.json).toMatchObject({
+        outcome: "SUCCESS",
+        config: { mode: "git" },
+      });
 
       const repo = await run(home, [
         "--json",
@@ -295,7 +315,9 @@ describe("corotum config Git Sync UX", () => {
         "https://example.test/other.git",
       ]);
       expect(readonly.code).toBe(ExitCode.INVALID_CONFIG);
-      expect(String(readonly.json?.error ?? readonly.stderr)).toMatch(/read-only/i);
+      expect(String(readonly.json?.error ?? readonly.stderr)).toMatch(
+        /read-only/i,
+      );
 
       const unknown = await run(home, [
         "--json",
@@ -305,7 +327,9 @@ describe("corotum config Git Sync UX", () => {
         "not-a-key",
       ]);
       expect(unknown.code).toBe(ExitCode.INVALID_CONFIG);
-      expect(String(unknown.json?.error ?? unknown.stderr)).toContain("Unknown config key");
+      expect(String(unknown.json?.error ?? unknown.stderr)).toContain(
+        "Unknown config key",
+      );
 
       const emptyHome = join(root, "empty");
       const emptyList = await run(emptyHome, [
@@ -337,16 +361,21 @@ describe("Git Sync command failures", () => {
         "status",
       ]);
       expect(uninitialized.code).toBe(ExitCode.INVALID_CONFIG);
-      expect(String(uninitialized.json?.error ?? uninitialized.stderr)).toContain(
-        "corotum init",
-      );
+      expect(
+        String(uninitialized.json?.error ?? uninitialized.stderr),
+      ).toContain("corotum init");
 
       const remote = await stateRemote(root);
       expect((await initGit(home, remote)).code).toBe(0);
 
       const missing = await run(
         home,
-        ["--json", "--non-interactive", "add", "https://example.test/skills.git"],
+        [
+          "--json",
+          "--non-interactive",
+          "add",
+          "https://example.test/skills.git",
+        ],
         { PATH: join(root, "empty-bin") },
       );
       expect(missing.code).toBe(ExitCode.GENERAL_ERROR);
@@ -389,13 +418,13 @@ describe("Git Sync command failures", () => {
         authBin,
         "fatal: Authentication failed for 'https://example.test/repo.git'",
       );
-      const auth = await run(
-        home,
-        ["--json", "--non-interactive", "sync"],
-        { PATH: authBin },
-      );
+      const auth = await run(home, ["--json", "--non-interactive", "sync"], {
+        PATH: authBin,
+      });
       expect(auth.code).toBe(ExitCode.AUTH_REQUIRED);
-      expect(String(auth.json?.error ?? auth.stderr)).toMatch(/authentication/i);
+      expect(String(auth.json?.error ?? auth.stderr)).toMatch(
+        /authentication/i,
+      );
     },
     timeout,
   );
@@ -412,7 +441,9 @@ describe("Git Sync command lifecycle", () => {
       const home = join(root, "home");
 
       expect((await initGit(home, remote)).code).toBe(0);
-      expect(JSON.parse(await readFile(paths(home).configFile, "utf8"))).toMatchObject({
+      expect(
+        JSON.parse(await readFile(paths(home).configFile, "utf8")),
+      ).toMatchObject({
         mode: "git",
         agents: {},
       });
@@ -428,10 +459,13 @@ describe("Git Sync command lifecycle", () => {
         "main",
       ]);
       expect(addedNotes.code).toBe(0);
-      expect(addedNotes.json).toMatchObject({ outcome: "SUCCESS", status: "ADDED" });
-      expect(await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8")).toBe(
-        "# Notes\n",
-      );
+      expect(addedNotes.json).toMatchObject({
+        outcome: "SUCCESS",
+        status: "ADDED",
+      });
+      expect(
+        await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Notes\n");
 
       const addedTasks = await run(home, [
         "--json",
@@ -464,7 +498,10 @@ describe("Git Sync command lifecycle", () => {
         "--check",
       ]);
       expect(checked.code).toBe(0);
-      expect(checked.json).toMatchObject({ outcome: "SUCCESS", status: "CHECKED" });
+      expect(checked.json).toMatchObject({
+        outcome: "SUCCESS",
+        status: "CHECKED",
+      });
       const checkedSkills = checked.json?.skills as
         | readonly { name: string; status: string }[]
         | undefined;
@@ -472,12 +509,20 @@ describe("Git Sync command lifecycle", () => {
         "notes",
         "tasks",
       ]);
-      expect(checkedSkills?.every((skill) => skill.status === "UP_TO_DATE")).toBe(
-        true,
-      );
-      const revisionBeforeCheck = await git(["--git-dir", remote, "rev-parse", "HEAD"]);
+      expect(
+        checkedSkills?.every((skill) => skill.status === "UP_TO_DATE"),
+      ).toBe(true);
+      const revisionBeforeCheck = await git([
+        "--git-dir",
+        remote,
+        "rev-parse",
+        "HEAD",
+      ]);
 
-      await writeSkill(join(notes.repository, "skills", "notes"), "# Notes v2\n");
+      await writeSkill(
+        join(notes.repository, "skills", "notes"),
+        "# Notes v2\n",
+      );
       await git(["-C", notes.repository, "add", "."]);
       await git(["-C", notes.repository, "commit", "-m", "notes v2"]);
       await git(["-C", notes.repository, "tag", "v2"]);
@@ -490,15 +535,15 @@ describe("Git Sync command lifecycle", () => {
         "notes",
       ]);
       expect(available.json).toMatchObject({ status: "CHECKED" });
-      expect(
-        (available.json?.skills as { status: string }[])[0]?.status,
-      ).toBe("UPDATE_AVAILABLE");
+      expect((available.json?.skills as { status: string }[])[0]?.status).toBe(
+        "UPDATE_AVAILABLE",
+      );
       expect(await git(["--git-dir", remote, "rev-parse", "HEAD"])).toBe(
         revisionBeforeCheck,
       );
-      expect(await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8")).toBe(
-        "# Notes\n",
-      );
+      expect(
+        await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Notes\n");
 
       const updatedOne = await run(home, [
         "--json",
@@ -508,12 +553,12 @@ describe("Git Sync command lifecycle", () => {
       ]);
       expect(updatedOne.code).toBe(0);
       expect(updatedOne.json).toMatchObject({ status: "UPDATED" });
-      expect(await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8")).toBe(
-        "# Notes v2\n",
-      );
-      expect(await readFile(join(namedSkill(home, "tasks"), "SKILL.md"), "utf8")).toBe(
-        "# Tasks\n",
-      );
+      expect(
+        await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Notes v2\n");
+      expect(
+        await readFile(join(namedSkill(home, "tasks"), "SKILL.md"), "utf8"),
+      ).toBe("# Tasks\n");
 
       const updatedAll = await run(home, [
         "--json",
@@ -532,11 +577,14 @@ describe("Git Sync command lifecycle", () => {
       ]);
       expect(setRef.code).toBe(0);
       expect(setRef.json).toMatchObject({ status: "SET_REF", ref: "v2" });
-      expect(await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8")).toBe(
-        "# Notes v2\n",
-      );
+      expect(
+        await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Notes v2\n");
 
-      await writeFile(join(namedSkill(home, "notes"), "SKILL.md"), "# drifted\n");
+      await writeFile(
+        join(namedSkill(home, "notes"), "SKILL.md"),
+        "# drifted\n",
+      );
       const restored = await run(home, [
         "--json",
         "--non-interactive",
@@ -544,9 +592,9 @@ describe("Git Sync command lifecycle", () => {
         "notes",
       ]);
       expect(restored.code).toBe(0);
-      expect(await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8")).toBe(
-        "# Notes v2\n",
-      );
+      expect(
+        await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Notes v2\n");
 
       const unmanaged = await run(home, [
         "--json",
@@ -555,9 +603,9 @@ describe("Git Sync command lifecycle", () => {
         "tasks",
       ]);
       expect(unmanaged.code).toBe(0);
-      expect(await readFile(join(namedSkill(home, "tasks"), "SKILL.md"), "utf8")).toBe(
-        "# Tasks\n",
-      );
+      expect(
+        await readFile(join(namedSkill(home, "tasks"), "SKILL.md"), "utf8"),
+      ).toBe("# Tasks\n");
 
       const removed = await run(home, [
         "--json",
@@ -568,7 +616,10 @@ describe("Git Sync command lifecycle", () => {
       expect(removed.code).toBe(0);
 
       const adoptHome = join(root, "adopt-home");
-      expect((await initGit(adoptHome, await stateRemote(join(root, "adopt-state")))).code).toBe(0);
+      expect(
+        (await initGit(adoptHome, await stateRemote(join(root, "adopt-state"))))
+          .code,
+      ).toBe(0);
       await writeSkill(namedSkill(adoptHome, "notes"), "# Local notes\n");
       const adopted = await run(adoptHome, [
         "--json",
@@ -584,7 +635,10 @@ describe("Git Sync command lifecycle", () => {
       expect(adopted.code).toBe(0);
       expect(adopted.json).toMatchObject({ status: "ADOPTED" });
       expect(
-        await readFile(join(namedSkill(adoptHome, "notes"), "SKILL.md"), "utf8"),
+        await readFile(
+          join(namedSkill(adoptHome, "notes"), "SKILL.md"),
+          "utf8",
+        ),
       ).toBe("# Local notes\n");
     },
     timeout,

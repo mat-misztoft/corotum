@@ -1,4 +1,12 @@
-import { cp, lstat, mkdir, realpath, rename, rm, symlink } from "node:fs/promises";
+import {
+  cp,
+  lstat,
+  mkdir,
+  realpath,
+  rename,
+  rm,
+  symlink,
+} from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 import type { AgentTargets, SkillId } from "../../core/src/index";
@@ -133,12 +141,17 @@ export class AgentTargetManager {
 
         try {
           await this.fileSystem.makeDirectory(parent);
-          const mode = await this.replaceExposure(input.canonicalPath, path, pathExists);
+          const mode = await this.replaceExposure(
+            input.canonicalPath,
+            path,
+            pathExists,
+          );
           // Copy fallback must record the bytes it actually wrote, rather than
           // trusting an input hash that may have become stale before exposure.
-          const expectedHash = mode === "copy"
-            ? await hashSkillDirectory(path)
-            : input.expectedContentHash;
+          const expectedHash =
+            mode === "copy"
+              ? await hashSkillDirectory(path)
+              : input.expectedContentHash;
           owned.set(ownershipKey({ skillId: input.skillId, agentId, path }), {
             skillId: input.skillId,
             agentId,
@@ -324,7 +337,8 @@ export class AgentTargetManager {
     }
     try {
       return (
-        (await realpath(target.path)) === (await realpath(target.canonicalPath)) &&
+        (await realpath(target.path)) ===
+          (await realpath(target.canonicalPath)) &&
         (await hashSkillDirectory(target.canonicalPath)) === target.expectedHash
       );
     } catch {

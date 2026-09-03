@@ -22,20 +22,6 @@ export {
   IDEMPOTENCY_KEY_HEADER,
 } from "./headers";
 export {
-  V2CloudProviderError,
-  V2SaaSProvider,
-  type V2CloudPushInput,
-  type V2CloudStateEnvelope,
-  type V2SaaSProviderOptions,
-} from "./v2-provider";
-export {
-  V2CloudNormalSync,
-  type ApplicableTarget,
-  type LastVerifiedLocalState,
-  type V2CloudSkillResult,
-  type V2CloudSyncResult,
-} from "./v2-sync";
-export {
   DEVICE_SYNC_STATUSES,
   DEVICE_TARGET_STATUSES,
   DEVICE_UPDATE_STATUSES,
@@ -49,6 +35,20 @@ export {
   type PostDeviceSyncReportOptions,
   postDeviceSyncReport,
 } from "./sync-report";
+export {
+  V2CloudProviderError,
+  type V2CloudPushInput,
+  type V2CloudStateEnvelope,
+  V2SaaSProvider,
+  type V2SaaSProviderOptions,
+} from "./v2-provider";
+export {
+  type ApplicableTarget,
+  type LastVerifiedLocalState,
+  V2CloudNormalSync,
+  type V2CloudSkillResult,
+  type V2CloudSyncResult,
+} from "./v2-sync";
 /** Provider-local stand-in for a Cloud workspace that has no revision yet. */
 export const UNINITIALIZED_CLOUD_REVISION = revisionId("rev_uninitialized");
 

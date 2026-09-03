@@ -2,9 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-
-import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 import { ARTIFACT_DESCRIPTOR_HEADER } from "../../../packages/saas-provider/src/index";
+import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 import { ExitCode } from "./cli-contracts";
 import { defaultConfig } from "./config";
 import { resolvePlatformPaths } from "./platform";
@@ -155,7 +154,13 @@ async function skillRepo(
 ): Promise<{ repository: string; revision: string; contentHash: string }> {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await mkdir(join(repository, "skills", name), { recursive: true });
   await writeFile(join(repository, "skills", name, "SKILL.md"), body);
@@ -164,9 +169,8 @@ async function skillRepo(
   return {
     repository,
     revision: await git(["-C", repository, "rev-parse", "HEAD"]),
-    contentHash: (
-      await scanNormalizedContent(join(repository, "skills", name))
-    ).contentHash,
+    contentHash: (await scanNormalizedContent(join(repository, "skills", name)))
+      .contentHash,
   };
 }
 
@@ -193,7 +197,10 @@ async function seedLogin(home: string): Promise<void> {
   });
 }
 
-async function seedCloudHome(home: string, options?: { token?: string | null }) {
+async function seedCloudHome(
+  home: string,
+  options?: { token?: string | null },
+) {
   await writeJson(paths(home).configFile, {
     ...defaultConfig(),
     mode: "cloud",
@@ -326,7 +333,10 @@ function startCloudServer(options?: {
         if (request.method === "GET") {
           const bytes = artifacts.get(locator);
           if (!bytes) {
-            return Response.json({ error: "Artifact object is missing." }, { status: 404 });
+            return Response.json(
+              { error: "Artifact object is missing." },
+              { status: 404 },
+            );
           }
           return new Response(bytes, {
             status: 200,
@@ -356,7 +366,13 @@ describe("real corotum migrate CLI", () => {
       const root = await temp("refuse");
       const remote = await stateRemote(root);
       const gitHome = join(root, "git-home");
-      const unmanaged = join(gitHome, ".agents", "skills", "keep-me", "SKILL.md");
+      const unmanaged = join(
+        gitHome,
+        ".agents",
+        "skills",
+        "keep-me",
+        "SKILL.md",
+      );
       await mkdir(dirname(unmanaged), { recursive: true });
       await writeFile(unmanaged, "# Unmanaged\n");
       expect(
@@ -688,12 +704,16 @@ describe("real corotum migrate CLI", () => {
       const remote = await stateRemote(root);
       const publicSkill = await skillRepo(root, "public", "# Public locked\n");
       const home = join(root, "home");
-      await mkdir(join(home, ".agents", "skills", "custom"), { recursive: true });
+      await mkdir(join(home, ".agents", "skills", "custom"), {
+        recursive: true,
+      });
       await writeFile(
         join(home, ".agents", "skills", "custom", "SKILL.md"),
         "# Custom artifact\n",
       );
-      await mkdir(join(home, ".agents", "skills", "keep-me"), { recursive: true });
+      await mkdir(join(home, ".agents", "skills", "keep-me"), {
+        recursive: true,
+      });
       await writeFile(
         join(home, ".agents", "skills", "keep-me", "SKILL.md"),
         "# Unmanaged stays\n",
@@ -743,13 +763,19 @@ describe("real corotum migrate CLI", () => {
         );
         expect(toCloud.code).toBe(ExitCode.SUCCESS);
         expect((await readConfig(home)).mode).toBe("cloud");
-        expect(await readFile(join(home, ".agents", "skills", "keep-me", "SKILL.md"), "utf8")).toBe(
-          "# Unmanaged stays\n",
-        );
+        expect(
+          await readFile(
+            join(home, ".agents", "skills", "keep-me", "SKILL.md"),
+            "utf8",
+          ),
+        ).toBe("# Unmanaged stays\n");
         const cloudSkills = cloud.state().lockfile.skills as Array<{
           name: string;
           source?: { repository: string; revision: string };
-          materialization: { kind: string; artifact?: { kind: string; locator: string } };
+          materialization: {
+            kind: string;
+            artifact?: { kind: string; locator: string };
+          };
         }>;
         const publicLock = cloudSkills.find((skill) => skill.name === "public");
         const customLock = cloudSkills.find((skill) => skill.name === "custom");
@@ -785,9 +811,12 @@ describe("real corotum migrate CLI", () => {
         const config = await readConfig(home);
         expect(config.mode).toBe("git");
         expect(config.gitRepository).toBe(backRemote);
-        expect(await readFile(join(home, ".agents", "skills", "keep-me", "SKILL.md"), "utf8")).toBe(
-          "# Unmanaged stays\n",
-        );
+        expect(
+          await readFile(
+            join(home, ".agents", "skills", "keep-me", "SKILL.md"),
+            "utf8",
+          ),
+        ).toBe("# Unmanaged stays\n");
         const tracked = await git([
           "--git-dir",
           backRemote,
@@ -808,8 +837,12 @@ describe("real corotum migrate CLI", () => {
             materialization: { kind: string; artifact?: { kind: string } };
           }>;
         };
-        const backPublic = lockfile.skills.find((skill) => skill.name === "public");
-        const backCustom = lockfile.skills.find((skill) => skill.name === "custom");
+        const backPublic = lockfile.skills.find(
+          (skill) => skill.name === "public",
+        );
+        const backCustom = lockfile.skills.find(
+          (skill) => skill.name === "custom",
+        );
         expect(backPublic?.source?.repository).toBe(publicSkill.repository);
         expect(backPublic?.source?.revision).toBe(publicSkill.revision);
         expect(backCustom?.materialization.artifact?.kind).toBe("git-tree");

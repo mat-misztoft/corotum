@@ -10,10 +10,7 @@ import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canoni
 import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { CLI_VERSION, type CliIo } from "./cli";
-import {
-  CloudAuthError,
-  resolveCloudOrigin,
-} from "./cloud-auth";
+import { CloudAuthError, resolveCloudOrigin } from "./cloud-auth";
 import {
   ConfigStore,
   type CorotumConfig,
@@ -109,7 +106,13 @@ async function createV2MutationRuntime(
   const enabledAgentIds = Object.entries(config.agents)
     .filter(([, value]) => value.enabled)
     .map(([id]) => id) as AgentId[];
-  const { provider, cloud } = await mutationProvider(program, io, config, storage, paths);
+  const { provider, cloud } = await mutationProvider(
+    program,
+    io,
+    config,
+    storage,
+    paths,
+  );
   const applier = new V2LocalApplier(
     stateStore,
     new CanonicalSkillStore(storage.skillsStoragePath),
@@ -126,7 +129,8 @@ async function createV2MutationRuntime(
                 skill.materialization.kind === "artifact" &&
                 skill.materialization.artifact.locator === locator,
             );
-            if (!lock) throw new Error("Artifact locator is not in desired state.");
+            if (!lock)
+              throw new Error("Artifact locator is not in desired state.");
             return cloud.downloadArtifact(lock);
           }
         : undefined,
@@ -190,7 +194,10 @@ async function mutationProvider(
         };
       },
       push: async (input) => {
-        const archives: Record<string, Awaited<ReturnType<typeof createArtifactArchive>>> = {};
+        const archives: Record<
+          string,
+          Awaited<ReturnType<typeof createArtifactArchive>>
+        > = {};
         const artifacts: Record<string, Uint8Array> = {};
         for (const [id, directory] of Object.entries(input.artifacts ?? {})) {
           const archive = await createArtifactArchive(directory);
@@ -219,4 +226,3 @@ async function mutationProvider(
 function classifyCloudMutationError(error: unknown): Error {
   return classifyCloudInspectError(error);
 }
-

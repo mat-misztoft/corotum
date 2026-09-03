@@ -1,4 +1,13 @@
-import { access, constants, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  constants,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -95,22 +104,19 @@ export function normalizeGitSource(source: string): string {
 
 /** Bun-backed system Git runner. Credentials remain exclusively under Git's control. */
 export const runSystemGit: GitCommandRunner = async ({ args, cwd }) => {
-  const child = Bun.spawn(
-    ["git", "-c", "http.timeout=45", ...args],
-    {
-      cwd,
-      stdin: "ignore",
-      stderr: "pipe",
-      stdout: "pipe",
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
-        GIT_SSH_COMMAND:
-          process.env.GIT_SSH_COMMAND ??
-          "ssh -o BatchMode=yes -o ConnectTimeout=10",
-      },
+  const child = Bun.spawn(["git", "-c", "http.timeout=45", ...args], {
+    cwd,
+    stdin: "ignore",
+    stderr: "pipe",
+    stdout: "pipe",
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_SSH_COMMAND:
+        process.env.GIT_SSH_COMMAND ??
+        "ssh -o BatchMode=yes -o ConnectTimeout=10",
     },
-  );
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).bytes(),
     new Response(child.stderr).text(),
@@ -125,7 +131,9 @@ export async function resolveGitDefaultRef(
   runGit: GitCommandRunner = runSystemGit,
 ): Promise<string> {
   const source = normalizeGitSource(sourceInput);
-  const result = await runGit({ args: ["ls-remote", "--symref", source, "HEAD"] });
+  const result = await runGit({
+    args: ["ls-remote", "--symref", source, "HEAD"],
+  });
   if (result.exitCode !== 0) throw await gitFailure(result.stderr, source);
   const match = new TextDecoder()
     .decode(result.stdout)
@@ -175,7 +183,9 @@ export class GitSkillMaterializer {
   }
 
   /** Resolves follow-ref content using the sanitized normalized hash. */
-  async resolveNormalized(input: ResolveGitSkillInput): Promise<ResolvedGitSkill> {
+  async resolveNormalized(
+    input: ResolveGitSkillInput,
+  ): Promise<ResolvedGitSkill> {
     return this.resolveWithHash(
       input,
       async (directory) => (await scanNormalizedContent(directory)).contentHash,
@@ -231,9 +241,14 @@ export class GitSkillMaterializer {
   }
 
   /** Materializes an immutable v2 source lock without consulting its follow ref. */
-  async materializeLockedSource(lock: LockedGitSource, destination: string): Promise<void> {
-    return this.materializeSource(lock, destination, async (directory) =>
-      (await scanNormalizedContent(directory)).contentHash,
+  async materializeLockedSource(
+    lock: LockedGitSource,
+    destination: string,
+  ): Promise<void> {
+    return this.materializeSource(
+      lock,
+      destination,
+      async (directory) => (await scanNormalizedContent(directory)).contentHash,
     );
   }
 
@@ -451,7 +466,10 @@ function normalizeSkillPath(path: string): string {
   return normalized;
 }
 
-async function publishDirectory(staging: string, destination: string): Promise<void> {
+async function publishDirectory(
+  staging: string,
+  destination: string,
+): Promise<void> {
   const backup = `${destination}.${crypto.randomUUID()}.backup`;
   let moved = false;
   try {
@@ -470,10 +488,18 @@ async function publishDirectory(staging: string, destination: string): Promise<v
 }
 
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
-async function gitFailure(stderr: string, source?: string): Promise<GitSourceError> {
+async function gitFailure(
+  stderr: string,
+  source?: string,
+): Promise<GitSourceError> {
   const message = stderr.trim() || "Git could not access the requested source.";
   if (
     /authentication|authorization|permission denied|could not read username|terminal prompts disabled/i.test(
@@ -501,6 +527,11 @@ async function localSourceIsUnreadable(source: string): Promise<boolean> {
     await access(path, constants.R_OK);
     return false;
   } catch (error) {
-    return typeof error === "object" && error !== null && "code" in error && error.code === "EACCES";
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "EACCES"
+    );
   }
 }

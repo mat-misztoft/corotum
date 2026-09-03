@@ -358,7 +358,9 @@ test("the launch period ends at midnight UTC and then requires a subscription", 
   const { db } = await billingDb();
   expect(isLaunchFreePeriod(launchEnd - 1)).toBe(true);
   expect(isLaunchFreePeriod(launchEnd)).toBe(false);
-  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd - 1)).toBe(true);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd - 1)).toBe(
+    true,
+  );
   expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
 });
 
@@ -389,39 +391,43 @@ test("login and pairing work without entitlement while hosted sync and mutations
   );
   const workspaceId = issued.workspaceId as string;
 
-  const pull = await afterLaunch(() => handleGetWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          "x-toolmirror-device-token": issued.token,
+  const pull = await afterLaunch(() =>
+    handleGetWorkspaceState(
+      new Request(
+        `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
+        {
+          headers: {
+            [CLI_VERSION_HEADER]: "0.1.0",
+            "x-toolmirror-device-token": issued.token,
+          },
         },
-      },
+      ),
+      db,
+      workspaceId,
+      true,
     ),
-    db,
-    workspaceId,
-    true,
-  ));
+  );
   expect(pull.status).toBe(402);
 
-  const push = await afterLaunch(() => handlePutWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        method: "PUT",
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          "x-toolmirror-device-token": issued.token,
-          "content-type": "application/json",
+  const push = await afterLaunch(() =>
+    handlePutWorkspaceState(
+      new Request(
+        `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
+        {
+          method: "PUT",
+          headers: {
+            [CLI_VERSION_HEADER]: "0.1.0",
+            "x-toolmirror-device-token": issued.token,
+            "content-type": "application/json",
+          },
+          body: "{}",
         },
-        body: "{}",
-      },
+      ),
+      db,
+      workspaceId,
+      true,
     ),
-    db,
-    workspaceId,
-    true,
-  ));
+  );
   expect(push.status).toBe(402);
 
   const grant = JSON.stringify({
@@ -440,15 +446,12 @@ test("login and pairing work without entitlement while hosted sync and mutations
     await sign(grant, webhookSecret),
   );
   const entitled = await handleGetWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          "x-toolmirror-device-token": issued.token,
-        },
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        "x-toolmirror-device-token": issued.token,
       },
-    ),
+    }),
     db,
     workspaceId,
     true,
@@ -492,15 +495,12 @@ test("self-hosted Cloud does not require Creem entitlement", async () => {
   );
   const workspaceId = issued.workspaceId as string;
   const pull = await handleGetWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          "x-toolmirror-device-token": issued.token,
-        },
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        "x-toolmirror-device-token": issued.token,
       },
-    ),
+    }),
     db,
     workspaceId,
     false,

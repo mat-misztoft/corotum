@@ -190,23 +190,20 @@ test("an authenticated device can report only its locally verified applied revis
   const workspaceId = first.workspaceId as string;
 
   const created = await handlePutWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        method: "PUT",
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          [DEVICE_TOKEN_HEADER]: first.token,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          state: desired,
-          baseRevision: null,
-          idempotencyKey: "key-1",
-          transition,
-        }),
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      method: "PUT",
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        [DEVICE_TOKEN_HEADER]: first.token,
+        "content-type": "application/json",
       },
-    ),
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: null,
+        idempotencyKey: "key-1",
+        transition,
+      }),
+    }),
     db,
     workspaceId,
   );
@@ -262,23 +259,20 @@ test("a report cannot change another device or claim an unreported device is syn
   const second = await pairDevice(db, sqlite, "laptop", 2_000);
   const workspaceId = first.workspaceId as string;
   const created = await handlePutWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        method: "PUT",
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          [DEVICE_TOKEN_HEADER]: first.token,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          state: desired,
-          baseRevision: null,
-          idempotencyKey: "key-1",
-          transition,
-        }),
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      method: "PUT",
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        [DEVICE_TOKEN_HEADER]: first.token,
+        "content-type": "application/json",
       },
-    ),
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: null,
+        idempotencyKey: "key-1",
+        transition,
+      }),
+    }),
     db,
     workspaceId,
   );
@@ -334,16 +328,18 @@ test("a report cannot change another device or claim an unreported device is syn
 test("hosted Cloud sync-report requires entitlement while self-host does not", async () => {
   const { sqlite, db } = await reportDb();
   const issued = await pairDevice(db, sqlite, "studio", 1_000);
-  const denied = await afterLaunch(() => handlePostDeviceSyncReport(
-    reportRequest(issued.deviceId, issued.token, {
-      appliedRevisionId: null,
-      syncStatus: "ERROR",
-      lastErrorCode: "DEVICE_ERROR",
-    }),
-    db,
-    issued.deviceId,
-    true,
-  ));
+  const denied = await afterLaunch(() =>
+    handlePostDeviceSyncReport(
+      reportRequest(issued.deviceId, issued.token, {
+        appliedRevisionId: null,
+        syncStatus: "ERROR",
+        lastErrorCode: "DEVICE_ERROR",
+      }),
+      db,
+      issued.deviceId,
+      true,
+    ),
+  );
   expect(denied.status).toBe(402);
 
   const allowed = await handlePostDeviceSyncReport(
@@ -412,23 +408,20 @@ test("reported device/skill/agent outcomes persist in dedicated target rows", as
   const issued = await pairDevice(db, sqlite, "studio", 1_000);
   const workspaceId = issued.workspaceId as string;
   const created = await handlePutWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        method: "PUT",
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          [DEVICE_TOKEN_HEADER]: issued.token,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          state: desired,
-          baseRevision: null,
-          idempotencyKey: "key-1",
-          transition,
-        }),
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      method: "PUT",
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        [DEVICE_TOKEN_HEADER]: issued.token,
+        "content-type": "application/json",
       },
-    ),
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: null,
+        idempotencyKey: "key-1",
+        transition,
+      }),
+    }),
     db,
     workspaceId,
   );
@@ -566,23 +559,20 @@ test("postDeviceSyncReport talks to /sync-report without pulling or executing re
   const issued = await pairDevice(db, sqlite, "studio", 1_000);
   const workspaceId = issued.workspaceId as string;
   const created = await handlePutWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        method: "PUT",
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          [DEVICE_TOKEN_HEADER]: issued.token,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          state: desired,
-          baseRevision: null,
-          idempotencyKey: "key-1",
-          transition,
-        }),
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      method: "PUT",
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        [DEVICE_TOKEN_HEADER]: issued.token,
+        "content-type": "application/json",
       },
-    ),
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: null,
+        idempotencyKey: "key-1",
+        transition,
+      }),
+    }),
     db,
     workspaceId,
   );
@@ -617,15 +607,12 @@ test("postDeviceSyncReport talks to /sync-report without pulling or executing re
   });
 
   const current = await handleGetWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          [DEVICE_TOKEN_HEADER]: issued.token,
-        },
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        [DEVICE_TOKEN_HEADER]: issued.token,
       },
-    ),
+    }),
     db,
     workspaceId,
   );
@@ -645,23 +632,20 @@ test("a SYNCED report for a stale applied revision is stored as BEHIND", async (
   const issued = await pairDevice(db, sqlite, "studio", 1_000);
   const workspaceId = issued.workspaceId as string;
   const first = await handlePutWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        method: "PUT",
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          [DEVICE_TOKEN_HEADER]: issued.token,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          state: desired,
-          baseRevision: null,
-          idempotencyKey: "key-1",
-          transition,
-        }),
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      method: "PUT",
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        [DEVICE_TOKEN_HEADER]: issued.token,
+        "content-type": "application/json",
       },
-    ),
+      body: JSON.stringify({
+        state: desired,
+        baseRevision: null,
+        idempotencyKey: "key-1",
+        transition,
+      }),
+    }),
     db,
     workspaceId,
   );
@@ -671,27 +655,24 @@ test("a SYNCED report for a stale applied revision is stored as BEHIND", async (
     lockfile: { version: 1 as const, skills: [] },
   };
   const second = await handlePutWorkspaceState(
-    new Request(
-      `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
-      {
-        method: "PUT",
-        headers: {
-          [CLI_VERSION_HEADER]: "0.1.0",
-          [DEVICE_TOKEN_HEADER]: issued.token,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          state: empty,
-          baseRevision: revision.revisionId,
-          idempotencyKey: "key-2",
-          transition: {
-            type: "REMOVE",
-            skillId: skill,
-            metadata: {},
-          },
-        }),
+    new Request(`https://corotum.com/api/v1/workspaces/${workspaceId}/state`, {
+      method: "PUT",
+      headers: {
+        [CLI_VERSION_HEADER]: "0.1.0",
+        [DEVICE_TOKEN_HEADER]: issued.token,
+        "content-type": "application/json",
       },
-    ),
+      body: JSON.stringify({
+        state: empty,
+        baseRevision: revision.revisionId,
+        idempotencyKey: "key-2",
+        transition: {
+          type: "REMOVE",
+          skillId: skill,
+          metadata: {},
+        },
+      }),
+    }),
     db,
     workspaceId,
   );

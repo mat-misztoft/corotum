@@ -399,35 +399,86 @@ export type DispositionLedger = Readonly<{
 }>;
 
 const sha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
-const immutableGitRevisionSchema = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
-const segmentSchema = z.string().trim().min(1).refine(
-  (value) => !value.includes("/") && !value.includes("\\") && value !== "." && value !== "..",
-  "A skill name must be one path segment.",
-);
-const sourceMetadataSchema = z.object({ repository: nonEmptyString, path: nonEmptyString, ref: nonEmptyString }).strict();
-const artifactMetadataSchema = z.object({
-  kind: z.enum(["git-tree", "r2-tar-zst"]),
-  contentHash: sha256Schema,
-  integrityHash: sha256Schema,
-  locator: nonEmptyString,
-  sizeBytes: z.number().int().nonnegative(),
-}).strict();
-const v2ManifestSchema = z.object({
-  version: z.literal(2),
-  skills: z.array(z.object({ id: nonEmptyString, name: segmentSchema, targets: targetsSchema, source: sourceMetadataSchema.nullable().optional(), resolutionStatus: z.enum(["PENDING_RESOLUTION", "RESOLVED"]).default("RESOLVED") }).strict()),
-}).strict();
-const v2LockfileSchema = z.object({
-  version: z.literal(2),
-  skills: z.array(z.object({
-    id: nonEmptyString,
-    name: segmentSchema,
-    source: sourceMetadataSchema.extend({ revision: immutableGitRevisionSchema, contentHash: sha256Schema }).strict().optional(),
-    materialization: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("source"), contentHash: sha256Schema }).strict(),
-      z.object({ kind: z.literal("artifact"), artifact: artifactMetadataSchema }).strict(),
-    ]),
-  }).strict()),
-}).strict();
+const immutableGitRevisionSchema = z
+  .string()
+  .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
+const segmentSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(
+    (value) =>
+      !value.includes("/") &&
+      !value.includes("\\") &&
+      value !== "." &&
+      value !== "..",
+    "A skill name must be one path segment.",
+  );
+const sourceMetadataSchema = z
+  .object({
+    repository: nonEmptyString,
+    path: nonEmptyString,
+    ref: nonEmptyString,
+  })
+  .strict();
+const artifactMetadataSchema = z
+  .object({
+    kind: z.enum(["git-tree", "r2-tar-zst"]),
+    contentHash: sha256Schema,
+    integrityHash: sha256Schema,
+    locator: nonEmptyString,
+    sizeBytes: z.number().int().nonnegative(),
+  })
+  .strict();
+const v2ManifestSchema = z
+  .object({
+    version: z.literal(2),
+    skills: z.array(
+      z
+        .object({
+          id: nonEmptyString,
+          name: segmentSchema,
+          targets: targetsSchema,
+          source: sourceMetadataSchema.nullable().optional(),
+          resolutionStatus: z
+            .enum(["PENDING_RESOLUTION", "RESOLVED"])
+            .default("RESOLVED"),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+const v2LockfileSchema = z
+  .object({
+    version: z.literal(2),
+    skills: z.array(
+      z
+        .object({
+          id: nonEmptyString,
+          name: segmentSchema,
+          source: sourceMetadataSchema
+            .extend({
+              revision: immutableGitRevisionSchema,
+              contentHash: sha256Schema,
+            })
+            .strict()
+            .optional(),
+          materialization: z.discriminatedUnion("kind", [
+            z
+              .object({ kind: z.literal("source"), contentHash: sha256Schema })
+              .strict(),
+            z
+              .object({
+                kind: z.literal("artifact"),
+                artifact: artifactMetadataSchema,
+              })
+              .strict(),
+          ]),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 
 function normalizedName(name: string): string {
   return name.normalize("NFC").toLocaleLowerCase("en-US");
@@ -441,32 +492,50 @@ function v2ValidationError(message: string): never {
 export function validateV2DesiredState(input: V2DesiredState): V2DesiredState {
   const manifestResult = v2ManifestSchema.safeParse(input.manifest);
   const lockResult = v2LockfileSchema.safeParse(input.lockfile);
-  if (!manifestResult.success || !lockResult.success) v2ValidationError("Invalid Corotum v2 desired state.");
+  if (!manifestResult.success || !lockResult.success)
+    v2ValidationError("Invalid Corotum v2 desired state.");
   const manifest = manifestResult.data;
   const lockfile = lockResult.data;
   const ids = new Set<string>();
   const names = new Set<string>();
   const manifests = manifest.skills.map((skill) => {
     const id = skillId(skill.id);
-    if (ids.has(id)) v2ValidationError(`manifest contains duplicate skill ID ${id}.`);
+    if (ids.has(id))
+      v2ValidationError(`manifest contains duplicate skill ID ${id}.`);
     ids.add(id);
     const name = normalizedName(skill.name);
-    if (names.has(name)) v2ValidationError(`manifest contains duplicate normalized name ${skill.name}.`);
+    if (names.has(name))
+      v2ValidationError(
+        `manifest contains duplicate normalized name ${skill.name}.`,
+      );
     names.add(name);
-    return { ...skill, id, targets: normalizeTargets(skill.targets) } as V2ManifestSkill;
+    return {
+      ...skill,
+      id,
+      targets: normalizeTargets(skill.targets),
+    } as V2ManifestSkill;
   });
   const manifestById = new Map(manifests.map((skill) => [skill.id, skill]));
   const lockIds = new Set<string>();
   const locks = lockfile.skills.map((lock) => {
     const id = skillId(lock.id);
-    if (lockIds.has(id)) v2ValidationError(`lockfile contains duplicate skill ID ${id}.`);
+    if (lockIds.has(id))
+      v2ValidationError(`lockfile contains duplicate skill ID ${id}.`);
     lockIds.add(id);
     const skill = manifestById.get(id);
     if (!skill) v2ValidationError(`Lock entry ${id} has no manifest skill.`);
-    if (skill.name !== lock.name) v2ValidationError(`Lock entry for ${id} does not match its manifest name.`);
+    if (skill.name !== lock.name)
+      v2ValidationError(
+        `Lock entry for ${id} does not match its manifest name.`,
+      );
     if (lock.materialization.kind === "source") {
-      if (!lock.source || lock.source.contentHash !== lock.materialization.contentHash) {
-        v2ValidationError(`Source materialization for ${id} must match its source hash.`);
+      if (
+        !lock.source ||
+        lock.source.contentHash !== lock.materialization.contentHash
+      ) {
+        v2ValidationError(
+          `Source materialization for ${id} must match its source hash.`,
+        );
       }
       if (
         !skill.source ||
@@ -474,74 +543,131 @@ export function validateV2DesiredState(input: V2DesiredState): V2DesiredState {
         skill.source.path !== lock.source.path ||
         skill.source.ref !== lock.source.ref
       ) {
-        v2ValidationError(`Source materialization for ${id} must match its manifest source.`);
+        v2ValidationError(
+          `Source materialization for ${id} must match its manifest source.`,
+        );
       }
     }
     if (lock.materialization.kind === "artifact" && lock.source) {
-      v2ValidationError(`Artifact materialization for ${id} must not include a source lock.`);
+      v2ValidationError(
+        `Artifact materialization for ${id} must not include a source lock.`,
+      );
     }
     return { ...lock, id } as V2LockedSkill;
   });
   for (const skill of manifests) {
-    if (!lockIds.has(skill.id) && skill.resolutionStatus !== "PENDING_RESOLUTION") v2ValidationError(`Resolved skill ${skill.id} has no lock entry.`);
-    if (lockIds.has(skill.id) && skill.resolutionStatus === "PENDING_RESOLUTION") v2ValidationError(`Pending skill ${skill.id} must not have a lock entry.`);
+    if (
+      !lockIds.has(skill.id) &&
+      skill.resolutionStatus !== "PENDING_RESOLUTION"
+    )
+      v2ValidationError(`Resolved skill ${skill.id} has no lock entry.`);
+    if (
+      lockIds.has(skill.id) &&
+      skill.resolutionStatus === "PENDING_RESOLUTION"
+    )
+      v2ValidationError(
+        `Pending skill ${skill.id} must not have a lock entry.`,
+      );
   }
   return {
-    manifest: { version: 2, skills: manifests.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) },
-    lockfile: { version: 2, skills: locks.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) },
+    manifest: {
+      version: 2,
+      skills: manifests.sort(
+        (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+      ),
+    },
+    lockfile: {
+      version: 2,
+      skills: locks.sort(
+        (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+      ),
+    },
   };
 }
 
 /** Parses a Corotum v2 manifest. */
 export function parseV2Manifest(source: string): V2DesiredState["manifest"] {
   try {
-    const manifest = v2ManifestSchema.parse(parse(source, { maxAliasCount: 0 }));
+    const manifest = v2ManifestSchema.parse(
+      parse(source, { maxAliasCount: 0 }),
+    );
     const ids = new Set<string>();
     const names = new Set<string>();
     const skills = manifest.skills.map((skill) => {
       const id = skillId(skill.id);
-      if (ids.has(id)) v2ValidationError(`manifest contains duplicate skill ID ${id}.`);
+      if (ids.has(id))
+        v2ValidationError(`manifest contains duplicate skill ID ${id}.`);
       ids.add(id);
       const name = normalizedName(skill.name);
-      if (names.has(name)) v2ValidationError(`manifest contains duplicate normalized name ${skill.name}.`);
+      if (names.has(name))
+        v2ValidationError(
+          `manifest contains duplicate normalized name ${skill.name}.`,
+        );
       names.add(name);
-      return { ...skill, id, targets: normalizeTargets(skill.targets) } as V2ManifestSkill;
+      return {
+        ...skill,
+        id,
+        targets: normalizeTargets(skill.targets),
+      } as V2ManifestSkill;
     });
-    return { version: 2, skills: skills.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) };
-  } catch { throw validationError("Invalid corotum.yaml manifest."); }
+    return {
+      version: 2,
+      skills: skills.sort(
+        (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+      ),
+    };
+  } catch {
+    throw validationError("Invalid corotum.yaml manifest.");
+  }
 }
 
 /** Produces deterministic v2 manifest YAML. */
-export function serializeV2Manifest(manifest: V2DesiredState["manifest"]): string {
+export function serializeV2Manifest(
+  manifest: V2DesiredState["manifest"],
+): string {
   const parsed = parseV2Manifest(stringify(manifest));
   return stringify({ version: 2, skills: parsed.skills });
 }
 
 /** Parses and validates a v2 lockfile together with its manifest. */
-export function parseV2Lockfile(source: string, manifest: V2DesiredState["manifest"]): V2DesiredState["lockfile"] {
+export function parseV2Lockfile(
+  source: string,
+  manifest: V2DesiredState["manifest"],
+): V2DesiredState["lockfile"] {
   try {
-    const lockfile = v2LockfileSchema.parse(JSON.parse(source)) as unknown as V2DesiredState["lockfile"];
+    const lockfile = v2LockfileSchema.parse(
+      JSON.parse(source),
+    ) as unknown as V2DesiredState["lockfile"];
     return validateV2DesiredState({ manifest, lockfile }).lockfile;
+  } catch {
+    throw validationError("Invalid corotum.lock lockfile.");
   }
-  catch { throw validationError("Invalid corotum.lock lockfile."); }
 }
 
 /** Produces deterministic v2 lockfile JSON. */
-export function serializeV2Lockfile(lockfile: V2DesiredState["lockfile"]): string {
+export function serializeV2Lockfile(
+  lockfile: V2DesiredState["lockfile"],
+): string {
   const parsed = v2LockfileSchema.parse(lockfile);
   const ids = new Set<string>();
   for (const skill of parsed.skills) {
     const id = skillId(skill.id);
-    if (ids.has(id)) v2ValidationError(`lockfile contains duplicate skill ID ${id}.`);
+    if (ids.has(id))
+      v2ValidationError(`lockfile contains duplicate skill ID ${id}.`);
     ids.add(id);
     if (
       skill.materialization.kind === "source" &&
-      (!skill.source || skill.source.contentHash !== skill.materialization.contentHash)
+      (!skill.source ||
+        skill.source.contentHash !== skill.materialization.contentHash)
     ) {
-      v2ValidationError(`Source materialization for ${id} must match its source hash.`);
+      v2ValidationError(
+        `Source materialization for ${id} must match its source hash.`,
+      );
     }
     if (skill.materialization.kind === "artifact" && skill.source) {
-      v2ValidationError(`Artifact materialization for ${id} must not include a source lock.`);
+      v2ValidationError(
+        `Artifact materialization for ${id} must not include a source lock.`,
+      );
     }
   }
   return `${JSON.stringify({ version: 2, skills: [...parsed.skills].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) }, null, 2)}\n`;
@@ -607,11 +733,14 @@ function normalizeDispositionLedger(input: unknown): DispositionLedger {
   }));
   audit.sort(
     (left, right) =>
-      left.skillId.localeCompare(right.skillId) || left.type.localeCompare(right.type),
+      left.skillId.localeCompare(right.skillId) ||
+      left.type.localeCompare(right.type),
   );
   return {
     version: 2,
-    activeDispositions: Object.fromEntries(entries) as DispositionLedger["activeDispositions"],
+    activeDispositions: Object.fromEntries(
+      entries,
+    ) as DispositionLedger["activeDispositions"],
     ...(audit.length > 0 ? { audit } : {}),
   };
 }
@@ -1031,7 +1160,9 @@ export function planV2Reconcile(
 ): V2ReconcilePlan {
   const desired = validateV2DesiredState(desiredInput);
   const ledger = normalizeDispositionLedger(ledgerInput);
-  const locks = new Map(desired.lockfile.skills.map((skill) => [skill.id, skill]));
+  const locks = new Map(
+    desired.lockfile.skills.map((skill) => [skill.id, skill]),
+  );
   const active = new Set(desired.manifest.skills.map((skill) => skill.id));
   const classifications: ClassifiedSkill[] = [];
   const operations: V2ReconcileOperation[] = [];
@@ -1039,25 +1170,36 @@ export function planV2Reconcile(
   for (const skill of desired.manifest.skills) {
     const local = actual.skills[skill.id];
     if (skill.resolutionStatus === "PENDING_RESOLUTION") {
-      classifications.push({ skillId: skill.id, classification: "PENDING_RESOLUTION" });
+      classifications.push({
+        skillId: skill.id,
+        classification: "PENDING_RESOLUTION",
+      });
       continue;
     }
     const lock = locks.get(skill.id);
-    if (!lock) throw validationError(`Resolved skill ${skill.id} has no lock entry.`);
-    const expectedHash = lock.materialization.kind === "source"
-      ? lock.materialization.contentHash
-      : lock.materialization.artifact.contentHash;
+    if (!lock)
+      throw validationError(`Resolved skill ${skill.id} has no lock entry.`);
+    const expectedHash =
+      lock.materialization.kind === "source"
+        ? lock.materialization.contentHash
+        : lock.materialization.artifact.contentHash;
     let install = false;
     if (!local || local.contentHash === null) {
       classifications.push({ skillId: skill.id, classification: "MISSING" });
       install = true;
     } else if (local.managed && local.contentHash === expectedHash) {
-      classifications.push({ skillId: skill.id, classification: "MANAGED_SYNCED" });
+      classifications.push({
+        skillId: skill.id,
+        classification: "MANAGED_SYNCED",
+      });
     } else if (!local.managed && local.contentHash === expectedHash) {
       classifications.push({ skillId: skill.id, classification: "UNMANAGED" });
       install = true;
     } else {
-      classifications.push({ skillId: skill.id, classification: local.managed ? "DRIFTED" : "LOCAL_CONFLICT" });
+      classifications.push({
+        skillId: skill.id,
+        classification: local.managed ? "DRIFTED" : "LOCAL_CONFLICT",
+      });
     }
 
     // A target collision blocks even a canonical install: otherwise an executor
@@ -1065,20 +1207,38 @@ export function planV2Reconcile(
     let targetConflict = false;
     const repairs: V2ReconcileOperation[] = [];
     for (const target of [...(local?.targets ?? [])].sort((left, right) =>
-      `${left.agentId}\0${left.path}`.localeCompare(`${right.agentId}\0${right.path}`),
+      `${left.agentId}\0${left.path}`.localeCompare(
+        `${right.agentId}\0${right.path}`,
+      ),
     )) {
       const targetRef = { agentId: target.agentId, path: target.path };
       if (!target.managed) {
         targetConflict = true;
-        classifications.push({ skillId: skill.id, classification: "LOCAL_CONFLICT", target: targetRef });
+        classifications.push({
+          skillId: skill.id,
+          classification: "LOCAL_CONFLICT",
+          target: targetRef,
+        });
       } else if (target.contentHash === null) {
-        classifications.push({ skillId: skill.id, classification: "MISSING", target: targetRef });
+        classifications.push({
+          skillId: skill.id,
+          classification: "MISSING",
+          target: targetRef,
+        });
         if (local?.managed && local.contentHash === expectedHash) {
-          repairs.push({ kind: "REPAIR_TARGET", skill: lock, target: targetRef });
+          repairs.push({
+            kind: "REPAIR_TARGET",
+            skill: lock,
+            target: targetRef,
+          });
         }
       } else if (target.contentHash !== expectedHash) {
         targetConflict = true;
-        classifications.push({ skillId: skill.id, classification: "DRIFTED", target: targetRef });
+        classifications.push({
+          skillId: skill.id,
+          classification: "DRIFTED",
+          target: targetRef,
+        });
       }
     }
     if (!targetConflict) {
@@ -1087,7 +1247,10 @@ export function planV2Reconcile(
     }
   }
 
-  for (const [id, local] of Object.entries(actual.skills) as [SkillId, ActualSkillState][]) {
+  for (const [id, local] of Object.entries(actual.skills) as [
+    SkillId,
+    ActualSkillState,
+  ][]) {
     if (active.has(id)) continue;
     if (!local.managed) {
       classifications.push({ skillId: id, classification: "UNMANAGED" });
@@ -1130,7 +1293,11 @@ export function planV2Reconcile(
       });
       continue;
     }
-    classifications.push({ skillId: id, classification: disposition === "REMOVE" ? "REMOVE_CANDIDATE" : "UNMANAGE_CANDIDATE" });
+    classifications.push({
+      skillId: id,
+      classification:
+        disposition === "REMOVE" ? "REMOVE_CANDIDATE" : "UNMANAGE_CANDIDATE",
+    });
     operations.push({ kind: disposition, skillId: id });
   }
 
@@ -1140,15 +1307,20 @@ export function planV2Reconcile(
       : operation.skillId;
   const targetKey = (target: { agentId: string; path: string } | undefined) =>
     target ? `${target.agentId}\0${target.path}` : "";
-  classifications.sort((a, b) =>
-    a.skillId.localeCompare(b.skillId) || targetKey(a.target).localeCompare(targetKey(b.target)),
+  classifications.sort(
+    (a, b) =>
+      a.skillId.localeCompare(b.skillId) ||
+      targetKey(a.target).localeCompare(targetKey(b.target)),
   );
-  operations.sort((a, b) =>
-    idOf(a).localeCompare(idOf(b)) ||
-    a.kind.localeCompare(b.kind) ||
-    targetKey(a.kind === "REPAIR_TARGET" ? a.target : undefined).localeCompare(
-      targetKey(b.kind === "REPAIR_TARGET" ? b.target : undefined),
-    ),
+  operations.sort(
+    (a, b) =>
+      idOf(a).localeCompare(idOf(b)) ||
+      a.kind.localeCompare(b.kind) ||
+      targetKey(
+        a.kind === "REPAIR_TARGET" ? a.target : undefined,
+      ).localeCompare(
+        targetKey(b.kind === "REPAIR_TARGET" ? b.target : undefined),
+      ),
   );
   return { classifications, operations };
 }

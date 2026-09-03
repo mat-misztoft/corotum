@@ -41,13 +41,13 @@ test("dashboard settings exposes only the authenticated user's billing state", a
   expect(
     (await handleDashboardSettingsGet(db(null) as never, null, true)).status,
   ).toBe(401);
-  expect(await readDashboardSettings(db("octocat") as never, "user_1", true)).toEqual({
+  expect(
+    await readDashboardSettings(db("octocat") as never, "user_1", true),
+  ).toEqual({
     hosted: true,
     launchFreePeriod: true,
     email: "ada@example.com",
-    accounts: [
-      { providerId: "github", accountId: "123", label: "octocat" },
-    ],
+    accounts: [{ providerId: "github", accountId: "123", label: "octocat" }],
     subscription: {
       interval: "year",
       status: "active",
@@ -57,7 +57,9 @@ test("dashboard settings exposes only the authenticated user's billing state", a
 });
 
 test("self-hosted settings expose no billing controls", async () => {
-  expect(await readDashboardSettings(db(null) as never, "user_1", false)).toEqual({
+  expect(
+    await readDashboardSettings(db(null) as never, "user_1", false),
+  ).toEqual({
     hosted: false,
     launchFreePeriod: false,
     email: "ada@example.com",

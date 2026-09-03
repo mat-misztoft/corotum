@@ -66,8 +66,7 @@ export function createCloudflareEmailService(
 function senderFrom(env: EmailEnvironment) {
   const from = env.AUTH_EMAIL_FROM?.trim();
   if (!from || !isEmail(from)) throw new EmailDeliveryError();
-  if (isHosted(env) && !isCorotumSender(from))
-    throw new EmailDeliveryError();
+  if (isHosted(env) && !isCorotumSender(from)) throw new EmailDeliveryError();
   return from;
 }
 

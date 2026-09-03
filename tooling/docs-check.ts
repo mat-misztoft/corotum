@@ -14,10 +14,7 @@ export const REQUIRED_DOC_FILES = [
   "apps/docs/src/content/docs/guides/migration.md",
 ] as const;
 
-const LEGACY_WRITE_FORMATS = [
-  "toolmirror.yaml",
-  "toolmirror.lock",
-] as const;
+const LEGACY_WRITE_FORMATS = ["toolmirror.yaml", "toolmirror.lock"] as const;
 
 const SELF_HOST_FORBIDDEN_ENV = [
   "CREEM_API_KEY",
@@ -66,10 +63,7 @@ function markdownCode(markdown: string): string {
 
 /** Drops the ToolMirror upgrade section so legacy filenames may appear only there. */
 export function withoutUpgradeSection(markdown: string): string {
-  return markdown.replace(
-    /## Upgrade from ToolMirror[\s\S]*?(?=\n## |$)/,
-    "",
-  );
+  return markdown.replace(/## Upgrade from ToolMirror[\s\S]*?(?=\n## |$)/, "");
 }
 
 /** True when docs show init with a global `--source` flag. */
@@ -177,7 +171,9 @@ export async function checkDocs(
     });
   }
 
-  const dashboard = files.get("apps/docs/src/content/docs/webmcp/dashboard-and-webmcp.md") ?? "";
+  const dashboard =
+    files.get("apps/docs/src/content/docs/webmcp/dashboard-and-webmcp.md") ??
+    "";
   for (const missing of includesAll(dashboard, [
     "full product surface",
     "reports the applied revision",
@@ -189,7 +185,8 @@ export async function checkDocs(
     });
   }
 
-  const selfHost = files.get("apps/docs/src/content/docs/cloud/self-hosting.md") ?? "";
+  const selfHost =
+    files.get("apps/docs/src/content/docs/cloud/self-hosting.md") ?? "";
   for (const missing of includesAll(selfHost, [
     "Creem is not required",
     "hosted Corotum billing is not required",
@@ -285,7 +282,8 @@ export async function checkDocs(
     }
   }
 
-  const install = files.get("apps/docs/src/content/docs/getting-started/install.md") ?? "";
+  const install =
+    files.get("apps/docs/src/content/docs/getting-started/install.md") ?? "";
   for (const missing of includesAll(install, [
     "curl -fsSL https://corotum.com/install.sh | sh",
     "irm https://corotum.com/install.ps1 | iex",
@@ -299,7 +297,8 @@ export async function checkDocs(
     });
   }
 
-  const migrate = files.get("apps/docs/src/content/docs/guides/migration.md") ?? "";
+  const migrate =
+    files.get("apps/docs/src/content/docs/guides/migration.md") ?? "";
   for (const missing of includesAll(migrate, [
     "corotum migrate cloud",
     "corotum migrate git",
@@ -313,7 +312,8 @@ export async function checkDocs(
     });
   }
 
-  const skills = files.get("apps/docs/src/content/docs/concepts/skills.md") ?? "";
+  const skills =
+    files.get("apps/docs/src/content/docs/concepts/skills.md") ?? "";
   for (const missing of includesAll(skills, [
     "~/.agents/skills",
     ".skill-lock.json",

@@ -9,8 +9,8 @@ import {
   type PairingDatabase,
   type PairingDevice,
   PairingExpiredError,
-  pairingIdForUserCode,
   PairingNotFoundError,
+  pairingIdForUserCode,
 } from "./pairings";
 
 function pairingError(error: unknown) {

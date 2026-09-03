@@ -282,480 +282,503 @@ async function loginWithCli(
   };
 }
 
-test("fresh installers produce a runnable CLI before Git and Cloud flows", async () => {
-  const work = await tempDir("corotum-e2e-install-");
-  roots.push(work);
-  const files = await releaseLayout("0.1.0", join(work, "staging"));
-  const server = startStaticServer(files);
-  try {
-    const unixHome = join(work, "unix-home");
-    await mkdir(unixHome, { recursive: true });
-    const unix = await runInstallSh(unixHome, server.origin, "darwin", "arm64");
-    expect(unix.code).toBe(0);
-    expect(unix.stdout).toContain("Official Corotum installer");
-    const dest = join(unixHome, ".local/bin/corotum");
-    const version = Bun.spawn([dest, "--version"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(await version.exited).toBe(0);
-    expect(await new Response(version.stdout).text()).toBe(
-      "corotum 0.1.0\n",
-    );
+test(
+  "fresh installers produce a runnable CLI before Git and Cloud flows",
+  async () => {
+    const work = await tempDir("corotum-e2e-install-");
+    roots.push(work);
+    const files = await releaseLayout("0.1.0", join(work, "staging"));
+    const server = startStaticServer(files);
+    try {
+      const unixHome = join(work, "unix-home");
+      await mkdir(unixHome, { recursive: true });
+      const unix = await runInstallSh(
+        unixHome,
+        server.origin,
+        "darwin",
+        "arm64",
+      );
+      expect(unix.code).toBe(0);
+      expect(unix.stdout).toContain("Official Corotum installer");
+      const dest = join(unixHome, ".local/bin/corotum");
+      const version = Bun.spawn([dest, "--version"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await version.exited).toBe(0);
+      expect(await new Response(version.stdout).text()).toBe("corotum 0.1.0\n");
 
-    const windows = await runWindowsInstallerFixture(
-      join(work, "windows-home"),
-      files,
-      join(work, "windows-extract"),
-    );
-    expect(windows.code).toBe(0);
-    expect(windows.stdout).toContain("Official Corotum installer");
-    expect(windows.stdout).toContain("corotum 0.1.0");
-  } finally {
-    server.stop();
-  }
-}, timeout);
+      const windows = await runWindowsInstallerFixture(
+        join(work, "windows-home"),
+        files,
+        join(work, "windows-extract"),
+      );
+      expect(windows.code).toBe(0);
+      expect(windows.stdout).toContain("Official Corotum installer");
+      expect(windows.stdout).toContain("corotum 0.1.0");
+    } finally {
+      server.stop();
+    }
+  },
+  timeout,
+);
 
-test("Git Sync completes without a Corotum Cloud subscription", async () => {
-  const { root, source, remote, stateWorktree } = await gitFixture();
-  const adopted = await lockFor(source, skillId("sk_adopted"), "adopted");
-  const added = await lockFor(source, skillId("sk_added"), "added");
-  const machineA = new GitStateProvider(join(root, "home-a", "git"), remote);
-  const base = revisionId(
-    (await git(["-C", stateWorktree, "rev-parse", "HEAD"])).trim(),
-  );
-  const adoption = await machineA.push(
-    { state: desired([adopted]), baseRevision: base },
-    { type: "ADOPT", skillId: adopted.id, metadata: {} },
-  );
-  expect(adoption).toMatchObject({ kind: "success" });
-  if (adoption.kind !== "success") throw new Error("adoption failed");
-  const addition = await machineA.push(
-    {
-      state: desired([adopted, added]),
-      baseRevision: adoption.value.revisionId,
-    },
-    { type: "ADD", skillId: added.id, metadata: {} },
-  );
-  expect(addition).toMatchObject({ kind: "success" });
-
-  const homeB = join(root, "home-b");
-  await mkdir(join(homeB, ".codex", "skills", "unmanaged"), {
-    recursive: true,
-  });
-  await writeFile(
-    join(homeB, ".codex", "skills", "unmanaged", "SKILL.md"),
-    "keep me\n",
-  );
-  const synced = await new SyncService(
-    new GitStateProvider(join(homeB, "git"), remote),
-    new LocalReconcileExecutor(
-      new LocalOperationalStateStore(join(homeB, "state", "state.json")),
-      new CanonicalSkillStore(join(homeB, "skills")),
-    ),
-  ).sync({
-    execution: { state: emptyState(), enabledAgentIds: [], homeDir: homeB },
-  });
-  expect(synced).toMatchObject({ kind: "synced" });
-  expect(
-    await readFile(
-      join(homeB, ".codex", "skills", "unmanaged", "SKILL.md"),
-      "utf8",
-    ),
-  ).toBe("keep me\n");
-  for (const lock of [adopted, added]) {
-    expect(await hashSkillDirectory(join(homeB, "skills", lock.skill))).toBe(
-      lock.contentHash,
-    );
-  }
-
-  const runner: GitCommandRunner = async ({ args }) =>
-    args[0] === "--version"
-      ? {
-          exitCode: 0,
-          stderr: "",
-          stdout: new TextEncoder().encode("git version"),
-        }
-      : {
-          exitCode: 128,
-          stderr: "Permission denied (publickey).",
-          stdout: new Uint8Array(),
-        };
-  const auth = await new GitStateProvider(
-    join(root, "private"),
-    "git@private.example:owner/skills.git",
-    runner,
-  ).pull();
-  expect(auth).toMatchObject({
-    kind: "failure",
-    error: { code: "AUTH_REQUIRED" },
-  });
-
-  const store = new CanonicalSkillStore(join(root, "drift", "skills"));
-  const executor = new LocalReconcileExecutor(
-    new LocalOperationalStateStore(join(root, "drift", "state.json")),
-    store,
-  );
-  await executor.execute({
-    plan: planReconcile(desired([adopted]), { skills: {} }),
-    desired: desired([adopted]),
-    revision: revisionId("one"),
-    state: emptyState(),
-    enabledAgentIds: [],
-    homeDir: join(root, "drift"),
-  });
-  await writeFile(
-    join(store.pathFor(adopted.skill), "SKILL.md"),
-    "drifted bytes\n",
-  );
-  const restored = await new RestoreService(
-    {
-      pull: async () => ({
-        kind: "success",
-        value: { revisionId: revisionId("one"), state: desired([adopted]) },
-      }),
-    },
-    executor,
-  ).restore({
-    all: true,
-    execution: {
-      state: {
-        schemaVersion: 1,
-        lastAppliedRevision: revisionId("one"),
-        skills: {
-          [adopted.id]: {
-            name: adopted.skill,
-            canonicalPath: store.pathFor(adopted.skill),
-            contentHash: adopted.contentHash,
-            targets: {},
-          },
-        },
-      },
-      enabledAgentIds: [],
-      homeDir: join(root, "drift"),
-    },
-  });
-  expect(restored).toMatchObject({ kind: "restored" });
-  expect(await hashSkillDirectory(store.pathFor(adopted.skill))).toBe(
-    adopted.contentHash,
-  );
-}, timeout);
-
-test("hosted Cloud is available during the launch period; self-hosted Cloud stays free", async () => {
-  const { root, source, remote, stateWorktree } = await gitFixture();
-  const lock = await lockFor(source, skillId("sk_review"), "adopted");
-  const extra = await lockFor(source, skillId("sk_added"), "added");
-  const hosted = await e2eDb();
-  const hostedServer = startCloudServer({
-    db: hosted.db,
-    hosted: true,
-    env: hostedEnv,
-  });
-  const self = await e2eDb();
-  const selfServer = startCloudServer({
-    db: self.db,
-    hosted: false,
-    env: selfHostedEnv,
-  });
-  try {
-    const studio = await loginWithCli(
-      hostedServer.origin,
-      hosted.sqlite,
-      "studio",
-      "10.0.0.1",
-    );
-    const unpaid = await new SaaSProvider({
-      origin: hostedServer.origin,
-      workspaceId: studio.workspaceId,
-      deviceToken: studio.token,
-      fetch: fetchWithIp("10.0.0.1"),
-    }).pull();
-    expect(unpaid.kind).toBe("success");
-
-    const payload = JSON.stringify({
-      id: "evt_e2e_paid",
-      eventType: "subscription.paid",
-      object: {
-        id: "sub_e2e",
-        status: "active",
-        customer: { id: "cus_ada" },
-        metadata: { userId: "user_1", billingInterval: "month" },
-      },
-    });
-    const webhook = await fetch(
-      `${hostedServer.origin}/api/v1/webhooks/creem`,
-      {
-        method: "POST",
-        headers: { "creem-signature": await sign(payload, webhookSecret) },
-        body: payload,
-      },
-    );
-    expect(webhook.status).toBe(200);
-
-    const providerA = new SaaSProvider({
-      origin: hostedServer.origin,
-      workspaceId: studio.workspaceId,
-      deviceToken: studio.token,
-      fetch: fetchWithIp("10.0.0.1"),
-    });
-    const pulled = await providerA.pull();
-    expect(pulled.kind).toBe("success");
-    if (pulled.kind !== "success") throw new Error("hosted pull failed");
-    const added = await providerA.push(
-      { state: desired([lock]), baseRevision: pulled.value.revisionId },
-      { type: "ADD", skillId: lock.id, metadata: {} },
-    );
-    expect(added.kind).toBe("success");
-    if (added.kind !== "success") throw new Error("hosted add failed");
-
-    const premature = await postDeviceSyncReport({
-      origin: hostedServer.origin,
-      deviceId: studio.deviceId,
-      deviceToken: studio.token,
-      fetch: fetchWithIp("10.0.0.1"),
-      report: { appliedRevisionId: null, syncStatus: "BEHIND" },
-    });
-    expect(premature).toMatchObject({
-      kind: "success",
-      value: { syncStatus: "BEHIND", appliedRevisionSequence: 0 },
-    });
-
-    const laptop = await pairDirect(hostedServer.origin, "laptop", "10.0.0.2");
-    const dashboardBefore = await fetch(
-      `${hostedServer.origin}/api/v1/dashboard`,
-    );
-    const beforeBody = (await dashboardBefore.json()) as {
-      devices: Array<{ name: string; syncStatus: string }>;
-    };
-    expect(
-      beforeBody.devices.find((device) => device.name === "laptop")?.syncStatus,
-    ).toBe("NEVER_SYNCED");
-
-    expect(
-      await postDeviceSyncReport({
-        origin: hostedServer.origin,
-        deviceId: studio.deviceId,
-        deviceToken: studio.token,
-        fetch: fetchWithIp("10.0.0.1"),
-        report: {
-          appliedRevisionId: added.value.revisionId,
-          syncStatus: "SYNCED",
-          targets: [
-            {
-              skillId: lock.id,
-              agentId: "codex",
-              status: "SYNCED",
-              contentHash: lock.contentHash,
-            },
-          ],
-          updates: [{ skillId: lock.id, status: "UP_TO_DATE" }],
-        },
-      }),
-    ).toMatchObject({ kind: "success", value: { syncStatus: "SYNCED" } });
-
-    const providerB = new SaaSProvider({
-      origin: hostedServer.origin,
-      workspaceId: laptop.workspaceId,
-      deviceToken: laptop.token,
-      fetch: fetchWithIp("10.0.0.2"),
-    });
-    const laptopState = await providerB.pull();
-    expect(laptopState).toMatchObject({
-      kind: "success",
-      value: { revisionId: added.value.revisionId },
-    });
-    const laptopHome = join(root, "laptop");
-    expect(
-      await new SyncService(
-        providerB,
-        new LocalReconcileExecutor(
-          new LocalOperationalStateStore(join(laptopHome, "state.json")),
-          new CanonicalSkillStore(join(laptopHome, "skills")),
-        ),
-      ).sync({
-        execution: {
-          state: emptyState(),
-          enabledAgentIds: [],
-          homeDir: laptopHome,
-        },
-      }),
-    ).toMatchObject({ kind: "synced" });
-    await postDeviceSyncReport({
-      origin: hostedServer.origin,
-      deviceId: laptop.deviceId,
-      deviceToken: laptop.token,
-      fetch: fetchWithIp("10.0.0.2"),
-      report: {
-        appliedRevisionId: added.value.revisionId,
-        syncStatus: "SYNCED",
-      },
-    });
-
-    const pending = await fetch(`${hostedServer.origin}/api/v1/webmcp`, {
-      method: "POST",
-      headers: {
-        origin: hostedServer.origin,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        tool: "set_skill_ref",
-        baseRevisionId: added.value.revisionId,
-        idempotencyKey: "webmcp-ref",
-        arguments: { skillId: lock.id, ref: "release" },
-      }),
-    });
-    expect(pending.status).toBe(200);
-    const pendingBody = (await pending.json()) as {
-      revisionId: string;
-      pendingResolution: string[];
-    };
-    expect(pendingBody.pendingResolution).toEqual([lock.id]);
-
-    expect(
-      await postDeviceSyncReport({
-        origin: hostedServer.origin,
-        deviceId: studio.deviceId,
-        deviceToken: studio.token,
-        fetch: fetchWithIp("10.0.0.1"),
-        report: {
-          appliedRevisionId: added.value.revisionId,
-          syncStatus: "SYNCED",
-        },
-      }),
-    ).toMatchObject({ kind: "success", value: { syncStatus: "BEHIND" } });
-
-    const resolved = await providerA.resolvePending({
-      skillId: lock.id,
-      baseRevision: pendingBody.revisionId,
-      repository: lock.source,
-      revision: lock.revision,
-      path: lock.path,
-      contentHash: lock.contentHash,
-    });
-    expect(resolved.kind).toBe("success");
-    if (resolved.kind !== "success") throw new Error("resolution failed");
-    expect(
-      await postDeviceSyncReport({
-        origin: hostedServer.origin,
-        deviceId: studio.deviceId,
-        deviceToken: studio.token,
-        fetch: fetchWithIp("10.0.0.1"),
-        report: {
-          appliedRevisionId: resolved.value.revisionId,
-          syncStatus: "SYNCED",
-        },
-      }),
-    ).toMatchObject({ kind: "success", value: { syncStatus: "SYNCED" } });
-
-    const listed = await fetch(`${hostedServer.origin}/api/v1/webmcp`, {
-      method: "POST",
-      headers: {
-        origin: hostedServer.origin,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ tool: "get_sync_status" }),
-    });
-    expect(listed.status).toBe(200);
-
-    const gitRemote = new GitStateProvider(join(root, "migrate-git"), remote);
-    const gitBase = revisionId(
+test(
+  "Git Sync completes without a Corotum Cloud subscription",
+  async () => {
+    const { root, source, remote, stateWorktree } = await gitFixture();
+    const adopted = await lockFor(source, skillId("sk_adopted"), "adopted");
+    const added = await lockFor(source, skillId("sk_added"), "added");
+    const machineA = new GitStateProvider(join(root, "home-a", "git"), remote);
+    const base = revisionId(
       (await git(["-C", stateWorktree, "rev-parse", "HEAD"])).trim(),
     );
-    const gitPush = await gitRemote.push(
-      { state: desired([extra]), baseRevision: gitBase },
-      { type: "ADD", skillId: extra.id, metadata: {} },
+    const adoption = await machineA.push(
+      { state: desired([adopted]), baseRevision: base },
+      { type: "ADOPT", skillId: adopted.id, metadata: {} },
     );
-    expect(gitPush.kind).toBe("success");
-    const migrated = await new MigrationService(gitRemote, providerA).migrate(
-      "merge",
-    );
-    expect(migrated.kind).toBe("migrated");
-
-    const selfStudio = await pairDirect(
-      selfServer.origin,
-      "studio",
-      "10.1.0.1",
-    );
-    const selfProvider = new SaaSProvider({
-      origin: selfServer.origin,
-      workspaceId: selfStudio.workspaceId,
-      deviceToken: selfStudio.token,
-      fetch: fetchWithIp("10.1.0.1"),
-    });
-    const selfPull = await selfProvider.pull();
-    expect(selfPull.kind).toBe("success");
-    if (selfPull.kind !== "success") throw new Error("self-hosted pull failed");
-    expect(
-      await selfProvider.push(
-        { state: desired([lock]), baseRevision: selfPull.value.revisionId },
-        { type: "ADD", skillId: lock.id, metadata: {} },
-      ),
-    ).toMatchObject({ kind: "success" });
-    const checkout = await fetch(
-      `${selfServer.origin}/api/v1/billing/checkout`,
+    expect(adoption).toMatchObject({ kind: "success" });
+    if (adoption.kind !== "success") throw new Error("adoption failed");
+    const addition = await machineA.push(
       {
+        state: desired([adopted, added]),
+        baseRevision: adoption.value.revisionId,
+      },
+      { type: "ADD", skillId: added.id, metadata: {} },
+    );
+    expect(addition).toMatchObject({ kind: "success" });
+
+    const homeB = join(root, "home-b");
+    await mkdir(join(homeB, ".codex", "skills", "unmanaged"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(homeB, ".codex", "skills", "unmanaged", "SKILL.md"),
+      "keep me\n",
+    );
+    const synced = await new SyncService(
+      new GitStateProvider(join(homeB, "git"), remote),
+      new LocalReconcileExecutor(
+        new LocalOperationalStateStore(join(homeB, "state", "state.json")),
+        new CanonicalSkillStore(join(homeB, "skills")),
+      ),
+    ).sync({
+      execution: { state: emptyState(), enabledAgentIds: [], homeDir: homeB },
+    });
+    expect(synced).toMatchObject({ kind: "synced" });
+    expect(
+      await readFile(
+        join(homeB, ".codex", "skills", "unmanaged", "SKILL.md"),
+        "utf8",
+      ),
+    ).toBe("keep me\n");
+    for (const lock of [adopted, added]) {
+      expect(await hashSkillDirectory(join(homeB, "skills", lock.skill))).toBe(
+        lock.contentHash,
+      );
+    }
+
+    const runner: GitCommandRunner = async ({ args }) =>
+      args[0] === "--version"
+        ? {
+            exitCode: 0,
+            stderr: "",
+            stdout: new TextEncoder().encode("git version"),
+          }
+        : {
+            exitCode: 128,
+            stderr: "Permission denied (publickey).",
+            stdout: new Uint8Array(),
+          };
+    const auth = await new GitStateProvider(
+      join(root, "private"),
+      "git@private.example:owner/skills.git",
+      runner,
+    ).pull();
+    expect(auth).toMatchObject({
+      kind: "failure",
+      error: { code: "AUTH_REQUIRED" },
+    });
+
+    const store = new CanonicalSkillStore(join(root, "drift", "skills"));
+    const executor = new LocalReconcileExecutor(
+      new LocalOperationalStateStore(join(root, "drift", "state.json")),
+      store,
+    );
+    await executor.execute({
+      plan: planReconcile(desired([adopted]), { skills: {} }),
+      desired: desired([adopted]),
+      revision: revisionId("one"),
+      state: emptyState(),
+      enabledAgentIds: [],
+      homeDir: join(root, "drift"),
+    });
+    await writeFile(
+      join(store.pathFor(adopted.skill), "SKILL.md"),
+      "drifted bytes\n",
+    );
+    const restored = await new RestoreService(
+      {
+        pull: async () => ({
+          kind: "success",
+          value: { revisionId: revisionId("one"), state: desired([adopted]) },
+        }),
+      },
+      executor,
+    ).restore({
+      all: true,
+      execution: {
+        state: {
+          schemaVersion: 1,
+          lastAppliedRevision: revisionId("one"),
+          skills: {
+            [adopted.id]: {
+              name: adopted.skill,
+              canonicalPath: store.pathFor(adopted.skill),
+              contentHash: adopted.contentHash,
+              targets: {},
+            },
+          },
+        },
+        enabledAgentIds: [],
+        homeDir: join(root, "drift"),
+      },
+    });
+    expect(restored).toMatchObject({ kind: "restored" });
+    expect(await hashSkillDirectory(store.pathFor(adopted.skill))).toBe(
+      adopted.contentHash,
+    );
+  },
+  timeout,
+);
+
+test(
+  "hosted Cloud is available during the launch period; self-hosted Cloud stays free",
+  async () => {
+    const { root, source, remote, stateWorktree } = await gitFixture();
+    const lock = await lockFor(source, skillId("sk_review"), "adopted");
+    const extra = await lockFor(source, skillId("sk_added"), "added");
+    const hosted = await e2eDb();
+    const hostedServer = startCloudServer({
+      db: hosted.db,
+      hosted: true,
+      env: hostedEnv,
+    });
+    const self = await e2eDb();
+    const selfServer = startCloudServer({
+      db: self.db,
+      hosted: false,
+      env: selfHostedEnv,
+    });
+    try {
+      const studio = await loginWithCli(
+        hostedServer.origin,
+        hosted.sqlite,
+        "studio",
+        "10.0.0.1",
+      );
+      const unpaid = await new SaaSProvider({
+        origin: hostedServer.origin,
+        workspaceId: studio.workspaceId,
+        deviceToken: studio.token,
+        fetch: fetchWithIp("10.0.0.1"),
+      }).pull();
+      expect(unpaid.kind).toBe("success");
+
+      const payload = JSON.stringify({
+        id: "evt_e2e_paid",
+        eventType: "subscription.paid",
+        object: {
+          id: "sub_e2e",
+          status: "active",
+          customer: { id: "cus_ada" },
+          metadata: { userId: "user_1", billingInterval: "month" },
+        },
+      });
+      const webhook = await fetch(
+        `${hostedServer.origin}/api/v1/webhooks/creem`,
+        {
+          method: "POST",
+          headers: { "creem-signature": await sign(payload, webhookSecret) },
+          body: payload,
+        },
+      );
+      expect(webhook.status).toBe(200);
+
+      const providerA = new SaaSProvider({
+        origin: hostedServer.origin,
+        workspaceId: studio.workspaceId,
+        deviceToken: studio.token,
+        fetch: fetchWithIp("10.0.0.1"),
+      });
+      const pulled = await providerA.pull();
+      expect(pulled.kind).toBe("success");
+      if (pulled.kind !== "success") throw new Error("hosted pull failed");
+      const added = await providerA.push(
+        { state: desired([lock]), baseRevision: pulled.value.revisionId },
+        { type: "ADD", skillId: lock.id, metadata: {} },
+      );
+      expect(added.kind).toBe("success");
+      if (added.kind !== "success") throw new Error("hosted add failed");
+
+      const premature = await postDeviceSyncReport({
+        origin: hostedServer.origin,
+        deviceId: studio.deviceId,
+        deviceToken: studio.token,
+        fetch: fetchWithIp("10.0.0.1"),
+        report: { appliedRevisionId: null, syncStatus: "BEHIND" },
+      });
+      expect(premature).toMatchObject({
+        kind: "success",
+        value: { syncStatus: "BEHIND", appliedRevisionSequence: 0 },
+      });
+
+      const laptop = await pairDirect(
+        hostedServer.origin,
+        "laptop",
+        "10.0.0.2",
+      );
+      const dashboardBefore = await fetch(
+        `${hostedServer.origin}/api/v1/dashboard`,
+      );
+      const beforeBody = (await dashboardBefore.json()) as {
+        devices: Array<{ name: string; syncStatus: string }>;
+      };
+      expect(
+        beforeBody.devices.find((device) => device.name === "laptop")
+          ?.syncStatus,
+      ).toBe("NEVER_SYNCED");
+
+      expect(
+        await postDeviceSyncReport({
+          origin: hostedServer.origin,
+          deviceId: studio.deviceId,
+          deviceToken: studio.token,
+          fetch: fetchWithIp("10.0.0.1"),
+          report: {
+            appliedRevisionId: added.value.revisionId,
+            syncStatus: "SYNCED",
+            targets: [
+              {
+                skillId: lock.id,
+                agentId: "codex",
+                status: "SYNCED",
+                contentHash: lock.contentHash,
+              },
+            ],
+            updates: [{ skillId: lock.id, status: "UP_TO_DATE" }],
+          },
+        }),
+      ).toMatchObject({ kind: "success", value: { syncStatus: "SYNCED" } });
+
+      const providerB = new SaaSProvider({
+        origin: hostedServer.origin,
+        workspaceId: laptop.workspaceId,
+        deviceToken: laptop.token,
+        fetch: fetchWithIp("10.0.0.2"),
+      });
+      const laptopState = await providerB.pull();
+      expect(laptopState).toMatchObject({
+        kind: "success",
+        value: { revisionId: added.value.revisionId },
+      });
+      const laptopHome = join(root, "laptop");
+      expect(
+        await new SyncService(
+          providerB,
+          new LocalReconcileExecutor(
+            new LocalOperationalStateStore(join(laptopHome, "state.json")),
+            new CanonicalSkillStore(join(laptopHome, "skills")),
+          ),
+        ).sync({
+          execution: {
+            state: emptyState(),
+            enabledAgentIds: [],
+            homeDir: laptopHome,
+          },
+        }),
+      ).toMatchObject({ kind: "synced" });
+      await postDeviceSyncReport({
+        origin: hostedServer.origin,
+        deviceId: laptop.deviceId,
+        deviceToken: laptop.token,
+        fetch: fetchWithIp("10.0.0.2"),
+        report: {
+          appliedRevisionId: added.value.revisionId,
+          syncStatus: "SYNCED",
+        },
+      });
+
+      const pending = await fetch(`${hostedServer.origin}/api/v1/webmcp`, {
         method: "POST",
         headers: {
-          origin: selfServer.origin,
+          origin: hostedServer.origin,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ interval: "month" }),
-      },
-    );
-    expect(checkout.status).toBe(404);
-  } finally {
-    hostedServer.stop();
-    selfServer.stop();
-  }
-}, timeout);
+        body: JSON.stringify({
+          tool: "set_skill_ref",
+          baseRevisionId: added.value.revisionId,
+          idempotencyKey: "webmcp-ref",
+          arguments: { skillId: lock.id, ref: "release" },
+        }),
+      });
+      expect(pending.status).toBe(200);
+      const pendingBody = (await pending.json()) as {
+        revisionId: string;
+        pendingResolution: string[];
+      };
+      expect(pendingBody.pendingResolution).toEqual([lock.id]);
 
-test("CLI update replaces the official binary after a fresh install", async () => {
-  const work = await tempDir("corotum-e2e-update-");
-  roots.push(work);
-  const currentFiles = await releaseLayout("0.1.0", join(work, "current"));
-  const latestFiles = await releaseLayout("0.1.1", join(work, "latest"));
-  const currentServer = startStaticServer(currentFiles);
-  const latestServer = startStaticServer(latestFiles);
-  try {
-    const home = join(work, "home");
-    await mkdir(home, { recursive: true });
-    const installed = await runInstallSh(
-      home,
-      currentServer.origin,
-      "darwin",
-      "arm64",
-    );
-    expect(installed.code).toBe(0);
-    const dest = join(home, ".local/bin/corotum");
-    const lock = new MutationLock(join(home, "process.lock"));
-    const updated = await cliUpdate(
-      {
-        currentVersion: "0.1.0",
-        platform: "darwin",
-        arch: "arm64",
-        executablePath: dest,
-        pendingDir: join(home, "pending"),
-        releaseBase: latestServer.origin,
-        fetchBytes: async (url) =>
-          new Uint8Array(await (await fetch(url)).arrayBuffer()),
-        acquireLock: () => lock.acquire(),
-      },
-      { check: false },
-    );
-    expect(updated.status).toBe("UPDATED");
-    const version = Bun.spawn([dest, "--version"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(await version.exited).toBe(0);
-    expect(await new Response(version.stdout).text()).toBe(
-      "corotum 0.1.1\n",
-    );
-  } finally {
-    currentServer.stop();
-    latestServer.stop();
-  }
-}, timeout);
+      expect(
+        await postDeviceSyncReport({
+          origin: hostedServer.origin,
+          deviceId: studio.deviceId,
+          deviceToken: studio.token,
+          fetch: fetchWithIp("10.0.0.1"),
+          report: {
+            appliedRevisionId: added.value.revisionId,
+            syncStatus: "SYNCED",
+          },
+        }),
+      ).toMatchObject({ kind: "success", value: { syncStatus: "BEHIND" } });
+
+      const resolved = await providerA.resolvePending({
+        skillId: lock.id,
+        baseRevision: pendingBody.revisionId,
+        repository: lock.source,
+        revision: lock.revision,
+        path: lock.path,
+        contentHash: lock.contentHash,
+      });
+      expect(resolved.kind).toBe("success");
+      if (resolved.kind !== "success") throw new Error("resolution failed");
+      expect(
+        await postDeviceSyncReport({
+          origin: hostedServer.origin,
+          deviceId: studio.deviceId,
+          deviceToken: studio.token,
+          fetch: fetchWithIp("10.0.0.1"),
+          report: {
+            appliedRevisionId: resolved.value.revisionId,
+            syncStatus: "SYNCED",
+          },
+        }),
+      ).toMatchObject({ kind: "success", value: { syncStatus: "SYNCED" } });
+
+      const listed = await fetch(`${hostedServer.origin}/api/v1/webmcp`, {
+        method: "POST",
+        headers: {
+          origin: hostedServer.origin,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ tool: "get_sync_status" }),
+      });
+      expect(listed.status).toBe(200);
+
+      const gitRemote = new GitStateProvider(join(root, "migrate-git"), remote);
+      const gitBase = revisionId(
+        (await git(["-C", stateWorktree, "rev-parse", "HEAD"])).trim(),
+      );
+      const gitPush = await gitRemote.push(
+        { state: desired([extra]), baseRevision: gitBase },
+        { type: "ADD", skillId: extra.id, metadata: {} },
+      );
+      expect(gitPush.kind).toBe("success");
+      const migrated = await new MigrationService(gitRemote, providerA).migrate(
+        "merge",
+      );
+      expect(migrated.kind).toBe("migrated");
+
+      const selfStudio = await pairDirect(
+        selfServer.origin,
+        "studio",
+        "10.1.0.1",
+      );
+      const selfProvider = new SaaSProvider({
+        origin: selfServer.origin,
+        workspaceId: selfStudio.workspaceId,
+        deviceToken: selfStudio.token,
+        fetch: fetchWithIp("10.1.0.1"),
+      });
+      const selfPull = await selfProvider.pull();
+      expect(selfPull.kind).toBe("success");
+      if (selfPull.kind !== "success")
+        throw new Error("self-hosted pull failed");
+      expect(
+        await selfProvider.push(
+          { state: desired([lock]), baseRevision: selfPull.value.revisionId },
+          { type: "ADD", skillId: lock.id, metadata: {} },
+        ),
+      ).toMatchObject({ kind: "success" });
+      const checkout = await fetch(
+        `${selfServer.origin}/api/v1/billing/checkout`,
+        {
+          method: "POST",
+          headers: {
+            origin: selfServer.origin,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ interval: "month" }),
+        },
+      );
+      expect(checkout.status).toBe(404);
+    } finally {
+      hostedServer.stop();
+      selfServer.stop();
+    }
+  },
+  timeout,
+);
+
+test(
+  "CLI update replaces the official binary after a fresh install",
+  async () => {
+    const work = await tempDir("corotum-e2e-update-");
+    roots.push(work);
+    const currentFiles = await releaseLayout("0.1.0", join(work, "current"));
+    const latestFiles = await releaseLayout("0.1.1", join(work, "latest"));
+    const currentServer = startStaticServer(currentFiles);
+    const latestServer = startStaticServer(latestFiles);
+    try {
+      const home = join(work, "home");
+      await mkdir(home, { recursive: true });
+      const installed = await runInstallSh(
+        home,
+        currentServer.origin,
+        "darwin",
+        "arm64",
+      );
+      expect(installed.code).toBe(0);
+      const dest = join(home, ".local/bin/corotum");
+      const lock = new MutationLock(join(home, "process.lock"));
+      const updated = await cliUpdate(
+        {
+          currentVersion: "0.1.0",
+          platform: "darwin",
+          arch: "arm64",
+          executablePath: dest,
+          pendingDir: join(home, "pending"),
+          releaseBase: latestServer.origin,
+          fetchBytes: async (url) =>
+            new Uint8Array(await (await fetch(url)).arrayBuffer()),
+          acquireLock: () => lock.acquire(),
+        },
+        { check: false },
+      );
+      expect(updated.status).toBe("UPDATED");
+      const version = Bun.spawn([dest, "--version"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await version.exited).toBe(0);
+      expect(await new Response(version.stdout).text()).toBe("corotum 0.1.1\n");
+    } finally {
+      currentServer.stop();
+      latestServer.stop();
+    }
+  },
+  timeout,
+);
 
 test("fresh-install evidence records every required path as PASS", async () => {
   const evidence = await Bun.file(evidencePath).text();

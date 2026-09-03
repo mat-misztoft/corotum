@@ -97,7 +97,9 @@ describe("welcome screen formatting", () => {
     expect(screen).toContain(",-----.");
     expect(screen).toContain(`v${CLI_VERSION}`);
     expect(screen).toContain("Keep your agent skills in sync.");
-    expect(screen).toContain("One desired state across every machine and AI agent.");
+    expect(screen).toContain(
+      "One desired state across every machine and AI agent.",
+    );
     expect(screen).toContain("  ✓ Git available");
     expect(screen).toContain("  ✓ macOS arm64");
     expect(screen).toContain("  ✓ Corotum home ready");
@@ -105,13 +107,17 @@ describe("welcome screen formatting", () => {
     expect(screen).toContain("  ● Pi");
     expect(screen).toContain("  ● Claude Code");
     expect(screen).toContain("  ○ Gemini CLI");
-    expect(screen).toContain("Git Sync       Free, backed by your Git repository");
-    expect(screen).toContain("Corotum Cloud  Hosted sync across all your devices");
+    expect(screen).toContain(
+      "Git Sync       Free, backed by your Git repository",
+    );
+    expect(screen).toContain(
+      "Corotum Cloud  Hosted sync across all your devices",
+    );
     expect(screen).toContain("› corotum init        Configure this device");
     expect(screen).toContain("› corotum status      Show local sync state");
     expect(screen).toContain("› corotum --help      View all commands");
     expect(screen).toContain("https://corotum.com");
-    expect(screen).not.toMatch(/\x1b\[/);
+    expect(screen).not.toContain("\x1b");
   });
 
   test("shows Git unavailable and unconfigured home", () => {
@@ -188,9 +194,9 @@ describe("welcome snapshot collection", () => {
     const detected = await collectWelcomeSnapshot(
       fixtureDeps({ detectAgentIds: async () => ["codex", "pi"] }),
     );
-    expect(detected.agents.find((agent) => agent.id === "codex")?.detected).toBe(
-      true,
-    );
+    expect(
+      detected.agents.find((agent) => agent.id === "codex")?.detected,
+    ).toBe(true);
     expect(detected.agents.find((agent) => agent.id === "pi")?.detected).toBe(
       true,
     );
@@ -282,7 +288,7 @@ describe("default corotum command", () => {
     expect(body).not.toContain(",-----.");
     expect(body).not.toContain("Keep your agent skills in sync.");
     expect(body).not.toContain("Detected agents");
-    expect(body).not.toMatch(/\x1b\[/);
+    expect(body).not.toContain("\x1b");
     expect(body).not.toMatch(/[✓●○›]/);
   });
 

@@ -134,10 +134,16 @@ export class V2SaaSProvider {
       headers: { [ARTIFACT_DESCRIPTOR_HEADER]: JSON.stringify(transfer) },
     });
     if (response.status === 401) {
-      throw new V2CloudProviderError("AUTH_REQUIRED", "Cloud device authentication failed.");
+      throw new V2CloudProviderError(
+        "AUTH_REQUIRED",
+        "Cloud device authentication failed.",
+      );
     }
     if (response.status === 404) {
-      throw new V2CloudProviderError("ARTIFACT_UNAVAILABLE", "Artifact object is missing.");
+      throw new V2CloudProviderError(
+        "ARTIFACT_UNAVAILABLE",
+        "Artifact object is missing.",
+      );
     }
     if (!response.ok) {
       throw await this.failureFrom(response, "artifact");
@@ -176,7 +182,11 @@ export class V2SaaSProvider {
   private async send(url: string, init: RequestInit): Promise<Response> {
     try {
       const headers = this.headers(init.headers);
-      if (init.body && typeof init.body === "string" && !headers.has("content-type")) {
+      if (
+        init.body &&
+        typeof init.body === "string" &&
+        !headers.has("content-type")
+      ) {
         headers.set("content-type", "application/json");
       }
       return await this.fetch(url, { ...init, headers });
@@ -188,7 +198,9 @@ export class V2SaaSProvider {
     }
   }
 
-  private async readEnvelope(response: Response): Promise<V2CloudStateEnvelope> {
+  private async readEnvelope(
+    response: Response,
+  ): Promise<V2CloudStateEnvelope> {
     if (!response.ok) throw await this.failureFrom(response, "state");
     const payload = (await response.json()) as {
       revisionId?: string | null;
@@ -198,14 +210,20 @@ export class V2SaaSProvider {
       ledger?: unknown;
     };
     if (!payload || typeof payload !== "object" || payload.state == null) {
-      throw new V2CloudProviderError("VALIDATION_ERROR", "Cloud returned invalid desired state.");
+      throw new V2CloudProviderError(
+        "VALIDATION_ERROR",
+        "Cloud returned invalid desired state.",
+      );
     }
-    const ledgerSource = payload.dispositionLedger ?? payload.ledger ?? { version: 2, activeDispositions: {} };
+    const ledgerSource = payload.dispositionLedger ??
+      payload.ledger ?? { version: 2, activeDispositions: {} };
     try {
       return {
         revisionId: payload.revisionId ?? null,
         revisionSequence: payload.revisionSequence ?? 0,
-        state: uninitializedEmptyV2State(payload) ?? validateV2DesiredState(payload.state as V2DesiredState),
+        state:
+          uninitializedEmptyV2State(payload) ??
+          validateV2DesiredState(payload.state as V2DesiredState),
         ledger: parseDispositionLedger(JSON.stringify(ledgerSource)),
       };
     } catch (error) {
@@ -216,9 +234,16 @@ export class V2SaaSProvider {
     }
   }
 
-  private async failureFrom(response: Response, transport: "state" | "artifact"): Promise<V2CloudProviderError> {
+  private async failureFrom(
+    response: Response,
+    transport: "state" | "artifact",
+  ): Promise<V2CloudProviderError> {
     const message = await responseMessage(response);
-    if (response.status === 401) return new V2CloudProviderError("AUTH_REQUIRED", "Cloud device authentication failed.");
+    if (response.status === 401)
+      return new V2CloudProviderError(
+        "AUTH_REQUIRED",
+        "Cloud device authentication failed.",
+      );
     if (response.status === 402) {
       return new V2CloudProviderError(
         "NETWORK_ERROR",
@@ -227,14 +252,16 @@ export class V2SaaSProvider {
           : "Hosted Cloud subscription required",
       );
     }
-    if (response.status === 409) return new V2CloudProviderError("CONFLICT", message);
+    if (response.status === 409)
+      return new V2CloudProviderError("CONFLICT", message);
     if (response.status === 404 && transport === "artifact") {
       return new V2CloudProviderError("ARTIFACT_UNAVAILABLE", message);
     }
     if (response.status === 400 && /hash|integrity|size/i.test(message)) {
       return new V2CloudProviderError("CONTENT_HASH_MISMATCH", message);
     }
-    if (response.status === 400) return new V2CloudProviderError("VALIDATION_ERROR", message);
+    if (response.status === 400)
+      return new V2CloudProviderError("VALIDATION_ERROR", message);
     return new V2CloudProviderError("NETWORK_ERROR", message);
   }
 }
@@ -254,13 +281,22 @@ function uninitializedEmptyV2State(payload: {
     manifest?: { version?: unknown; skills?: unknown };
     lockfile?: { skills?: unknown };
   } | null;
-  if (!state || (state.manifest?.version !== 1 && state.manifest?.version !== 2)) {
+  if (
+    !state ||
+    (state.manifest?.version !== 1 && state.manifest?.version !== 2)
+  ) {
     return null;
   }
-  if (!Array.isArray(state.manifest?.skills) || state.manifest.skills.length > 0) {
+  if (
+    !Array.isArray(state.manifest?.skills) ||
+    state.manifest.skills.length > 0
+  ) {
     return null;
   }
-  if (!Array.isArray(state.lockfile?.skills) || state.lockfile.skills.length > 0) {
+  if (
+    !Array.isArray(state.lockfile?.skills) ||
+    state.lockfile.skills.length > 0
+  ) {
     return null;
   }
   return emptyV2State;
@@ -282,7 +318,10 @@ function artifactTransfer(workspaceId: string, lock: V2LockedSkill) {
   }
   const expected = `workspaces/${workspaceId}/artifacts/${lock.id}/${artifact.integrityHash}.tar.zst`;
   if (artifact.locator !== expected) {
-    throw new V2CloudProviderError("VALIDATION_ERROR", "Artifact locator is not valid for this workspace.");
+    throw new V2CloudProviderError(
+      "VALIDATION_ERROR",
+      "Artifact locator is not valid for this workspace.",
+    );
   }
   return { skillId: lock.id, artifact };
 }
@@ -301,7 +340,8 @@ function synthesizedTransition(
 async function responseMessage(response: Response) {
   try {
     const payload = (await response.json()) as { error?: unknown };
-    if (typeof payload.error === "string" && payload.error.trim()) return payload.error;
+    if (typeof payload.error === "string" && payload.error.trim())
+      return payload.error;
   } catch {
     // Fall through to the status text when the body is not JSON.
   }

@@ -9,20 +9,20 @@ import {
   localAgentFileSystem,
 } from "../../../packages/agent-targets/src/index";
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
-import { createCliV2GitStateProvider } from "./artifact-consent";
 import {
+  type AgentStatus,
   agentStatuses,
   enabledAgentIdsFrom,
   formatAgentStatuses,
   parseAgentId,
-  type AgentStatus,
 } from "./agents";
+import { createCliV2GitStateProvider } from "./artifact-consent";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import {
   ConfigStore,
-  effectiveStoragePaths,
   type CorotumConfig,
+  effectiveStoragePaths,
 } from "./config";
 import { LocalOperationalStateStore } from "./local-state";
 import { MutationLock } from "./mutation-lock";
@@ -67,7 +67,12 @@ export function registerAgentsCommand(program: Command, io: CliIo): void {
     .command("enable <agent>")
     .description("enable local exposure for one agent on this device")
     .action(async (agentInput: string) => {
-      const result = await mutateAgent(program, io, parseAgentId(agentInput), true);
+      const result = await mutateAgent(
+        program,
+        io,
+        parseAgentId(agentInput),
+        true,
+      );
       const name = displayName(result.agentId);
       write(
         io,
@@ -84,9 +89,16 @@ export function registerAgentsCommand(program: Command, io: CliIo): void {
     });
   agents
     .command("disable <agent>")
-    .description("remove local exposure for one agent without deleting global skills")
+    .description(
+      "remove local exposure for one agent without deleting global skills",
+    )
     .action(async (agentInput: string) => {
-      const result = await mutateAgent(program, io, parseAgentId(agentInput), false);
+      const result = await mutateAgent(
+        program,
+        io,
+        parseAgentId(agentInput),
+        false,
+      );
       const name = displayName(result.agentId);
       write(
         io,

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,10 +15,18 @@ import { CanonicalSkillStore, hashSkillDirectory } from "./canonical-store";
 
 const directories: string[] = [];
 afterEach(async () =>
-  Promise.all(directories.splice(0).map((path) => rm(path, { force: true, recursive: true }))),
+  Promise.all(
+    directories
+      .splice(0)
+      .map((path) => rm(path, { force: true, recursive: true })),
+  ),
 );
 
-async function fixture(root: string, name: string, content: string): Promise<string> {
+async function fixture(
+  root: string,
+  name: string,
+  content: string,
+): Promise<string> {
   const path = join(root, `${name}-${crypto.randomUUID()}`);
   await mkdir(path, { recursive: true });
   await writeFile(join(path, "SKILL.md"), content);
@@ -30,7 +45,9 @@ describe("CanonicalSkillStore", () => {
     await store.replaceFromDirectory(id, "example", source, hash);
 
     expect(store.pathFor("example")).toBe(join(root, "skills", "example"));
-    expect(await readFile(join(store.pathFor("example"), "SKILL.md"), "utf8")).toBe("# Example\n");
+    expect(
+      await readFile(join(store.pathFor("example"), "SKILL.md"), "utf8"),
+    ).toBe("# Example\n");
     expect(await readdir(join(root, "skills"))).toEqual(["example"]);
   });
 
@@ -44,12 +61,16 @@ describe("CanonicalSkillStore", () => {
     const oldHash = await hashSkillDirectory(oldSource);
     await store.replaceFromDirectory(id, "example", oldSource, oldHash);
 
-    await expect(store.replaceFromDirectory(id, "example", newSource, "sha256:wrong", {
-      skillId: id,
-      contentHash: oldHash,
-    })).rejects.toThrow("expected hash");
+    await expect(
+      store.replaceFromDirectory(id, "example", newSource, "sha256:wrong", {
+        skillId: id,
+        contentHash: oldHash,
+      }),
+    ).rejects.toThrow("expected hash");
 
-    expect(await readFile(join(store.pathFor("example"), "SKILL.md"), "utf8")).toBe("# Old\n");
+    expect(
+      await readFile(join(store.pathFor("example"), "SKILL.md"), "utf8"),
+    ).toBe("# Old\n");
     expect(await readdir(join(root, "skills"))).toEqual(["example"]);
   });
 
@@ -59,10 +80,21 @@ describe("CanonicalSkillStore", () => {
     const source = await fixture(root, "source", "# Managed\n");
     const store = new CanonicalSkillStore(join(root, "skills"));
     await mkdir(store.pathFor("Example"), { recursive: true });
-    await writeFile(join(store.pathFor("Example"), "SKILL.md"), "# Unmanaged\n");
+    await writeFile(
+      join(store.pathFor("Example"), "SKILL.md"),
+      "# Unmanaged\n",
+    );
 
-    await expect(store.replaceFromDirectory(skillId("sk_example"), "Example", source, await hashSkillDirectory(source)))
-      .rejects.toMatchObject({ code: "LOCAL_CONFLICT" });
-    expect(await readFile(join(store.pathFor("Example"), "SKILL.md"), "utf8")).toBe("# Unmanaged\n");
+    await expect(
+      store.replaceFromDirectory(
+        skillId("sk_example"),
+        "Example",
+        source,
+        await hashSkillDirectory(source),
+      ),
+    ).rejects.toMatchObject({ code: "LOCAL_CONFLICT" });
+    expect(
+      await readFile(join(store.pathFor("Example"), "SKILL.md"), "utf8"),
+    ).toBe("# Unmanaged\n");
   });
 });

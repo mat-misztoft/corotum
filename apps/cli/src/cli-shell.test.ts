@@ -17,7 +17,7 @@ import { CliTelemetry } from "./telemetry";
 const roots: string[] = [];
 const cli = join(import.meta.dir, "index.ts");
 const timeout = 30_000;
-const ansi = /\x1b\[/;
+const ansi = "\x1b";
 const banner = ",-----.";
 const welcomePhrases = [
   "Detected agents",
@@ -75,7 +75,12 @@ function throwingTelemetry(): CliTelemetry {
 function commandHelpArgv(): readonly (readonly string[])[] {
   const io = fixtureIo().io;
   const program = createCli(io);
-  const argv: (readonly string[])[] = [["--help"], ["--version"], ["-h"], ["-V"]];
+  const argv: (readonly string[])[] = [
+    ["--help"],
+    ["--version"],
+    ["-h"],
+    ["-V"],
+  ];
   for (const command of program.commands) {
     argv.push([command.name(), "--help"]);
     for (const subcommand of command.commands) {
@@ -90,7 +95,7 @@ function parseJson(text: string): Record<string, unknown> {
 }
 
 function assertJsonPurity(body: string): Record<string, unknown> {
-  expect(body).not.toMatch(ansi);
+  expect(body).not.toContain(ansi);
   expect(body).not.toContain(banner);
   for (const phrase of welcomePhrases) {
     expect(body).not.toContain(phrase);
@@ -162,12 +167,14 @@ describe("CLI help and version side effects", () => {
   test("every help and version path is side-effect free", async () => {
     for (const argv of commandHelpArgv()) {
       const { io, output, errors } = fixtureIo(true);
-      expect(await runCli(argv, io, throwingTelemetry())).toBe(ExitCode.SUCCESS);
+      expect(await runCli(argv, io, throwingTelemetry())).toBe(
+        ExitCode.SUCCESS,
+      );
       expect(errors).toEqual([]);
       const body = output.join("");
       expect(body.length).toBeGreaterThan(0);
       expect(body).not.toContain(banner);
-      expect(body).not.toMatch(ansi);
+      expect(body).not.toContain(ansi);
       if (argv.includes("--version") || argv.includes("-V")) {
         expect(body).toBe(`corotum ${CLI_VERSION}\n`);
       } else {
@@ -185,7 +192,9 @@ describe("CLI help and version side effects", () => {
       ["init", "--json", "--help"],
     ] as const) {
       const { io, output, errors } = fixtureIo(true);
-      expect(await runCli(argv, io, throwingTelemetry())).toBe(ExitCode.SUCCESS);
+      expect(await runCli(argv, io, throwingTelemetry())).toBe(
+        ExitCode.SUCCESS,
+      );
       expect(errors).toEqual([]);
       expect(assertJsonPurity(output.join(""))).toEqual({
         schemaVersion: 1,
@@ -269,7 +278,9 @@ describe("exit codes and non-interactive input", () => {
     expect(await runCli(["--non-interactive", "add"], io)).toBe(
       ExitCode.GENERAL_ERROR,
     );
-    expect(output.join("") + errors.join("")).toMatch(/required|missing|argument/i);
+    expect(output.join("") + errors.join("")).toMatch(
+      /required|missing|argument/i,
+    );
   });
 });
 
@@ -289,7 +300,7 @@ describe("real CLI help/version and missing init provider", () => {
       ] as const) {
         const result = await spawnCli(home, args);
         expect(result.code).toBe(0);
-        expect(result.stdout).not.toMatch(ansi);
+        expect(result.stdout).not.toContain(ansi);
         expect(result.stdout).not.toContain(banner);
         if (args.includes("--json")) {
           assertJsonPurity(result.stdout);

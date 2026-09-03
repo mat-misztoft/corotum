@@ -53,13 +53,15 @@ export async function discoverInitProvenance(
   const root = join(homeDir, ".agents", "skills");
   const entries = await readDirectories(root);
   const locks = await readLocks(join(homeDir, ".agents", ".skill-lock.json"));
-  return Promise.all(entries.map(async (entry) => ({
-    name: entry.name,
-    normalizedName: normalizeCandidateName(entry.name),
-    path: join(root, entry.name),
-    contentHash: await hashSkillDirectory(join(root, entry.name)),
-    provenance: provenanceFor(entry.name, locks),
-  })));
+  return Promise.all(
+    entries.map(async (entry) => ({
+      name: entry.name,
+      normalizedName: normalizeCandidateName(entry.name),
+      path: join(root, entry.name),
+      contentHash: await hashSkillDirectory(join(root, entry.name)),
+      provenance: provenanceFor(entry.name, locks),
+    })),
+  );
 }
 
 async function readDirectories(root: string) {
@@ -76,9 +78,8 @@ async function readLocks(path: string): Promise<Locks> {
   try {
     const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
     if (!isRecord(parsed)) return { entries: [], invalid: true };
-    const records = "skills" in parsed && isRecord(parsed.skills)
-      ? parsed.skills
-      : parsed;
+    const records =
+      "skills" in parsed && isRecord(parsed.skills) ? parsed.skills : parsed;
     return {
       entries: Object.entries(records).flatMap(([name, value]) =>
         isRecord(value) ? [{ name, ...value }] : [],
@@ -99,12 +100,17 @@ function provenanceFor(name: string, locks: Locks): InitProvenance {
     );
   });
   if (matches.length === 0) {
-    return { status: "source-unknown", reason: locks.invalid ? "invalid-lockfile" : "missing-provenance" };
+    return {
+      status: "source-unknown",
+      reason: locks.invalid ? "invalid-lockfile" : "missing-provenance",
+    };
   }
-  if (matches.length !== 1) return { status: "source-unknown", reason: "nonmatching-provenance" };
+  if (matches.length !== 1)
+    return { status: "source-unknown", reason: "nonmatching-provenance" };
 
   const [entry] = matches;
-  if (!hasRequiredFields(entry)) return { status: "source-unknown", reason: "missing-provenance" };
+  if (!hasRequiredFields(entry))
+    return { status: "source-unknown", reason: "missing-provenance" };
   const skillPath = skillDirectoryPath(entry.skillPath);
   if (!skillPath) {
     return { status: "source-unknown", reason: "nonmatching-provenance" };
@@ -125,8 +131,13 @@ function provenanceFor(name: string, locks: Locks): InitProvenance {
 }
 
 function hasRequiredFields(entry: LockEntry): entry is ValidLockEntry {
-  return [entry.source, entry.sourceType, entry.sourceUrl, entry.skillPath, entry.skillFolderHash]
-    .every((value) => typeof value === "string" && value.trim().length > 0);
+  return [
+    entry.source,
+    entry.sourceType,
+    entry.sourceUrl,
+    entry.skillPath,
+    entry.skillFolderHash,
+  ].every((value) => typeof value === "string" && value.trim().length > 0);
 }
 
 function skillDirectoryPath(path: string): string | null {
@@ -140,8 +151,14 @@ function skillDirectoryPath(path: string): string | null {
 }
 
 function normalizeSkillPath(path: string): string | null {
-  const normalized = posix.normalize(path.replaceAll("\\", "/")).replace(/^\.\//, "");
-  return normalized === "." || normalized.startsWith("../") || normalized.startsWith("/") ? null : normalized;
+  const normalized = posix
+    .normalize(path.replaceAll("\\", "/"))
+    .replace(/^\.\//, "");
+  return normalized === "." ||
+    normalized.startsWith("../") ||
+    normalized.startsWith("/")
+    ? null
+    : normalized;
 }
 
 function normalizeCandidateName(name: string): string {
@@ -149,7 +166,12 @@ function normalizeCandidateName(name: string): string {
 }
 
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

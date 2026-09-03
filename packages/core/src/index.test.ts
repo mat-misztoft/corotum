@@ -6,26 +6,26 @@ import {
   type DomainErrorCode,
   mergeDesiredStates,
   offlineSkillDisposition,
+  parseDispositionLedger,
   parseLockfile,
   parseManifest,
   parseRevisionTransition,
+  parseV2Lockfile,
+  parseV2Manifest,
   planReconcile,
   planV2Reconcile,
   type Result,
   revisionId,
   type SkillId,
   type StateProvider,
+  serializeDispositionLedger,
   serializeLockfile,
   serializeManifest,
   serializeRevisionTransition,
-  skillId,
-  validateDesiredState,
-  parseDispositionLedger,
-  parseV2Lockfile,
-  parseV2Manifest,
-  serializeDispositionLedger,
   serializeV2Lockfile,
   serializeV2Manifest,
+  skillId,
+  validateDesiredState,
   validateV2DesiredState,
 } from "./index";
 
@@ -33,56 +33,268 @@ describe("v2 desired-state contracts", () => {
   const id = skillId("sk_01V2");
   const manifest = {
     version: 2 as const,
-    skills: [{ id, name: "review", targets: "all" as const, source: { repository: "https://example.test/skills.git", path: "review", ref: "main" }, resolutionStatus: "RESOLVED" as const }],
+    skills: [
+      {
+        id,
+        name: "review",
+        targets: "all" as const,
+        source: {
+          repository: "https://example.test/skills.git",
+          path: "review",
+          ref: "main",
+        },
+        resolutionStatus: "RESOLVED" as const,
+      },
+    ],
   };
   const lockfile = {
     version: 2 as const,
-    skills: [{ id, name: "review", source: { ...manifest.skills[0].source, revision: "a".repeat(40), contentHash: `sha256:${"a".repeat(64)}` as const }, materialization: { kind: "source" as const, contentHash: `sha256:${"a".repeat(64)}` as const } }],
+    skills: [
+      {
+        id,
+        name: "review",
+        source: {
+          ...manifest.skills[0].source,
+          revision: "a".repeat(40),
+          contentHash: `sha256:${"a".repeat(64)}` as const,
+        },
+        materialization: {
+          kind: "source" as const,
+          contentHash: `sha256:${"a".repeat(64)}` as const,
+        },
+      },
+    ],
   };
 
   test("round-trips byte-stably and preserves source nullability for artifact locks", () => {
-    const artifactManifest = { ...manifest, skills: [{ ...manifest.skills[0], source: null }] };
-    const artifactLock = { version: 2 as const, skills: [{ id, name: "review", materialization: { kind: "artifact" as const, artifact: { kind: "git-tree" as const, contentHash: `sha256:${"b".repeat(64)}` as const, integrityHash: `sha256:${"c".repeat(64)}` as const, locator: "artifacts/review", sizeBytes: 1 } } }] };
-    expect(serializeV2Manifest(manifest)).toBe(serializeV2Manifest({ ...manifest, skills: [...manifest.skills].reverse() }));
+    const artifactManifest = {
+      ...manifest,
+      skills: [{ ...manifest.skills[0], source: null }],
+    };
+    const artifactLock = {
+      version: 2 as const,
+      skills: [
+        {
+          id,
+          name: "review",
+          materialization: {
+            kind: "artifact" as const,
+            artifact: {
+              kind: "git-tree" as const,
+              contentHash: `sha256:${"b".repeat(64)}` as const,
+              integrityHash: `sha256:${"c".repeat(64)}` as const,
+              locator: "artifacts/review",
+              sizeBytes: 1,
+            },
+          },
+        },
+      ],
+    };
+    expect(serializeV2Manifest(manifest)).toBe(
+      serializeV2Manifest({
+        ...manifest,
+        skills: [...manifest.skills].reverse(),
+      }),
+    );
     expect(serializeV2Lockfile(lockfile)).toBe(serializeV2Lockfile(lockfile));
-    expect(validateV2DesiredState({ manifest: artifactManifest, lockfile: artifactLock }).lockfile.skills[0]?.materialization.kind).toBe("artifact");
-    expect(parseV2Lockfile(serializeV2Lockfile(lockfile), parseV2Manifest(serializeV2Manifest(manifest)))).toEqual(lockfile);
+    expect(
+      validateV2DesiredState({
+        manifest: artifactManifest,
+        lockfile: artifactLock,
+      }).lockfile.skills[0]?.materialization.kind,
+    ).toBe("artifact");
+    expect(
+      parseV2Lockfile(
+        serializeV2Lockfile(lockfile),
+        parseV2Manifest(serializeV2Manifest(manifest)),
+      ),
+    ).toEqual(lockfile);
   });
 
   test("rejects duplicate normalized names and incompatible materialization", () => {
-    expect(() => parseV2Manifest(serializeV2Manifest({ ...manifest, skills: [...manifest.skills, { ...manifest.skills[0], id: skillId("sk_02V2"), name: "REVIEW" }] }))).toThrow("Invalid corotum.yaml manifest");
-    expect(() => parseV2Manifest(serializeV2Manifest({ ...manifest, skills: [...manifest.skills, { ...manifest.skills[0], name: "other" }] }))).toThrow("Invalid corotum.yaml manifest");
-    expect(() => validateV2DesiredState({ manifest, lockfile: { ...lockfile, skills: [{ ...lockfile.skills[0], materialization: { kind: "source", contentHash: `sha256:${"b".repeat(64)}` as const } }] } })).toThrow("must match its source hash");
-    expect(() => validateV2DesiredState({ manifest, lockfile: { ...lockfile, skills: [{ ...lockfile.skills[0], source: { ...lockfile.skills[0].source, path: "different" } }] } })).toThrow("must match its manifest source");
-    expect(() => validateV2DesiredState({ manifest, lockfile: { ...lockfile, skills: [{ ...lockfile.skills[0], materialization: { kind: "artifact", artifact: { kind: "git-tree", contentHash: `sha256:${"a".repeat(64)}` as const, integrityHash: `sha256:${"b".repeat(64)}` as const, locator: "artifacts/review", sizeBytes: 1 } } }] } })).toThrow("must not include a source lock");
+    expect(() =>
+      parseV2Manifest(
+        serializeV2Manifest({
+          ...manifest,
+          skills: [
+            ...manifest.skills,
+            { ...manifest.skills[0], id: skillId("sk_02V2"), name: "REVIEW" },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid corotum.yaml manifest");
+    expect(() =>
+      parseV2Manifest(
+        serializeV2Manifest({
+          ...manifest,
+          skills: [
+            ...manifest.skills,
+            { ...manifest.skills[0], name: "other" },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid corotum.yaml manifest");
+    expect(() =>
+      validateV2DesiredState({
+        manifest,
+        lockfile: {
+          ...lockfile,
+          skills: [
+            {
+              ...lockfile.skills[0],
+              materialization: {
+                kind: "source",
+                contentHash: `sha256:${"b".repeat(64)}` as const,
+              },
+            },
+          ],
+        },
+      }),
+    ).toThrow("must match its source hash");
+    expect(() =>
+      validateV2DesiredState({
+        manifest,
+        lockfile: {
+          ...lockfile,
+          skills: [
+            {
+              ...lockfile.skills[0],
+              source: { ...lockfile.skills[0].source, path: "different" },
+            },
+          ],
+        },
+      }),
+    ).toThrow("must match its manifest source");
+    expect(() =>
+      validateV2DesiredState({
+        manifest,
+        lockfile: {
+          ...lockfile,
+          skills: [
+            {
+              ...lockfile.skills[0],
+              materialization: {
+                kind: "artifact",
+                artifact: {
+                  kind: "git-tree",
+                  contentHash: `sha256:${"a".repeat(64)}` as const,
+                  integrityHash: `sha256:${"b".repeat(64)}` as const,
+                  locator: "artifacts/review",
+                  sizeBytes: 1,
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ).toThrow("must not include a source lock");
   });
 
   test("rejects malformed IDs, hashes, and incomplete artifact descriptors", () => {
-    expect(() => parseV2Manifest("version: 2\nskills:\n  - id: invalid\n    name: review\n    targets: all\n")).toThrow("Invalid corotum.yaml manifest");
-    expect(() => parseV2Manifest("version: 2\nskills:\n  - id: sk_01V2\n    name: nested\\review\n    targets: all\n")).toThrow("Invalid corotum.yaml manifest");
-    expect(() => parseV2Lockfile(JSON.stringify({ ...lockfile, skills: [{ ...lockfile.skills[0], source: { ...lockfile.skills[0].source, contentHash: "sha256:bad" } }] }), manifest)).toThrow("Invalid corotum.lock lockfile");
-    expect(() => parseV2Lockfile(JSON.stringify({ ...lockfile, skills: [{ ...lockfile.skills[0], source: { ...lockfile.skills[0].source, revision: "HEAD" } }] }), manifest)).toThrow("Invalid corotum.lock lockfile");
-    expect(() => parseV2Lockfile(JSON.stringify({ version: 2, skills: [{ id, name: "review", materialization: { kind: "artifact", artifact: { kind: "git-tree", contentHash: `sha256:${"a".repeat(64)}`, integrityHash: `sha256:${"b".repeat(64)}`, locator: "artifact" } } }] }), manifest)).toThrow("Invalid corotum.lock lockfile");
+    expect(() =>
+      parseV2Manifest(
+        "version: 2\nskills:\n  - id: invalid\n    name: review\n    targets: all\n",
+      ),
+    ).toThrow("Invalid corotum.yaml manifest");
+    expect(() =>
+      parseV2Manifest(
+        "version: 2\nskills:\n  - id: sk_01V2\n    name: nested\\review\n    targets: all\n",
+      ),
+    ).toThrow("Invalid corotum.yaml manifest");
+    expect(() =>
+      parseV2Lockfile(
+        JSON.stringify({
+          ...lockfile,
+          skills: [
+            {
+              ...lockfile.skills[0],
+              source: {
+                ...lockfile.skills[0].source,
+                contentHash: "sha256:bad",
+              },
+            },
+          ],
+        }),
+        manifest,
+      ),
+    ).toThrow("Invalid corotum.lock lockfile");
+    expect(() =>
+      parseV2Lockfile(
+        JSON.stringify({
+          ...lockfile,
+          skills: [
+            {
+              ...lockfile.skills[0],
+              source: { ...lockfile.skills[0].source, revision: "HEAD" },
+            },
+          ],
+        }),
+        manifest,
+      ),
+    ).toThrow("Invalid corotum.lock lockfile");
+    expect(() =>
+      parseV2Lockfile(
+        JSON.stringify({
+          version: 2,
+          skills: [
+            {
+              id,
+              name: "review",
+              materialization: {
+                kind: "artifact",
+                artifact: {
+                  kind: "git-tree",
+                  contentHash: `sha256:${"a".repeat(64)}`,
+                  integrityHash: `sha256:${"b".repeat(64)}`,
+                  locator: "artifact",
+                },
+              },
+            },
+          ],
+        }),
+        manifest,
+      ),
+    ).toThrow("Invalid corotum.lock lockfile");
   });
 
   test("serializes a durable disposition ledger after unrelated revisions and re-add", () => {
-    const ledger = { version: 2 as const, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "UNMANAGE" as const, effectiveSequence: 2 } } };
+    const ledger = {
+      version: 2 as const,
+      activeDispositions: {
+        [id]: {
+          skillId: id,
+          name: "review",
+          disposition: "UNMANAGE" as const,
+          effectiveSequence: 2,
+        },
+      },
+    };
     const serialized = serializeDispositionLedger(ledger);
     const afterUnrelatedRevision = parseDispositionLedger(serialized);
     expect(afterUnrelatedRevision).toEqual(ledger);
     expect(serializeDispositionLedger(afterUnrelatedRevision)).toBe(serialized);
-    expect(validateV2DesiredState({ manifest, lockfile }).manifest.skills).toEqual([expect.objectContaining({ id, name: "review" })]);
-    expect(afterUnrelatedRevision.activeDispositions[id]).toEqual(ledger.activeDispositions[id]);
+    expect(
+      validateV2DesiredState({ manifest, lockfile }).manifest.skills,
+    ).toEqual([expect.objectContaining({ id, name: "review" })]);
+    expect(afterUnrelatedRevision.activeDispositions[id]).toEqual(
+      ledger.activeDispositions[id],
+    );
     const withAudit = {
       ...ledger,
       audit: [
         { type: "ADOPT" as const, skillId: id, metadata: {} },
-        { type: "ADOPT" as const, skillId: skillId("sk_02V2"), metadata: { origin: "init" } },
+        {
+          type: "ADOPT" as const,
+          skillId: skillId("sk_02V2"),
+          metadata: { origin: "init" },
+        },
       ],
     };
-    expect(parseDispositionLedger(serializeDispositionLedger(withAudit)).audit?.map((entry) => entry.skillId)).toEqual(
-      ["sk_01V2", "sk_02V2"],
-    );
+    expect(
+      parseDispositionLedger(serializeDispositionLedger(withAudit)).audit?.map(
+        (entry) => entry.skillId,
+      ),
+    ).toEqual(["sk_01V2", "sk_02V2"]);
   });
 
   test("publishes every v2 materialization failure code", () => {
@@ -311,69 +523,263 @@ describe("v2 local reconcile safety", () => {
   const id = skillId("sk_v2local");
   const hash = `sha256:${"a".repeat(64)}` as const;
   const desired = {
-    manifest: { version: 2 as const, skills: [{ id, name: "review", targets: "all" as const, resolutionStatus: "RESOLVED" as const }] },
-    lockfile: { version: 2 as const, skills: [{ id, name: "review", materialization: { kind: "artifact" as const, artifact: { kind: "git-tree" as const, contentHash: hash, integrityHash: hash, locator: "review", sizeBytes: 1 } } }] },
+    manifest: {
+      version: 2 as const,
+      skills: [
+        {
+          id,
+          name: "review",
+          targets: "all" as const,
+          resolutionStatus: "RESOLVED" as const,
+        },
+      ],
+    },
+    lockfile: {
+      version: 2 as const,
+      skills: [
+        {
+          id,
+          name: "review",
+          materialization: {
+            kind: "artifact" as const,
+            artifact: {
+              kind: "git-tree" as const,
+              contentHash: hash,
+              integrityHash: hash,
+              locator: "review",
+              sizeBytes: 1,
+            },
+          },
+        },
+      ],
+    },
   };
 
   test("uses a durable ledger and never deletes unknown local ownership", () => {
-    const removedDesired = { manifest: { version: 2 as const, skills: [] }, lockfile: { version: 2 as const, skills: [] } };
-    expect(planV2Reconcile(removedDesired, { skills: { [id]: { managed: true, contentHash: hash } } }, { version: 2, activeDispositions: {} })).toEqual({
-      classifications: [{ skillId: id, classification: "LOCAL_CONFLICT" }], operations: [],
+    const removedDesired = {
+      manifest: { version: 2 as const, skills: [] },
+      lockfile: { version: 2 as const, skills: [] },
+    };
+    expect(
+      planV2Reconcile(
+        removedDesired,
+        { skills: { [id]: { managed: true, contentHash: hash } } },
+        { version: 2, activeDispositions: {} },
+      ),
+    ).toEqual({
+      classifications: [{ skillId: id, classification: "LOCAL_CONFLICT" }],
+      operations: [],
     });
-    expect(planV2Reconcile(removedDesired, { skills: { [id]: { managed: true, contentHash: hash } } }, {
-      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "UNMANAGE", effectiveSequence: 4 } },
-    }).operations).toEqual([{ kind: "UNMANAGE", skillId: id }]);
-    expect(planV2Reconcile(removedDesired, { skills: { [id]: { managed: true, contentHash: hash } } }, {
-      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "REMOVE", effectiveSequence: 1 } },
-    }).operations).toEqual([{ kind: "REMOVE", skillId: id }]);
-    const target = { agentId: "pi", path: "/home/test/.pi/agent/skills/review" };
-    expect(planV2Reconcile(removedDesired, {
-      skills: { [id]: { managed: true, contentHash: hash, targets: [{ ...target, managed: true, contentHash: `sha256:${"b".repeat(64)}` }] } },
-    }, {
-      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "REMOVE", effectiveSequence: 1 } },
-    })).toEqual({
-      classifications: [{ skillId: id, classification: "DRIFTED", target }], operations: [],
+    expect(
+      planV2Reconcile(
+        removedDesired,
+        { skills: { [id]: { managed: true, contentHash: hash } } },
+        {
+          version: 2,
+          activeDispositions: {
+            [id]: {
+              skillId: id,
+              name: "review",
+              disposition: "UNMANAGE",
+              effectiveSequence: 4,
+            },
+          },
+        },
+      ).operations,
+    ).toEqual([{ kind: "UNMANAGE", skillId: id }]);
+    expect(
+      planV2Reconcile(
+        removedDesired,
+        { skills: { [id]: { managed: true, contentHash: hash } } },
+        {
+          version: 2,
+          activeDispositions: {
+            [id]: {
+              skillId: id,
+              name: "review",
+              disposition: "REMOVE",
+              effectiveSequence: 1,
+            },
+          },
+        },
+      ).operations,
+    ).toEqual([{ kind: "REMOVE", skillId: id }]);
+    const target = {
+      agentId: "pi",
+      path: "/home/test/.pi/agent/skills/review",
+    };
+    expect(
+      planV2Reconcile(
+        removedDesired,
+        {
+          skills: {
+            [id]: {
+              managed: true,
+              contentHash: hash,
+              targets: [
+                {
+                  ...target,
+                  managed: true,
+                  contentHash: `sha256:${"b".repeat(64)}`,
+                },
+              ],
+            },
+          },
+        },
+        {
+          version: 2,
+          activeDispositions: {
+            [id]: {
+              skillId: id,
+              name: "review",
+              disposition: "REMOVE",
+              effectiveSequence: 1,
+            },
+          },
+        },
+      ),
+    ).toEqual({
+      classifications: [{ skillId: id, classification: "DRIFTED", target }],
+      operations: [],
     });
-    expect(planV2Reconcile(removedDesired, {
-      skills: { [id]: { managed: true, contentHash: `sha256:${"b".repeat(64)}`, expectedContentHash: hash } },
-    }, {
-      version: 2, activeDispositions: { [id]: { skillId: id, name: "review", disposition: "UNMANAGE", effectiveSequence: 1 } },
-    })).toEqual({
-      classifications: [{ skillId: id, classification: "DRIFTED" }], operations: [],
+    expect(
+      planV2Reconcile(
+        removedDesired,
+        {
+          skills: {
+            [id]: {
+              managed: true,
+              contentHash: `sha256:${"b".repeat(64)}`,
+              expectedContentHash: hash,
+            },
+          },
+        },
+        {
+          version: 2,
+          activeDispositions: {
+            [id]: {
+              skillId: id,
+              name: "review",
+              disposition: "UNMANAGE",
+              effectiveSequence: 1,
+            },
+          },
+        },
+      ),
+    ).toEqual({
+      classifications: [{ skillId: id, classification: "DRIFTED" }],
+      operations: [],
     });
   });
 
   test("claims only an exact unmanaged re-add and blocks changed content", () => {
-    expect(planV2Reconcile({ ...desired, manifest: { ...desired.manifest, skills: [{ ...desired.manifest.skills[0], id }] } }, { skills: { [id]: { managed: false, contentHash: hash } } }, { version: 2, activeDispositions: {} }).operations).toEqual([
-      expect.objectContaining({ kind: "INSTALL", skill: expect.objectContaining({ id }) }),
+    expect(
+      planV2Reconcile(
+        {
+          ...desired,
+          manifest: {
+            ...desired.manifest,
+            skills: [{ ...desired.manifest.skills[0], id }],
+          },
+        },
+        { skills: { [id]: { managed: false, contentHash: hash } } },
+        { version: 2, activeDispositions: {} },
+      ).operations,
+    ).toEqual([
+      expect.objectContaining({
+        kind: "INSTALL",
+        skill: expect.objectContaining({ id }),
+      }),
     ]);
-    expect(planV2Reconcile(desired, { skills: { [id]: { managed: false, contentHash: `sha256:${"b".repeat(64)}` } } }, { version: 2, activeDispositions: {} })).toEqual({
-      classifications: [{ skillId: id, classification: "LOCAL_CONFLICT" }], operations: [],
+    expect(
+      planV2Reconcile(
+        desired,
+        {
+          skills: {
+            [id]: { managed: false, contentHash: `sha256:${"b".repeat(64)}` },
+          },
+        },
+        { version: 2, activeDispositions: {} },
+      ),
+    ).toEqual({
+      classifications: [{ skillId: id, classification: "LOCAL_CONFLICT" }],
+      operations: [],
     });
-    expect(planV2Reconcile(desired, { skills: { [id]: { managed: true, contentHash: `sha256:${"b".repeat(64)}` } } }, { version: 2, activeDispositions: {} })).toEqual({
-      classifications: [{ skillId: id, classification: "DRIFTED" }], operations: [],
+    expect(
+      planV2Reconcile(
+        desired,
+        {
+          skills: {
+            [id]: { managed: true, contentHash: `sha256:${"b".repeat(64)}` },
+          },
+        },
+        { version: 2, activeDispositions: {} },
+      ),
+    ).toEqual({
+      classifications: [{ skillId: id, classification: "DRIFTED" }],
+      operations: [],
     });
   });
 
   test("repairs only a missing verified target and plans target drift or collisions as no-ops", () => {
-    const target = { agentId: "pi", path: "/home/test/.pi/agent/skills/review" };
-    expect(planV2Reconcile(desired, {
-      skills: { [id]: { managed: true, contentHash: hash, targets: [{ ...target, managed: true, contentHash: null }] } },
-    }, { version: 2, activeDispositions: {} }).operations).toEqual([
-      expect.objectContaining({ kind: "REPAIR_TARGET", skill: expect.objectContaining({ id }), target }),
+    const target = {
+      agentId: "pi",
+      path: "/home/test/.pi/agent/skills/review",
+    };
+    expect(
+      planV2Reconcile(
+        desired,
+        {
+          skills: {
+            [id]: {
+              managed: true,
+              contentHash: hash,
+              targets: [{ ...target, managed: true, contentHash: null }],
+            },
+          },
+        },
+        { version: 2, activeDispositions: {} },
+      ).operations,
+    ).toEqual([
+      expect.objectContaining({
+        kind: "REPAIR_TARGET",
+        skill: expect.objectContaining({ id }),
+        target,
+      }),
     ]);
 
-    const collision = planV2Reconcile(desired, {
-      skills: { [id]: { managed: false, contentHash: null, targets: [
-        { ...target, managed: false, contentHash: hash },
-        { agentId: "codex", path: "/home/test/.codex/skills/review", managed: true, contentHash: `sha256:${"b".repeat(64)}` },
-      ] } },
-    }, { version: 2, activeDispositions: {} });
+    const collision = planV2Reconcile(
+      desired,
+      {
+        skills: {
+          [id]: {
+            managed: false,
+            contentHash: null,
+            targets: [
+              { ...target, managed: false, contentHash: hash },
+              {
+                agentId: "codex",
+                path: "/home/test/.codex/skills/review",
+                managed: true,
+                contentHash: `sha256:${"b".repeat(64)}`,
+              },
+            ],
+          },
+        },
+      },
+      { version: 2, activeDispositions: {} },
+    );
     expect(collision.operations).toEqual([]);
-    expect(collision.classifications).toEqual(expect.arrayContaining([
-      { skillId: id, classification: "LOCAL_CONFLICT", target },
-      expect.objectContaining({ skillId: id, classification: "DRIFTED", target: expect.objectContaining({ agentId: "codex" }) }),
-    ]));
+    expect(collision.classifications).toEqual(
+      expect.arrayContaining([
+        { skillId: id, classification: "LOCAL_CONFLICT", target },
+        expect.objectContaining({
+          skillId: id,
+          classification: "DRIFTED",
+          target: expect.objectContaining({ agentId: "codex" }),
+        }),
+      ]),
+    );
   });
 });
 

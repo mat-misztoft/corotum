@@ -15,22 +15,22 @@ import { basename, dirname, join, sep } from "node:path";
 
 import { builtInAgentAdapters } from "../../../packages/agent-targets/src/index";
 import {
-  parseDispositionLedger,
+  type parseDispositionLedger,
   parseLockfile,
   parseManifest,
   parseRevisionTransition,
   parseV2Lockfile,
   parseV2Manifest,
+  type SkillId,
   serializeDispositionLedger,
   serializeV2Lockfile,
   serializeV2Manifest,
   skillId,
-  validateV2DesiredState,
-  type SkillId,
   type V2DesiredState,
+  validateV2DesiredState,
 } from "../../../packages/core/src/index";
 import { hashSkillDirectory } from "../../../packages/skills-adapter/src/canonical-store";
-import { defaultConfig, type CorotumConfig } from "./config";
+import { type CorotumConfig, defaultConfig } from "./config";
 import type { LocalOperationalState, LocalTargetState } from "./local-state";
 import type { CorotumPaths } from "./platform";
 
@@ -161,20 +161,31 @@ export class LegacyMigrator {
   }): Promise<LegacyMigrationResult> {
     const markerPath = join(input.current.stateDir, LEGACY_MIGRATION_MARKER);
     const existing = await readMarker(markerPath);
-    if (existing?.status === "state-updated" || existing?.status === "cleaned") {
+    if (
+      existing?.status === "state-updated" ||
+      existing?.status === "cleaned"
+    ) {
       return { marker: existing, conflicts: existing.conflicts };
     }
 
     const discovery = await this.discover(input);
-    const locks = await loadDesiredLocks(unique([input.legacy.gitDir, input.current.gitDir]));
-    const previousState = await readState(join(input.legacy.stateDir, "state.json"));
+    const locks = await loadDesiredLocks(
+      unique([input.legacy.gitDir, input.current.gitDir]),
+    );
+    const previousState = await readState(
+      join(input.legacy.stateDir, "state.json"),
+    );
     const conflicts: LegacyConflict[] = [];
-    const staged: LegacyStagedSkill[] = existing?.status === "copied" ? [...existing.skills] : [];
-    const files: LegacyCopiedFile[] = existing?.status === "copied" ? [...existing.files] : [];
+    const staged: LegacyStagedSkill[] =
+      existing?.status === "copied" ? [...existing.skills] : [];
+    const files: LegacyCopiedFile[] =
+      existing?.status === "copied" ? [...existing.files] : [];
     const backups = new Set<string>(existing?.backups ?? []);
 
     const byId = new Map(staged.map((skill) => [skill.skillId, skill]));
-    const claimedNames = new Map(staged.map((skill) => [normalizeName(skill.name), skill]));
+    const claimedNames = new Map(
+      staged.map((skill) => [normalizeName(skill.name), skill]),
+    );
 
     for (const directory of discovery.skillDirs) {
       const id = basename(directory);
@@ -183,7 +194,8 @@ export class LegacyMigrator {
         conflicts.push({
           path: directory,
           code: "LOCAL_CONFLICT",
-          message: "Unmanaged or unlocked legacy skill directory was left untouched.",
+          message:
+            "Unmanaged or unlocked legacy skill directory was left untouched.",
         });
         continue;
       }
@@ -212,7 +224,8 @@ export class LegacyMigrator {
         conflicts.push({
           path: directory,
           code: "LOCAL_CONFLICT",
-          message: "Multiple legacy skill directories map to the same desired name.",
+          message:
+            "Multiple legacy skill directories map to the same desired name.",
         });
         continue;
       }
@@ -222,7 +235,8 @@ export class LegacyMigrator {
             conflicts.push({
               path: destination,
               code: "LOCAL_CONFLICT",
-              message: "Named canonical destination already exists with different content.",
+              message:
+                "Named canonical destination already exists with different content.",
             });
             continue;
           }
@@ -238,7 +252,9 @@ export class LegacyMigrator {
         await this.stageDirectory(directory, destination);
         if ((await hashSkillDirectory(destination)) !== hash) {
           await rm(destination, { force: true, recursive: true });
-          throw new LegacyMigrationError("Staged named skill does not match its locked hash.");
+          throw new LegacyMigrationError(
+            "Staged named skill does not match its locked hash.",
+          );
         }
       }
       const targets = await retarget(
@@ -283,12 +299,17 @@ export class LegacyMigrator {
     await this.writeCurrentState(input, copiedSkills, previousState);
     await this.hooks.afterState?.();
 
-    const marker: LegacyMigrationMarker = { ...copiedMarker, status: "state-updated" };
+    const marker: LegacyMigrationMarker = {
+      ...copiedMarker,
+      status: "state-updated",
+    };
     await writeMarker(markerPath, marker);
     return { marker, conflicts };
   }
 
-  async cleanup(input: { current: CorotumPaths }): Promise<LegacyMigrationMarker> {
+  async cleanup(input: {
+    current: CorotumPaths;
+  }): Promise<LegacyMigrationMarker> {
     const markerPath = join(input.current.stateDir, LEGACY_MIGRATION_MARKER);
     const extras = await extraMarkers(input.current.stateDir, markerPath);
     if (extras.length > 0) {
@@ -321,7 +342,10 @@ export class LegacyMigrator {
     return cleaned;
   }
 
-  private async stageDirectory(source: string, destination: string): Promise<void> {
+  private async stageDirectory(
+    source: string,
+    destination: string,
+  ): Promise<void> {
     await mkdir(dirname(destination), { recursive: true });
     const staging = `${destination}.${crypto.randomUUID()}.staging`;
     try {
@@ -341,7 +365,10 @@ export class LegacyMigrator {
     const pairs: Array<readonly [string, string]> = [
       [input.legacy.configFile, input.current.configFile],
       [input.legacy.credentialsFile, input.current.credentialsFile],
-      [join(input.legacy.stateDir, "state.json"), join(input.current.stateDir, "state.json")],
+      [
+        join(input.legacy.stateDir, "state.json"),
+        join(input.current.stateDir, "state.json"),
+      ],
     ];
     for (const [from, to] of pairs) {
       if (!(await exists(from)) || from === to) continue;
@@ -350,17 +377,26 @@ export class LegacyMigrator {
       backups.add(from);
     }
     const gitDirs = unique(
-      input.legacy.gitDir !== input.current.gitDir && (await exists(input.legacy.gitDir))
+      input.legacy.gitDir !== input.current.gitDir &&
+        (await exists(input.legacy.gitDir))
         ? [input.current.gitDir]
         : [input.legacy.gitDir, input.current.gitDir],
     );
-    if (input.legacy.gitDir !== input.current.gitDir && (await exists(input.legacy.gitDir))) {
+    if (
+      input.legacy.gitDir !== input.current.gitDir &&
+      (await exists(input.legacy.gitDir))
+    ) {
       await mkdir(input.current.gitDir, { recursive: true });
       for (const cache of await listDirectories(input.legacy.gitDir)) {
         const destination = join(input.current.gitDir, basename(cache));
-        if (!(await exists(destination))) await this.stageDirectory(cache, destination);
+        if (!(await exists(destination)))
+          await this.stageDirectory(cache, destination);
         backups.add(cache);
-        for (const name of ["toolmirror.yaml", "toolmirror.lock", "toolmirror.transition.json"]) {
+        for (const name of [
+          "toolmirror.yaml",
+          "toolmirror.lock",
+          "toolmirror.transition.json",
+        ]) {
           const file = join(cache, name);
           if (await exists(file)) backups.add(file);
         }
@@ -372,7 +408,11 @@ export class LegacyMigrator {
         conflicts.push(...imported.conflicts);
         files.push(...imported.files);
         for (const file of imported.files) {
-          if (file.from === input.legacy.gitDir || file.from.startsWith(`${input.legacy.gitDir}${sep}`)) backups.add(file.from);
+          if (
+            file.from === input.legacy.gitDir ||
+            file.from.startsWith(`${input.legacy.gitDir}${sep}`)
+          )
+            backups.add(file.from);
         }
       }
     }
@@ -410,7 +450,10 @@ export class LegacyMigrator {
               contentHash: skill.contentHash,
               ownership: "verified" as const,
               targets: Object.fromEntries(
-                skill.targets.map((target) => [`${target.agentId}\0${target.path}`, target]),
+                skill.targets.map((target) => [
+                  `${target.agentId}\0${target.path}`,
+                  target,
+                ]),
               ),
             },
           ]),
@@ -428,7 +471,10 @@ export class LegacyMigrator {
       );
     }
     for (const skill of marker.skills) {
-      if (!(await exists(skill.to)) || (await hashSkillDirectory(skill.to)) !== skill.contentHash) {
+      if (
+        !(await exists(skill.to)) ||
+        (await hashSkillDirectory(skill.to)) !== skill.contentHash
+      ) {
         throw new LegacyMigrationError(
           `Legacy cleanup refused: named canonical hash for ${skill.name} does not match.`,
           "LOCAL_CONFLICT",
@@ -446,7 +492,9 @@ export class LegacyMigrator {
   }
 
   private async deleteBackups(backups: readonly string[]): Promise<void> {
-    for (const path of [...backups].sort((left, right) => right.length - left.length)) {
+    for (const path of [...backups].sort(
+      (left, right) => right.length - left.length,
+    )) {
       await rm(path, { force: true, recursive: true });
     }
   }
@@ -473,7 +521,12 @@ async function importGitFiles(
   const v2Lock = join(cache, "corotum.lock");
   const v2Transitions = join(cache, "corotum.transitions.json");
 
-  const converted = await convertGitSnapshot(v1Manifest, v1Lock, v2Manifest, v2Lock);
+  const converted = await convertGitSnapshot(
+    v1Manifest,
+    v1Lock,
+    v2Manifest,
+    v2Lock,
+  );
   if (converted.kind === "conflict") {
     conflicts.push(converted.conflict);
   } else if (converted.kind === "written") {
@@ -481,7 +534,10 @@ async function importGitFiles(
   }
 
   if ((await exists(v1Transition)) && !(await exists(v2Transitions))) {
-    const ledger = await ledgerFromTransition(v1Transition, converted.kind === "written" ? converted.state : null);
+    const ledger = await ledgerFromTransition(
+      v1Transition,
+      converted.kind === "written" ? converted.state : null,
+    );
     if (ledger) {
       await writeText(v2Transitions, serializeDispositionLedger(ledger));
       files.push({ from: v1Transition, to: v2Transitions });
@@ -489,7 +545,8 @@ async function importGitFiles(
       conflicts.push({
         path: v1Transition,
         code: "LOCAL_CONFLICT",
-        message: "Current transition file is not a valid recoverable v2 ledger.",
+        message:
+          "Current transition file is not a valid recoverable v2 ledger.",
       });
     }
   }
@@ -506,11 +563,19 @@ async function convertGitSnapshot(
   | { kind: "written"; files: LegacyCopiedFile[]; state: V2DesiredState }
   | { kind: "conflict"; conflict: LegacyConflict }
 > {
-  if (await exists(v2Manifest) && (await exists(v2Lock))) return { kind: "none" };
-  if (await exists(v2Manifest) && (await exists(v1Lock)) && !(await exists(v2Lock))) {
+  if ((await exists(v2Manifest)) && (await exists(v2Lock)))
+    return { kind: "none" };
+  if (
+    (await exists(v2Manifest)) &&
+    (await exists(v1Lock)) &&
+    !(await exists(v2Lock))
+  ) {
     try {
       const manifest = parseV2Manifest(await readFile(v2Manifest, "utf8"));
-      const lockfile = parseV2Lockfile(await readFile(v1Lock, "utf8"), manifest);
+      const lockfile = parseV2Lockfile(
+        await readFile(v1Lock, "utf8"),
+        manifest,
+      );
       const state = validateV2DesiredState({ manifest, lockfile });
       await writeText(v2Lock, serializeV2Lockfile(state.lockfile));
       return { kind: "written", files: [{ from: v1Lock, to: v2Lock }], state };
@@ -525,7 +590,8 @@ async function convertGitSnapshot(
       };
     }
   }
-  if (!(await exists(v1Manifest)) && !(await exists(v1Lock))) return { kind: "none" };
+  if (!(await exists(v1Manifest)) && !(await exists(v1Lock)))
+    return { kind: "none" };
   try {
     const state = v1ToV2(
       parseManifest(await readFile(v1Manifest, "utf8")),
@@ -605,7 +671,8 @@ async function ledgerFromTransition(
       return { version: 2, activeDispositions: {} };
     }
     const name =
-      state?.manifest.skills.find((skill) => skill.id === transition.skillId)?.name ??
+      state?.manifest.skills.find((skill) => skill.id === transition.skillId)
+        ?.name ??
       transition.metadata.name ??
       transition.skillId;
     return {
@@ -624,7 +691,9 @@ async function ledgerFromTransition(
   }
 }
 
-async function loadDesiredLocks(gitDirs: readonly string[]): Promise<DesiredLock[]> {
+async function loadDesiredLocks(
+  gitDirs: readonly string[],
+): Promise<DesiredLock[]> {
   const locks: DesiredLock[] = [];
   const seen = new Set<string>();
   for (const gitDir of gitDirs) {
@@ -648,7 +717,10 @@ async function locksFromCache(cache: string): Promise<DesiredLock[]> {
     if (await exists(v2Manifest)) {
       const manifest = parseV2Manifest(await readFile(v2Manifest, "utf8"));
       const lockSource = (await exists(v2Lock)) ? v2Lock : v1Lock;
-      const lockfile = parseV2Lockfile(await readFile(lockSource, "utf8"), manifest);
+      const lockfile = parseV2Lockfile(
+        await readFile(lockSource, "utf8"),
+        manifest,
+      );
       return lockfile.skills.map((lock) => ({
         id: lock.id,
         name: lock.name,
@@ -682,20 +754,31 @@ async function retarget(
 ): Promise<{ targets: LocalTargetState[]; conflicts: LegacyConflict[] }> {
   const targets: LocalTargetState[] = [];
   const conflicts: LegacyConflict[] = [];
-  const candidates = new Map<string, { agentId: LocalTargetState["agentId"]; path: string }>();
+  const candidates = new Map<
+    string,
+    { agentId: LocalTargetState["agentId"]; path: string }
+  >();
   for (const target of Object.values(recorded)) {
     candidates.set(target.path, { agentId: target.agentId, path: target.path });
   }
   for (const adapter of builtInAgentAdapters) {
     for (const parent of adapter.globalSkillPaths(homeDir)) {
-      for (const path of [join(parent, name), join(parent, basename(oldCanonical))]) {
+      for (const path of [
+        join(parent, name),
+        join(parent, basename(oldCanonical)),
+      ]) {
         candidates.set(path, { agentId: adapter.id, path });
       }
     }
   }
   for (const candidate of candidates.values()) {
     if (!(await exists(candidate.path))) continue;
-    const result = await retargetOne(candidate.path, oldCanonical, newCanonical, expectedHash);
+    const result = await retargetOne(
+      candidate.path,
+      oldCanonical,
+      newCanonical,
+      expectedHash,
+    );
     if (result.kind === "conflict") {
       conflicts.push({
         path: candidate.path,
@@ -730,7 +813,10 @@ async function retargetOne(
       const oldReal = await realpath(oldCanonical).catch(() => oldCanonical);
       const newReal = await realpath(newCanonical).catch(() => newCanonical);
       if (current !== oldReal && current !== newReal) {
-        return { kind: "conflict", message: "Symlink target is not the migrated canonical skill." };
+        return {
+          kind: "conflict",
+          message: "Symlink target is not the migrated canonical skill.",
+        };
       }
       if (current !== newReal) {
         const staging = `${path}.${crypto.randomUUID()}.staging`;
@@ -740,15 +826,24 @@ async function retargetOne(
       return { kind: "ok", mode: "symlink" };
     }
     if ((await hashSkillDirectory(path)) !== expectedHash) {
-      return { kind: "conflict", message: "Copy-fallback target does not match the locked hash." };
+      return {
+        kind: "conflict",
+        message: "Copy-fallback target does not match the locked hash.",
+      };
     }
     return { kind: "ok", mode: "copy" };
   } catch {
-    return { kind: "conflict", message: "Agent target is ambiguous and was left untouched." };
+    return {
+      kind: "conflict",
+      message: "Agent target is ambiguous and was left untouched.",
+    };
   }
 }
 
-async function targetMatches(target: LocalTargetState, canonical: string): Promise<boolean> {
+async function targetMatches(
+  target: LocalTargetState,
+  canonical: string,
+): Promise<boolean> {
   try {
     if (target.mode === "symlink") {
       return (await realpath(target.path)) === (await realpath(canonical));
@@ -778,7 +873,11 @@ async function listSkillIdDirs(root: string | null): Promise<string[]> {
 async function listLegacyGitFiles(gitDir: string): Promise<string[]> {
   const files: string[] = [];
   for (const cache of await listDirectories(gitDir)) {
-    for (const name of ["toolmirror.yaml", "toolmirror.lock", "toolmirror.transition.json"]) {
+    for (const name of [
+      "toolmirror.yaml",
+      "toolmirror.lock",
+      "toolmirror.transition.json",
+    ]) {
       const file = join(cache, name);
       if (await exists(file)) files.push(file);
     }
@@ -789,12 +888,16 @@ async function listLegacyGitFiles(gitDir: string): Promise<string[]> {
 async function listDirectories(root: string): Promise<string[]> {
   if (!(await exists(root))) return [];
   const entries = await readdir(root, { withFileTypes: true });
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => join(root, entry.name));
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(root, entry.name));
 }
 
 async function skillsStoragePath(configFile: string): Promise<string | null> {
   try {
-    const parsed = JSON.parse(await readFile(configFile, "utf8")) as { skillsStoragePath?: string | null };
+    const parsed = JSON.parse(await readFile(configFile, "utf8")) as {
+      skillsStoragePath?: string | null;
+    };
     return parsed.skillsStoragePath ?? null;
   } catch {
     return null;
@@ -803,7 +906,10 @@ async function skillsStoragePath(configFile: string): Promise<string | null> {
 
 async function readConfig(file: string): Promise<CorotumConfig> {
   try {
-    return { ...defaultConfig(), ...(JSON.parse(await readFile(file, "utf8")) as CorotumConfig) };
+    return {
+      ...defaultConfig(),
+      ...(JSON.parse(await readFile(file, "utf8")) as CorotumConfig),
+    };
   } catch {
     return defaultConfig();
   }
@@ -819,8 +925,16 @@ async function readState(file: string): Promise<LocalOperationalState | null> {
 
 async function readMarker(path: string): Promise<LegacyMigrationMarker | null> {
   try {
-    const parsed = JSON.parse(await readFile(path, "utf8")) as LegacyMigrationMarker;
-    if (parsed.schemaVersion !== 1 || !parsed.status || !parsed.current || !parsed.legacy) return null;
+    const parsed = JSON.parse(
+      await readFile(path, "utf8"),
+    ) as LegacyMigrationMarker;
+    if (
+      parsed.schemaVersion !== 1 ||
+      !parsed.status ||
+      !parsed.current ||
+      !parsed.legacy
+    )
+      return null;
     return parsed;
   } catch (error) {
     if (isNotFound(error)) return null;
@@ -831,16 +945,27 @@ async function readMarker(path: string): Promise<LegacyMigrationMarker | null> {
   }
 }
 
-async function extraMarkers(stateDir: string, markerPath: string): Promise<string[]> {
+async function extraMarkers(
+  stateDir: string,
+  markerPath: string,
+): Promise<string[]> {
   if (!(await exists(stateDir))) return [];
   const prefix = `${LEGACY_MIGRATION_MARKER}.`;
   const entries = await readdir(stateDir);
   return entries
     .map((name) => join(stateDir, name))
-    .filter((path) => path !== markerPath && (basename(path) === LEGACY_MIGRATION_MARKER || basename(path).startsWith(prefix)));
+    .filter(
+      (path) =>
+        path !== markerPath &&
+        (basename(path) === LEGACY_MIGRATION_MARKER ||
+          basename(path).startsWith(prefix)),
+    );
 }
 
-async function writeMarker(path: string, marker: LegacyMigrationMarker): Promise<void> {
+async function writeMarker(
+  path: string,
+  marker: LegacyMigrationMarker,
+): Promise<void> {
   await writeJson(path, marker);
 }
 
@@ -879,7 +1004,9 @@ function normalizeName(name: string): string {
 }
 
 function unique(values: Array<string | null>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+  return [
+    ...new Set(values.filter((value): value is string => Boolean(value))),
+  ];
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -893,5 +1020,10 @@ async function exists(path: string): Promise<boolean> {
 }
 
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }

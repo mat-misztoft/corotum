@@ -2,13 +2,13 @@ import { homedir } from "node:os";
 
 import type { Command } from "commander";
 import type { CliIo } from "./cli";
-import { jsonEnvelope, type CliOutcome } from "./cli-contracts";
+import { type CliOutcome, jsonEnvelope } from "./cli-contracts";
 import { cloudOriginFrom } from "./cloud-auth";
 import {
   CONFIG_KEYS,
-  SETTABLE_CONFIG_KEYS,
   type ConfigKey,
   ConfigStore,
+  SETTABLE_CONFIG_KEYS,
 } from "./config";
 import { resolvePlatformPaths } from "./platform";
 

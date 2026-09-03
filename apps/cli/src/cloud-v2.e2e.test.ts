@@ -13,13 +13,15 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { gitTreeHash, V2GitStateProvider } from "../../../packages/git-provider/src/index";
 import {
-  skillId,
   type DispositionLedger,
+  skillId,
   type V2DesiredState,
 } from "../../../packages/core/src/index";
+import {
+  gitTreeHash,
+  V2GitStateProvider,
+} from "../../../packages/git-provider/src/index";
 import {
   CLI_VERSION_HEADER,
   DEVICE_TOKEN_HEADER,
@@ -31,12 +33,12 @@ import { createArtifactArchive } from "../../../packages/skills-adapter/src/arti
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
 import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
+import { memoryArtifactBucket } from "../../web/src/artifacts";
 import {
   handleGetWorkspaceArtifact,
   handlePostWorkspaceArtifactGc,
   handlePutWorkspaceArtifact,
 } from "../../web/src/artifacts-http";
-import { memoryArtifactBucket } from "../../web/src/artifacts";
 import { approvePairing, createPairing } from "../../web/src/pairings";
 import {
   handleGetWorkspaceState,
@@ -44,10 +46,10 @@ import {
 } from "../../web/src/state-http";
 import { handlePostDeviceSyncReport } from "../../web/src/sync-report-http";
 import { issueDeviceToken, type TokenDatabase } from "../../web/src/tokens";
-import { SOURCE_REFRESH_NOTICE, type InitSkillOutcome } from "./init-adoption";
+import { defaultConfig } from "./config";
+import { type InitSkillOutcome, SOURCE_REFRESH_NOTICE } from "./init-adoption";
 import { InitRecoveryStore, InitTransactionService } from "./init-transaction";
 import { LocalOperationalStateStore } from "./local-state";
-import { defaultConfig } from "./config";
 import { resolvePlatformPaths } from "./platform";
 import { LifecycleRecoveryStore, V2LifecycleService } from "./v2-lifecycle";
 import { V2LocalApplier } from "./v2-local-applier";
@@ -56,7 +58,9 @@ import { V2MutationService } from "./v2-mutations";
 import { V2SyncService } from "./v2-sync";
 
 const roots: string[] = [];
-const migrationsDirectory = fileURLToPath(new URL("../../web/migrations/", import.meta.url));
+const migrationsDirectory = fileURLToPath(
+  new URL("../../web/migrations/", import.meta.url),
+);
 const migrationFiles = readdirSync(migrationsDirectory)
   .filter((file) => file.endsWith(".sql"))
   .sort();
@@ -72,7 +76,10 @@ const pairingDevice = {
 afterEach(async () => {
   await Promise.all(
     roots.splice(0).map(async (root) => {
-      await Bun.spawn(["chmod", "-R", "u+rwx", root], { stderr: "pipe", stdout: "pipe" }).exited;
+      await Bun.spawn(["chmod", "-R", "u+rwx", root], {
+        stderr: "pipe",
+        stdout: "pipe",
+      }).exited;
       await rm(root, { force: true, recursive: true });
     }),
   );
@@ -85,7 +92,11 @@ async function temp(name: string): Promise<string> {
 }
 
 async function git(args: readonly string[], cwd?: string): Promise<string> {
-  const process = Bun.spawn(["git", ...args], { cwd, stderr: "pipe", stdout: "pipe" });
+  const process = Bun.spawn(["git", ...args], {
+    cwd,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(process.stdout).text(),
     new Response(process.stderr).text(),
@@ -143,7 +154,13 @@ function targetSkill(home: string, name: string): string {
 async function skillRepo(root: string, name: string, body: string) {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await writeSkill(join(repository, "skills", name), body);
   await git(["-C", repository, "add", "."]);
@@ -151,7 +168,8 @@ async function skillRepo(root: string, name: string, body: string) {
   return {
     repository,
     revision: await git(["-C", repository, "rev-parse", "HEAD"]),
-    contentHash: (await scanNormalizedContent(join(repository, "skills", name))).contentHash,
+    contentHash: (await scanNormalizedContent(join(repository, "skills", name)))
+      .contentHash,
   };
 }
 
@@ -213,7 +231,12 @@ async function pairDevice(
     .run(user.id, "Ada", user.email, Date.now(), Date.now());
   const pairing = await createPairing(db, pairingDevice, now);
   await approvePairing(db, user.id, pairing.id, pairing.userCode, now + 1);
-  const issued = await issueDeviceToken(db, pairing.id, pairing.deviceCode, now + 2);
+  const issued = await issueDeviceToken(
+    db,
+    pairing.id,
+    pairing.deviceCode,
+    now + 2,
+  );
   return { issued, workspaceId: issued.workspaceId as string };
 }
 
@@ -233,48 +256,114 @@ function cloudFetch(
     if (fault.outage) throw new TypeError("Cloud origin is unreachable.");
     const request = new Request(input, init);
     const headers = new Headers(request.headers);
-    if (!headers.has("x-forwarded-for")) headers.set("x-forwarded-for", identity);
+    if (!headers.has("x-forwarded-for"))
+      headers.set("x-forwarded-for", identity);
     const routed = new Request(request, { headers });
     const url = new URL(routed.url);
-    const workspaceState = url.pathname.match(/^\/api\/v1\/workspaces\/([^/]+)\/state$/);
-    const workspaceGc = url.pathname.match(/^\/api\/v1\/workspaces\/([^/]+)\/artifacts\/gc$/);
-    const workspaceArtifact = url.pathname.match(/^\/api\/v1\/workspaces\/([^/]+)\/artifacts$/);
-    const syncReport = url.pathname.match(/^\/api\/v1\/devices\/([^/]+)\/sync-report$/);
+    const workspaceState = url.pathname.match(
+      /^\/api\/v1\/workspaces\/([^/]+)\/state$/,
+    );
+    const workspaceGc = url.pathname.match(
+      /^\/api\/v1\/workspaces\/([^/]+)\/artifacts\/gc$/,
+    );
+    const workspaceArtifact = url.pathname.match(
+      /^\/api\/v1\/workspaces\/([^/]+)\/artifacts$/,
+    );
+    const syncReport = url.pathname.match(
+      /^\/api\/v1\/devices\/([^/]+)\/sync-report$/,
+    );
     if (workspaceState && routed.method === "GET") {
-      return handleGetWorkspaceState(routed, db, decodeURIComponent(workspaceState[1]!));
+      return handleGetWorkspaceState(
+        routed,
+        db,
+        decodeURIComponent(workspaceState[1]!),
+      );
     }
     if (workspaceState && routed.method === "PUT") {
-      return handlePutWorkspaceState(routed, db, decodeURIComponent(workspaceState[1]!));
+      return handlePutWorkspaceState(
+        routed,
+        db,
+        decodeURIComponent(workspaceState[1]!),
+      );
     }
     if (workspaceGc && routed.method === "POST") {
-      return handlePostWorkspaceArtifactGc(routed, db, bucket, decodeURIComponent(workspaceGc[1]!));
+      return handlePostWorkspaceArtifactGc(
+        routed,
+        db,
+        bucket,
+        decodeURIComponent(workspaceGc[1]!),
+      );
     }
     if (workspaceArtifact && routed.method === "PUT") {
-      return handlePutWorkspaceArtifact(routed, db, bucket, decodeURIComponent(workspaceArtifact[1]!));
+      return handlePutWorkspaceArtifact(
+        routed,
+        db,
+        bucket,
+        decodeURIComponent(workspaceArtifact[1]!),
+      );
     }
     if (workspaceArtifact && routed.method === "GET") {
-      if (fault.missingArtifacts) return new Response(JSON.stringify({ error: "Artifact object is missing." }), { status: 404, headers: { "content-type": "application/json" } });
-      if (fault.corruptArtifacts) return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 });
-      return handleGetWorkspaceArtifact(routed, db, bucket, decodeURIComponent(workspaceArtifact[1]!));
+      if (fault.missingArtifacts)
+        return new Response(
+          JSON.stringify({ error: "Artifact object is missing." }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      if (fault.corruptArtifacts)
+        return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 });
+      return handleGetWorkspaceArtifact(
+        routed,
+        db,
+        bucket,
+        decodeURIComponent(workspaceArtifact[1]!),
+      );
     }
     if (syncReport && routed.method === "POST") {
-      return handlePostDeviceSyncReport(routed, db, decodeURIComponent(syncReport[1]!));
+      return handlePostDeviceSyncReport(
+        routed,
+        db,
+        decodeURIComponent(syncReport[1]!),
+      );
     }
-    return new Response(JSON.stringify({ error: `Unexpected URL ${url.pathname}` }), { status: 500, headers: { "content-type": "application/json" } });
+    return new Response(
+      JSON.stringify({ error: `Unexpected URL ${url.pathname}` }),
+      { status: 500, headers: { "content-type": "application/json" } },
+    );
   };
 }
 
-async function cloudWorkspace(label: string, user?: { id: string; email: string }) {
+async function cloudWorkspace(
+  label: string,
+  user?: { id: string; email: string },
+) {
   const { sqlite, db } = await artifactDb();
   const first = await pairDevice(db, sqlite, user);
-  const second = await pairDevice(db, sqlite, user ?? { id: "user_1", email: "ada@example.com" }, Date.now() + 10_000);
-  const foreign = await pairDevice(db, sqlite, { id: "user_2", email: "bob@example.com" }, Date.now() + 20_000);
+  const second = await pairDevice(
+    db,
+    sqlite,
+    user ?? { id: "user_1", email: "ada@example.com" },
+    Date.now() + 10_000,
+  );
+  const foreign = await pairDevice(
+    db,
+    sqlite,
+    { id: "user_2", email: "bob@example.com" },
+    Date.now() + 20_000,
+  );
   const bucket = memoryArtifactBucket();
   const origin = "https://cloud.invalid";
   const fault: TransportFault = {};
   const fetchFor = (token: string, deviceId: string) =>
-    cloudFetch(db, bucket, `${label}-${deviceId.slice(-8)}`, fault) as typeof fetch;
-  const provider = (issued: { token: string; deviceId: string; workspaceId: string | null }) =>
+    cloudFetch(
+      db,
+      bucket,
+      `${label}-${deviceId.slice(-8)}`,
+      fault,
+    ) as typeof fetch;
+  const provider = (issued: {
+    token: string;
+    deviceId: string;
+    workspaceId: string | null;
+  }) =>
     new V2SaaSProvider({
       origin,
       workspaceId: issued.workspaceId as string,
@@ -300,7 +389,11 @@ function mutationPort(cloud: V2SaaSProvider) {
   return {
     pull: async () => {
       const snapshot = await cloud.pull();
-      return { revisionId: snapshot.revisionId ?? "", state: snapshot.state, ledger: snapshot.ledger };
+      return {
+        revisionId: snapshot.revisionId ?? "",
+        state: snapshot.state,
+        ledger: snapshot.ledger,
+      };
     },
     push: async (input: {
       state: V2DesiredState;
@@ -318,8 +411,13 @@ function mutationPort(cloud: V2SaaSProvider) {
         baseRevision: input.baseRevision || null,
         artifacts,
       });
-      if (!snapshot.revisionId) throw new Error("Cloud did not return a revision.");
-      return { revisionId: snapshot.revisionId, state: snapshot.state, ledger: snapshot.ledger };
+      if (!snapshot.revisionId)
+        throw new Error("Cloud did not return a revision.");
+      return {
+        revisionId: snapshot.revisionId,
+        state: snapshot.state,
+        ledger: snapshot.ledger,
+      };
     },
   };
 }
@@ -329,7 +427,11 @@ function initPort(cloud: V2SaaSProvider) {
   return {
     pull: async () => {
       const snapshot = await cloud.pull();
-      return { revisionId: snapshot.revisionId, state: snapshot.state, ledger: snapshot.ledger };
+      return {
+        revisionId: snapshot.revisionId,
+        state: snapshot.state,
+        ledger: snapshot.ledger,
+      };
     },
     push: port.push,
   };
@@ -343,7 +445,9 @@ function homeServices(
   fetch: typeof globalThis.fetch,
 ) {
   const current = paths(home);
-  const stateStore = new LocalOperationalStateStore(join(current.stateDir, "state.json"));
+  const stateStore = new LocalOperationalStateStore(
+    join(current.stateDir, "state.json"),
+  );
   const canonicalStore = new CanonicalSkillStore(current.skillsDir);
   const applier = new V2LocalApplier(stateStore, canonicalStore, {
     storagePath: current.gitDir,
@@ -363,7 +467,11 @@ function homeServices(
   });
   const envelope = async () => {
     const pulled = await cloud.pull();
-    return { revisionId: pulled.revisionId ?? "", state: pulled.state, ledger: pulled.ledger };
+    return {
+      revisionId: pulled.revisionId ?? "",
+      state: pulled.state,
+      ledger: pulled.ledger,
+    };
   };
   const sync = new V2SyncService(
     { pull: envelope, pullReadOnly: envelope },
@@ -374,7 +482,9 @@ function homeServices(
       homeDir: home,
       enabledAgentIds: ["codex"],
       reporter: async (input) => {
-        const failed = input.operations.find((operation) => operation.status !== "SUCCESS");
+        const failed = input.operations.find(
+          (operation) => operation.status !== "SUCCESS",
+        );
         await postDeviceSyncReport({
           origin,
           deviceId: device.deviceId,
@@ -399,20 +509,30 @@ function homeServices(
       mutationPort(cloud),
       applier,
       stateStore,
-      new LifecycleRecoveryStore(join(current.stateDir, "lifecycle-transaction.json")),
+      new LifecycleRecoveryStore(
+        join(current.stateDir, "lifecycle-transaction.json"),
+      ),
     ),
-    mutations: new V2MutationService(mutationPort(cloud), {
-      resolve: async (source) => {
-        const resolved = await new GitSkillMaterializer().resolve({
-          id: skillId("sk_pendingadd"),
-          source: source.repository,
-          skill: source.path.split("/").at(-1) ?? "skill",
-          ref: source.ref,
-          path: source.path,
-        });
-        return { ...resolved, ref: source.ref, contentHash: resolved.contentHash as `sha256:${string}` };
+    mutations: new V2MutationService(
+      mutationPort(cloud),
+      {
+        resolve: async (source) => {
+          const resolved = await new GitSkillMaterializer().resolve({
+            id: skillId("sk_pendingadd"),
+            source: source.repository,
+            skill: source.path.split("/").at(-1) ?? "skill",
+            ref: source.ref,
+            path: source.path,
+          });
+          return {
+            ...resolved,
+            ref: source.ref,
+            contentHash: resolved.contentHash as `sha256:${string}`,
+          };
+        },
       },
-    }, applier),
+      applier,
+    ),
   };
 }
 
@@ -424,10 +544,14 @@ async function initializeCloudHome(
 ) {
   await enableCodex(home);
   const current = paths(home);
-  const stateStore = new LocalOperationalStateStore(join(current.stateDir, "state.json"));
+  const stateStore = new LocalOperationalStateStore(
+    join(current.stateDir, "state.json"),
+  );
   return new InitTransactionService({
     provider: initPort(cloud),
-    recovery: new InitRecoveryStore(join(current.stateDir, "init-transaction.json")),
+    recovery: new InitRecoveryStore(
+      join(current.stateDir, "init-transaction.json"),
+    ),
     persistConfig: async () => {
       await writeJson(current.configFile, {
         ...defaultConfig(),
@@ -481,21 +605,48 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       await writeSkill(namedSkill(homeA, "public"), "# Public locked\n");
       await writeSkill(namedSkill(homeA, "custom"), "# Custom artifact\n");
       const scanned = await scanNormalizedContent(namedSkill(homeA, "custom"));
-      const initialized = await initializeCloudHome(homeA, cloud.provider(cloud.machineA), cloud.workspaceId, [
-        sourceOutcome("public", namedSkill(homeA, "public"), publicSkill),
-        { kind: "artifact-backed", name: "custom", path: namedSkill(homeA, "custom"), classification: "unknown", localContentHash: scanned.contentHash },
-      ]);
+      const initialized = await initializeCloudHome(
+        homeA,
+        cloud.provider(cloud.machineA),
+        cloud.workspaceId,
+        [
+          sourceOutcome("public", namedSkill(homeA, "public"), publicSkill),
+          {
+            kind: "artifact-backed",
+            name: "custom",
+            path: namedSkill(homeA, "custom"),
+            classification: "unknown",
+            localContentHash: scanned.contentHash,
+          },
+        ],
+      );
       expect(initialized.kind).toBe("initialized");
       const snapshot = await cloud.provider(cloud.machineA).pull();
-      const sourceLock = snapshot.state.lockfile.skills.find((lock) => lock.name === "public");
-      const artifactLock = snapshot.state.lockfile.skills.find((lock) => lock.name === "custom");
+      const sourceLock = snapshot.state.lockfile.skills.find(
+        (lock) => lock.name === "public",
+      );
+      const artifactLock = snapshot.state.lockfile.skills.find(
+        (lock) => lock.name === "custom",
+      );
       expect(sourceLock?.materialization.kind).toBe("source");
-      expect(artifactLock?.materialization).toMatchObject({ kind: "artifact", artifact: { kind: "r2-tar-zst" } });
-      expect([...cloud.bucket.objects.keys()].every((key) => key.startsWith(`workspaces/${cloud.workspaceId}/`))).toBe(true);
+      expect(artifactLock?.materialization).toMatchObject({
+        kind: "artifact",
+        artifact: { kind: "r2-tar-zst" },
+      });
+      expect(
+        [...cloud.bucket.objects.keys()].every((key) =>
+          key.startsWith(`workspaces/${cloud.workspaceId}/`),
+        ),
+      ).toBe(true);
       expect(cloud.bucket.objects.size).toBe(1);
-      expect((await lstat(targetSkill(homeA, "public"))).isSymbolicLink()).toBe(true);
+      expect((await lstat(targetSkill(homeA, "public"))).isSymbolicLink()).toBe(
+        true,
+      );
 
-      await writeFile(join(publicSkill.repository, "skills", "public", "SKILL.md"), "# Public HEAD moved\n");
+      await writeFile(
+        join(publicSkill.repository, "skills", "public", "SKILL.md"),
+        "# Public HEAD moved\n",
+      );
       await git(["-C", publicSkill.repository, "add", "."]);
       await git(["-C", publicSkill.repository, "commit", "-m", "move head"]);
 
@@ -508,11 +659,25 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         cloud.fetchFor(cloud.machineB.token, cloud.machineB.deviceId),
       ).sync.sync();
       expect(synced.kind).toBe("synced");
-      expect(await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8")).toBe("# Public locked\n");
-      expect(await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8")).toBe("# Custom artifact\n");
-      expect((await scanNormalizedContent(namedSkill(homeB, "public"))).contentHash).toBe(publicSkill.contentHash);
-      expect((await lstat(targetSkill(homeB, "custom"))).isSymbolicLink()).toBe(true);
-      expect(cloud.sqlite.query("SELECT sync_status AS status FROM device_workspaces WHERE device_id = ?").get(cloud.machineB.deviceId)).toEqual({ status: "SYNCED" });
+      expect(
+        await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Public locked\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8"),
+      ).toBe("# Custom artifact\n");
+      expect(
+        (await scanNormalizedContent(namedSkill(homeB, "public"))).contentHash,
+      ).toBe(publicSkill.contentHash);
+      expect((await lstat(targetSkill(homeB, "custom"))).isSymbolicLink()).toBe(
+        true,
+      );
+      expect(
+        cloud.sqlite
+          .query(
+            "SELECT sync_status AS status FROM device_workspaces WHERE device_id = ?",
+          )
+          .get(cloud.machineB.deviceId),
+      ).toEqual({ status: "SYNCED" });
     },
     timeout,
   );
@@ -523,17 +688,34 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       const root = await temp("auth");
       const cloud = await cloudWorkspace("auth");
       const publicSkill = await skillRepo(root, "public", "# Public locked\n");
-      const privateSkill = await skillRepo(root, "classified", "# Classified locked\n");
+      const privateSkill = await skillRepo(
+        root,
+        "classified",
+        "# Classified locked\n",
+      );
       const homeA = join(root, "home-a");
       const homeB = join(root, "home-b");
       await writeSkill(namedSkill(homeA, "public"), "# Public locked\n");
       await writeSkill(namedSkill(homeA, "custom"), "# Custom artifact\n");
       const scanned = await scanNormalizedContent(namedSkill(homeA, "custom"));
       expect(
-        (await initializeCloudHome(homeA, cloud.provider(cloud.machineA), cloud.workspaceId, [
-          sourceOutcome("public", namedSkill(homeA, "public"), publicSkill),
-          { kind: "artifact-backed", name: "custom", path: namedSkill(homeA, "custom"), classification: "unknown", localContentHash: scanned.contentHash },
-        ])).kind,
+        (
+          await initializeCloudHome(
+            homeA,
+            cloud.provider(cloud.machineA),
+            cloud.workspaceId,
+            [
+              sourceOutcome("public", namedSkill(homeA, "public"), publicSkill),
+              {
+                kind: "artifact-backed",
+                name: "custom",
+                path: namedSkill(homeA, "custom"),
+                classification: "unknown",
+                localContentHash: scanned.contentHash,
+              },
+            ],
+          )
+        ).kind,
       ).toBe("initialized");
       const added = await homeServices(
         homeA,
@@ -543,11 +725,20 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         cloud.fetchFor(cloud.machineA.token, cloud.machineA.deviceId),
       ).mutations.add({
         name: "classified",
-        source: { repository: privateSkill.repository, path: "skills/classified", ref: "main" },
+        source: {
+          repository: privateSkill.repository,
+          path: "skills/classified",
+          ref: "main",
+        },
       });
-      expect(added.kind === "success" || added.kind === "persisted-not-applied").toBe(true);
+      expect(
+        added.kind === "success" || added.kind === "persisted-not-applied",
+      ).toBe(true);
 
-      await Bun.spawn(["chmod", "-R", "a-rwx", privateSkill.repository], { stderr: "pipe", stdout: "pipe" }).exited;
+      await Bun.spawn(["chmod", "-R", "a-rwx", privateSkill.repository], {
+        stderr: "pipe",
+        stdout: "pipe",
+      }).exited;
       await enableCodex(homeB);
       await writeSkill(namedSkill(homeB, "notes"), "# Unrelated unmanaged\n");
       await writeSkill(targetSkill(homeB, "notes"), "# Unrelated unmanaged\n");
@@ -559,11 +750,23 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         cloud.fetchFor(cloud.machineB.token, cloud.machineB.deviceId),
       ).sync.sync();
       expect(synced.kind).toBe("partial");
-      expect(synced.operations.some((operation) => operation.status === "AUTH_REQUIRED")).toBe(true);
-      expect(await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8")).toBe("# Custom artifact\n");
-      expect(await readFile(join(namedSkill(homeB, "notes"), "SKILL.md"), "utf8")).toBe("# Unrelated unmanaged\n");
-      expect(await readFile(join(targetSkill(homeB, "notes"), "SKILL.md"), "utf8")).toBe("# Unrelated unmanaged\n");
-      await expect(readFile(join(namedSkill(homeB, "classified"), "SKILL.md"), "utf8")).rejects.toThrow();
+      expect(
+        synced.operations.some(
+          (operation) => operation.status === "AUTH_REQUIRED",
+        ),
+      ).toBe(true);
+      expect(
+        await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8"),
+      ).toBe("# Custom artifact\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Unrelated unmanaged\n");
+      expect(
+        await readFile(join(targetSkill(homeB, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Unrelated unmanaged\n");
+      await expect(
+        readFile(join(namedSkill(homeB, "classified"), "SKILL.md"), "utf8"),
+      ).rejects.toThrow();
     },
     timeout,
   );
@@ -580,38 +783,84 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       await writeSkill(namedSkill(homeA, "public"), "# Public locked\n");
       await writeSkill(namedSkill(homeA, "extra"), "# Extra locked\n");
       expect(
-        (await initializeCloudHome(homeA, cloud.provider(cloud.machineA), cloud.workspaceId, [
-          sourceOutcome("public", namedSkill(homeA, "public"), publicSkill),
-          sourceOutcome("extra", namedSkill(homeA, "extra"), extra),
-        ])).kind,
+        (
+          await initializeCloudHome(
+            homeA,
+            cloud.provider(cloud.machineA),
+            cloud.workspaceId,
+            [
+              sourceOutcome("public", namedSkill(homeA, "public"), publicSkill),
+              sourceOutcome("extra", namedSkill(homeA, "extra"), extra),
+            ],
+          )
+        ).kind,
       ).toBe("initialized");
       await enableCodex(homeB);
-      const servicesA = homeServices(homeA, cloud.provider(cloud.machineA), cloud.machineA, cloud.origin, cloud.fetchFor(cloud.machineA.token, cloud.machineA.deviceId));
-      const servicesB = homeServices(homeB, cloud.provider(cloud.machineB), cloud.machineB, cloud.origin, cloud.fetchFor(cloud.machineB.token, cloud.machineB.deviceId));
+      const servicesA = homeServices(
+        homeA,
+        cloud.provider(cloud.machineA),
+        cloud.machineA,
+        cloud.origin,
+        cloud.fetchFor(cloud.machineA.token, cloud.machineA.deviceId),
+      );
+      const servicesB = homeServices(
+        homeB,
+        cloud.provider(cloud.machineB),
+        cloud.machineB,
+        cloud.origin,
+        cloud.fetchFor(cloud.machineB.token, cloud.machineB.deviceId),
+      );
       expect((await servicesB.sync.sync()).kind).toBe("synced");
       expect((await servicesA.lifecycle.remove("public")).kind).toBe("success");
-      expect((await servicesA.lifecycle.unmanage("extra")).kind).toBe("success");
+      expect((await servicesA.lifecycle.unmanage("extra")).kind).toBe(
+        "success",
+      );
       expect((await servicesB.sync.sync()).kind).toBe("synced");
       await expect(lstat(namedSkill(homeB, "public"))).rejects.toThrow();
       await expect(lstat(targetSkill(homeB, "public"))).rejects.toThrow();
-      expect(await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8")).toBe("# Extra locked\n");
-      expect((await lstat(targetSkill(homeB, "extra"))).isSymbolicLink()).toBe(false);
+      expect(
+        await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8"),
+      ).toBe("# Extra locked\n");
+      expect((await lstat(targetSkill(homeB, "extra"))).isSymbolicLink()).toBe(
+        false,
+      );
 
-      await writeFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "# Modified unmanaged\n");
-      await writeFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "# Modified unmanaged\n");
+      await writeFile(
+        join(namedSkill(homeB, "extra"), "SKILL.md"),
+        "# Modified unmanaged\n",
+      );
+      await writeFile(
+        join(targetSkill(homeB, "extra"), "SKILL.md"),
+        "# Modified unmanaged\n",
+      );
       const readdedOnA = await servicesA.mutations.add({
         name: "extra",
-        source: { repository: extra.repository, path: "skills/extra", ref: "main" },
+        source: {
+          repository: extra.repository,
+          path: "skills/extra",
+          ref: "main",
+        },
       });
-      expect(readdedOnA.kind === "success" || readdedOnA.kind === "persisted-not-applied").toBe(true);
+      expect(
+        readdedOnA.kind === "success" ||
+          readdedOnA.kind === "persisted-not-applied",
+      ).toBe(true);
       const readded = await servicesB.sync.sync();
       expect(readded.kind).toBe("partial");
       const conflicted =
-        readded.operations.some((operation) => operation.status === "LOCAL_CONFLICT") ||
-        readded.snapshot.plan.classifications.some((item) => item.classification === "LOCAL_CONFLICT");
+        readded.operations.some(
+          (operation) => operation.status === "LOCAL_CONFLICT",
+        ) ||
+        readded.snapshot.plan.classifications.some(
+          (item) => item.classification === "LOCAL_CONFLICT",
+        );
       expect(conflicted).toBe(true);
-      expect(await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8")).toBe("# Modified unmanaged\n");
-      expect(await readFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "utf8")).toBe("# Modified unmanaged\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8"),
+      ).toBe("# Modified unmanaged\n");
+      expect(
+        await readFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "utf8"),
+      ).toBe("# Modified unmanaged\n");
     },
     timeout,
   );
@@ -626,22 +875,56 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       await writeSkill(namedSkill(homeA, "custom"), "# Custom artifact\n");
       const scanned = await scanNormalizedContent(namedSkill(homeA, "custom"));
       expect(
-        (await initializeCloudHome(homeA, cloud.provider(cloud.machineA), cloud.workspaceId, [
-          { kind: "artifact-backed", name: "custom", path: namedSkill(homeA, "custom"), classification: "unknown", localContentHash: scanned.contentHash },
-        ])).kind,
+        (
+          await initializeCloudHome(
+            homeA,
+            cloud.provider(cloud.machineA),
+            cloud.workspaceId,
+            [
+              {
+                kind: "artifact-backed",
+                name: "custom",
+                path: namedSkill(homeA, "custom"),
+                classification: "unknown",
+                localContentHash: scanned.contentHash,
+              },
+            ],
+          )
+        ).kind,
       ).toBe("initialized");
       await enableCodex(homeB);
       const providerB = cloud.provider(cloud.machineB);
-      const fetchB = cloud.fetchFor(cloud.machineB.token, cloud.machineB.deviceId);
-      const first = await homeServices(homeB, providerB, cloud.machineB, cloud.origin, fetchB).sync.sync();
+      const fetchB = cloud.fetchFor(
+        cloud.machineB.token,
+        cloud.machineB.deviceId,
+      );
+      const first = await homeServices(
+        homeB,
+        providerB,
+        cloud.machineB,
+        cloud.origin,
+        fetchB,
+      ).sync.sync();
       expect(first.kind).toBe("synced");
-      const verified = JSON.parse(await readFile(join(paths(homeB).stateDir, "state.json"), "utf8")) as { lastAppliedRevision: string };
+      const verified = JSON.parse(
+        await readFile(join(paths(homeB).stateDir, "state.json"), "utf8"),
+      ) as { lastAppliedRevision: string };
       expect(verified.lastAppliedRevision).toBeTruthy();
 
       cloud.fault.outage = true;
-      const outage = await homeServices(homeB, providerB, cloud.machineB, cloud.origin, fetchB).sync.sync();
+      const outage = await homeServices(
+        homeB,
+        providerB,
+        cloud.machineB,
+        cloud.origin,
+        fetchB,
+      ).sync.sync();
       expect(outage.kind).toBe("refused");
-      expect(JSON.parse(await readFile(join(paths(homeB).stateDir, "state.json"), "utf8")).lastAppliedRevision).toBe(verified.lastAppliedRevision);
+      expect(
+        JSON.parse(
+          await readFile(join(paths(homeB).stateDir, "state.json"), "utf8"),
+        ).lastAppliedRevision,
+      ).toBe(verified.lastAppliedRevision);
       cloud.fault.outage = false;
 
       cloud.fault.missingArtifacts = true;
@@ -651,12 +934,28 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         deviceToken: cloud.machineB.token,
         fetch: fetchB,
       }).sync({
-        lastVerified: { appliedRevisionId: verified.lastAppliedRevision, canonical: {} },
+        lastVerified: {
+          appliedRevisionId: verified.lastAppliedRevision,
+          canonical: {},
+        },
         canonicalRoot: join(homeB, "canonical-missing"),
-        targets: [{ skillId: skillId("sk_unusedmissing"), agentId: "codex", path: join(homeB, "missing-target") }],
+        targets: [
+          {
+            skillId: skillId("sk_unusedmissing"),
+            agentId: "codex",
+            path: join(homeB, "missing-target"),
+          },
+        ],
       });
-      expect(missing.report?.lastErrorCode === "ARTIFACT_UNAVAILABLE" || missing.skillResults.some((result) => result.code === "ARTIFACT_UNAVAILABLE")).toBe(true);
-      expect(missing.lastVerified.appliedRevisionId).toBe(verified.lastAppliedRevision);
+      expect(
+        missing.report?.lastErrorCode === "ARTIFACT_UNAVAILABLE" ||
+          missing.skillResults.some(
+            (result) => result.code === "ARTIFACT_UNAVAILABLE",
+          ),
+      ).toBe(true);
+      expect(missing.lastVerified.appliedRevisionId).toBe(
+        verified.lastAppliedRevision,
+      );
       cloud.fault.missingArtifacts = false;
 
       cloud.fault.corruptArtifacts = true;
@@ -666,12 +965,30 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         deviceToken: cloud.machineB.token,
         fetch: fetchB,
       }).sync({
-        lastVerified: { appliedRevisionId: verified.lastAppliedRevision, canonical: {} },
+        lastVerified: {
+          appliedRevisionId: verified.lastAppliedRevision,
+          canonical: {},
+        },
         canonicalRoot: join(homeB, "canonical-corrupt"),
-        targets: [{ skillId: skillId("sk_unusedcorrupt"), agentId: "codex", path: join(homeB, "corrupt-target") }],
+        targets: [
+          {
+            skillId: skillId("sk_unusedcorrupt"),
+            agentId: "codex",
+            path: join(homeB, "corrupt-target"),
+          },
+        ],
       });
-      expect(["ARTIFACT_UNAVAILABLE", "CONTENT_HASH_MISMATCH", "NETWORK_ERROR"]).toContain(corrupt.report?.lastErrorCode ?? corrupt.skillResults.find((result) => result.code)?.code);
-      expect(corrupt.lastVerified.appliedRevisionId).toBe(verified.lastAppliedRevision);
+      expect([
+        "ARTIFACT_UNAVAILABLE",
+        "CONTENT_HASH_MISMATCH",
+        "NETWORK_ERROR",
+      ]).toContain(
+        corrupt.report?.lastErrorCode ??
+          corrupt.skillResults.find((result) => result.code)?.code,
+      );
+      expect(corrupt.lastVerified.appliedRevisionId).toBe(
+        verified.lastAppliedRevision,
+      );
       cloud.fault.corruptArtifacts = false;
 
       const locator = [...cloud.bucket.objects.keys()][0]!;
@@ -685,12 +1002,26 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         deviceToken: cloud.machineB.token,
         fetch: fetchB,
       }).sync({
-        lastVerified: { appliedRevisionId: verified.lastAppliedRevision, canonical: {} },
+        lastVerified: {
+          appliedRevisionId: verified.lastAppliedRevision,
+          canonical: {},
+        },
         canonicalRoot: join(homeB, "canonical-hash"),
-        targets: [{ skillId: skillId("sk_unusedhash"), agentId: "codex", path: join(homeB, "hash-target") }],
+        targets: [
+          {
+            skillId: skillId("sk_unusedhash"),
+            agentId: "codex",
+            path: join(homeB, "hash-target"),
+          },
+        ],
       });
-      expect(["CONTENT_HASH_MISMATCH", "ARTIFACT_UNAVAILABLE"]).toContain(mismatch.report?.lastErrorCode ?? mismatch.skillResults.find((result) => result.code)?.code);
-      expect(mismatch.lastVerified.appliedRevisionId).toBe(verified.lastAppliedRevision);
+      expect(["CONTENT_HASH_MISMATCH", "ARTIFACT_UNAVAILABLE"]).toContain(
+        mismatch.report?.lastErrorCode ??
+          mismatch.skillResults.find((result) => result.code)?.code,
+      );
+      expect(mismatch.lastVerified.appliedRevisionId).toBe(
+        verified.lastAppliedRevision,
+      );
       cloud.bucket.objects.set(locator, original);
 
       const lock = (await providerB.pull()).state.lockfile.skills[0]!;
@@ -710,9 +1041,16 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         targets: [{ skillId: lock.id, agentId: "codex", path: reportTarget }],
       });
       expect(reported.report).toMatchObject({ syncStatus: "SYNCED" });
-      expect(reported.receipt).toMatchObject({ syncStatus: "SYNCED", appliedRevisionId: reported.report?.appliedRevisionId });
-      expect(reported.lastVerified.appliedRevisionId).toBe((await providerB.pull()).revisionId);
-      expect(await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8")).toBe("# Custom artifact\n");
+      expect(reported.receipt).toMatchObject({
+        syncStatus: "SYNCED",
+        appliedRevisionId: reported.report?.appliedRevisionId,
+      });
+      expect(reported.lastVerified.appliedRevisionId).toBe(
+        (await providerB.pull()).revisionId,
+      );
+      expect(
+        await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8"),
+      ).toBe("# Custom artifact\n");
     },
     timeout,
   );
@@ -727,18 +1065,31 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       const homeB = join(root, "home-b");
       await writeSkill(namedSkill(homeA, "public"), "# Public locked\n");
       expect(
-        (await initializeCloudHome(homeA, cloud.provider(cloud.machineA), cloud.workspaceId, [
-          sourceOutcome("public", namedSkill(homeA, "public"), publicSkill),
-        ])).kind,
+        (
+          await initializeCloudHome(
+            homeA,
+            cloud.provider(cloud.machineA),
+            cloud.workspaceId,
+            [sourceOutcome("public", namedSkill(homeA, "public"), publicSkill)],
+          )
+        ).kind,
       ).toBe("initialized");
       await enableCodex(homeB);
-      const servicesB = homeServices(homeB, cloud.provider(cloud.machineB), cloud.machineB, cloud.origin, cloud.fetchFor(cloud.machineB.token, cloud.machineB.deviceId));
+      const servicesB = homeServices(
+        homeB,
+        cloud.provider(cloud.machineB),
+        cloud.machineB,
+        cloud.origin,
+        cloud.fetchFor(cloud.machineB.token, cloud.machineB.deviceId),
+      );
       expect((await servicesB.sync.sync()).kind).toBe("synced");
       await rm(join(paths(homeB).stateDir, "state.json"), { force: true });
       const recovered = await servicesB.sync.inspect();
       expect(recovered.kind).toBe("ready");
       expect((await servicesB.sync.sync()).kind).toBe("synced");
-      expect(await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8")).toBe("# Public locked\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Public locked\n");
 
       await writeSkill(namedSkill(homeB, "notes"), "# Local notes\n");
       await writeSkill(targetSkill(homeB, "notes"), "# Local notes\n");
@@ -754,7 +1105,12 @@ describe("Cloud v2 application/service end-to-end safety", () => {
           version: 2,
           skills: [
             ...current.state.manifest.skills,
-            { id: notesId, name: "notes", targets: "all", resolutionStatus: "RESOLVED" },
+            {
+              id: notesId,
+              name: "notes",
+              targets: "all",
+              resolutionStatus: "RESOLVED",
+            },
           ],
         },
         lockfile: {
@@ -766,7 +1122,13 @@ describe("Cloud v2 application/service end-to-end safety", () => {
               name: "notes",
               materialization: {
                 kind: "artifact",
-                artifact: { kind: "r2-tar-zst", contentHash: notesHash, integrityHash: archive.integrityHash, locator, sizeBytes: archive.sizeBytes },
+                artifact: {
+                  kind: "r2-tar-zst",
+                  contentHash: notesHash,
+                  integrityHash: archive.integrityHash,
+                  locator,
+                  sizeBytes: archive.sizeBytes,
+                },
               },
             },
           ],
@@ -780,24 +1142,48 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       });
       const partial = await servicesB.sync.sync();
       expect(partial.kind).toBe("partial");
-      expect(await readFile(join(namedSkill(homeB, "notes"), "SKILL.md"), "utf8")).toBe("# Local notes\n");
-      expect(await readFile(join(targetSkill(homeB, "notes"), "SKILL.md"), "utf8")).toBe("# Local notes\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Local notes\n");
+      expect(
+        await readFile(join(targetSkill(homeB, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Local notes\n");
 
       const gitRoot = join(root, "git-round");
       const gitProvider = await (async () => {
         const remote = join(gitRoot, "remote.git");
         const worktree = join(gitRoot, "worktree");
         await git(["init", "--initial-branch=main", worktree]);
-        await git(["-C", worktree, "config", "user.email", "tests@corotum.invalid"]);
+        await git([
+          "-C",
+          worktree,
+          "config",
+          "user.email",
+          "tests@corotum.invalid",
+        ]);
         await git(["-C", worktree, "config", "user.name", "Corotum tests"]);
         await git(["-C", worktree, "commit", "--allow-empty", "-m", "initial"]);
         await git(["init", "--bare", remote]);
         await git(["-C", worktree, "remote", "add", "origin", remote]);
         await git(["-C", worktree, "push", "-u", "origin", "main"]);
-        await git(["--git-dir", remote, "symbolic-ref", "HEAD", "refs/heads/main"]);
-        const provider = new V2GitStateProvider(join(gitRoot, "cache"), remote, undefined, async () => undefined);
+        await git([
+          "--git-dir",
+          remote,
+          "symbolic-ref",
+          "HEAD",
+          "refs/heads/main",
+        ]);
+        const provider = new V2GitStateProvider(
+          join(gitRoot, "cache"),
+          remote,
+          undefined,
+          async () => undefined,
+        );
         await provider.push({
-          state: { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } },
+          state: {
+            manifest: { version: 2, skills: [] },
+            lockfile: { version: 2, skills: [] },
+          },
           ledger: emptyLedger,
           baseRevision: await git(["-C", worktree, "rev-parse", "HEAD"]),
         });
@@ -805,20 +1191,67 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       })();
       const artifactDirectory = join(gitRoot, "artifact");
       await writeSkill(artifactDirectory, "# git artifact\n");
-      const contentHash = (await scanNormalizedContent(artifactDirectory)).contentHash;
+      const contentHash = (await scanNormalizedContent(artifactDirectory))
+        .contentHash;
       const integrityHash = await gitTreeHash(artifactDirectory);
       const artifactId = skillId("sk_gitround");
       const sourceId = skillId("sk_srcround");
-      const sourceMeta = { repository: publicSkill.repository, path: "skills/public", ref: "main" };
+      const sourceMeta = {
+        repository: publicSkill.repository,
+        path: "skills/public",
+        ref: "main",
+      };
       const gitState: V2DesiredState = {
-        manifest: { version: 2, skills: [
-          { id: artifactId, name: "adopted", targets: "all", resolutionStatus: "RESOLVED" },
-          { id: sourceId, name: "upstream", targets: "all", source: sourceMeta, resolutionStatus: "RESOLVED" },
-        ] },
-        lockfile: { version: 2, skills: [
-          { id: artifactId, name: "adopted", materialization: { kind: "artifact", artifact: { kind: "git-tree", locator: `artifacts/${artifactId}/${integrityHash.slice(7)}`, contentHash, integrityHash, sizeBytes: 1 } } },
-          { id: sourceId, name: "upstream", source: { ...sourceMeta, revision: publicSkill.revision, contentHash: publicSkill.contentHash }, materialization: { kind: "source", contentHash: publicSkill.contentHash } },
-        ] },
+        manifest: {
+          version: 2,
+          skills: [
+            {
+              id: artifactId,
+              name: "adopted",
+              targets: "all",
+              resolutionStatus: "RESOLVED",
+            },
+            {
+              id: sourceId,
+              name: "upstream",
+              targets: "all",
+              source: sourceMeta,
+              resolutionStatus: "RESOLVED",
+            },
+          ],
+        },
+        lockfile: {
+          version: 2,
+          skills: [
+            {
+              id: artifactId,
+              name: "adopted",
+              materialization: {
+                kind: "artifact",
+                artifact: {
+                  kind: "git-tree",
+                  locator: `artifacts/${artifactId}/${integrityHash.slice(7)}`,
+                  contentHash,
+                  integrityHash,
+                  sizeBytes: 1,
+                },
+              },
+            },
+            {
+              id: sourceId,
+              name: "upstream",
+              source: {
+                ...sourceMeta,
+                revision: publicSkill.revision,
+                contentHash: publicSkill.contentHash,
+              },
+              materialization: {
+                kind: "source",
+                contentHash: publicSkill.contentHash,
+              },
+            },
+          ],
+        },
       };
       const seeded = await gitProvider.push({
         state: gitState,
@@ -826,7 +1259,10 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         baseRevision: (await gitProvider.pull()).revisionId,
         artifacts: { [artifactId]: artifactDirectory },
       });
-      const roundCloud = await cloudWorkspace("roundtrip", { id: "user_3", email: "cara@example.com" });
+      const roundCloud = await cloudWorkspace("roundtrip", {
+        id: "user_3",
+        email: "cara@example.com",
+      });
       const destination = roundCloud.provider(roundCloud.machineA);
       const migrated = await migrateV2GitToCloud({
         source: seeded,
@@ -834,7 +1270,11 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         destination: {
           pull: async () => {
             const snapshot = await destination.pull();
-            return { revisionId: snapshot.revisionId, state: snapshot.state, ledger: snapshot.ledger };
+            return {
+              revisionId: snapshot.revisionId,
+              state: snapshot.state,
+              ledger: snapshot.ledger,
+            };
           },
           push: async (input) => {
             const pushed = await destination.push(input);
@@ -845,8 +1285,15 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       });
       expect(migrated).toBeTruthy();
       const cloudSnapshot = await destination.pull();
-      expect(cloudSnapshot.state.lockfile.skills.find((lock) => lock.id === sourceId)?.materialization.kind).toBe("source");
-      expect(cloudSnapshot.state.lockfile.skills.find((lock) => lock.id === artifactId)?.materialization).toMatchObject({
+      expect(
+        cloudSnapshot.state.lockfile.skills.find((lock) => lock.id === sourceId)
+          ?.materialization.kind,
+      ).toBe("source");
+      expect(
+        cloudSnapshot.state.lockfile.skills.find(
+          (lock) => lock.id === artifactId,
+        )?.materialization,
+      ).toMatchObject({
         kind: "artifact",
         artifact: { kind: "r2-tar-zst", contentHash },
       });
@@ -858,11 +1305,17 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       });
       expect(back).toBeTruthy();
       const gitAfter = await gitProvider.pull();
-      expect(gitAfter.state.lockfile.skills.find((lock) => lock.id === artifactId)?.materialization).toMatchObject({
+      expect(
+        gitAfter.state.lockfile.skills.find((lock) => lock.id === artifactId)
+          ?.materialization,
+      ).toMatchObject({
         kind: "artifact",
         artifact: { kind: "git-tree", contentHash },
       });
-      expect(gitAfter.state.lockfile.skills.find((lock) => lock.id === sourceId)?.source?.revision).toBe(publicSkill.revision);
+      expect(
+        gitAfter.state.lockfile.skills.find((lock) => lock.id === sourceId)
+          ?.source?.revision,
+      ).toBe(publicSkill.revision);
     },
     timeout,
   );
@@ -874,16 +1327,33 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       const cloud = await cloudWorkspace("gc");
       const home = join(root, "home-a");
       await writeSkill(namedSkill(home, "custom"), "# one\n");
-      const firstHash = (await scanNormalizedContent(namedSkill(home, "custom"))).contentHash;
+      const firstHash = (
+        await scanNormalizedContent(namedSkill(home, "custom"))
+      ).contentHash;
       expect(
-        (await initializeCloudHome(home, cloud.provider(cloud.machineA), cloud.workspaceId, [
-          { kind: "artifact-backed", name: "custom", path: namedSkill(home, "custom"), classification: "unknown", localContentHash: firstHash },
-        ])).kind,
+        (
+          await initializeCloudHome(
+            home,
+            cloud.provider(cloud.machineA),
+            cloud.workspaceId,
+            [
+              {
+                kind: "artifact-backed",
+                name: "custom",
+                path: namedSkill(home, "custom"),
+                classification: "unknown",
+                localContentHash: firstHash,
+              },
+            ],
+          )
+        ).kind,
       ).toBe("initialized");
       const firstLocator = [...cloud.bucket.objects.keys()][0]!;
 
       await writeFile(join(namedSkill(home, "custom"), "SKILL.md"), "# two\n");
-      const secondArchive = await createArtifactArchive(namedSkill(home, "custom"));
+      const secondArchive = await createArtifactArchive(
+        namedSkill(home, "custom"),
+      );
       const current = await cloud.provider(cloud.machineA).pull();
       const lock = current.state.lockfile.skills[0]!;
       const secondLocator = `workspaces/${cloud.workspaceId}/artifacts/${lock.id}/${secondArchive.integrityHash}.tar.zst`;
@@ -891,19 +1361,21 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         manifest: current.state.manifest,
         lockfile: {
           version: 2,
-          skills: [{
-            ...lock,
-            materialization: {
-              kind: "artifact",
-              artifact: {
-                kind: "r2-tar-zst",
-                contentHash: secondArchive.contentHash,
-                integrityHash: secondArchive.integrityHash,
-                locator: secondLocator,
-                sizeBytes: secondArchive.sizeBytes,
+          skills: [
+            {
+              ...lock,
+              materialization: {
+                kind: "artifact",
+                artifact: {
+                  kind: "r2-tar-zst",
+                  contentHash: secondArchive.contentHash,
+                  integrityHash: secondArchive.integrityHash,
+                  locator: secondLocator,
+                  sizeBytes: secondArchive.sizeBytes,
+                },
               },
             },
-          }],
+          ],
         },
       };
       await cloud.provider(cloud.machineA).push({
@@ -913,8 +1385,13 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         artifacts: { [lock.id]: secondArchive.bytes },
       });
 
-      await writeFile(join(namedSkill(home, "custom"), "SKILL.md"), "# three\n");
-      const thirdArchive = await createArtifactArchive(namedSkill(home, "custom"));
+      await writeFile(
+        join(namedSkill(home, "custom"), "SKILL.md"),
+        "# three\n",
+      );
+      const thirdArchive = await createArtifactArchive(
+        namedSkill(home, "custom"),
+      );
       const afterSecond = await cloud.provider(cloud.machineA).pull();
       const thirdLocator = `workspaces/${cloud.workspaceId}/artifacts/${lock.id}/${thirdArchive.integrityHash}.tar.zst`;
       await cloud.provider(cloud.machineA).push({
@@ -922,19 +1399,21 @@ describe("Cloud v2 application/service end-to-end safety", () => {
           manifest: afterSecond.state.manifest,
           lockfile: {
             version: 2,
-            skills: [{
-              ...lock,
-              materialization: {
-                kind: "artifact",
-                artifact: {
-                  kind: "r2-tar-zst",
-                  contentHash: thirdArchive.contentHash,
-                  integrityHash: thirdArchive.integrityHash,
-                  locator: thirdLocator,
-                  sizeBytes: thirdArchive.sizeBytes,
+            skills: [
+              {
+                ...lock,
+                materialization: {
+                  kind: "artifact",
+                  artifact: {
+                    kind: "r2-tar-zst",
+                    contentHash: thirdArchive.contentHash,
+                    integrityHash: thirdArchive.integrityHash,
+                    locator: thirdLocator,
+                    sizeBytes: thirdArchive.sizeBytes,
+                  },
                 },
               },
-            }],
+            ],
           },
         },
         ledger: afterSecond.ledger,
@@ -943,14 +1422,17 @@ describe("Cloud v2 application/service end-to-end safety", () => {
       });
 
       const collected = await handlePostWorkspaceArtifactGc(
-        new Request(`https://cloud.invalid/api/v1/workspaces/${cloud.workspaceId}/artifacts/gc`, {
-          method: "POST",
-          headers: {
-            [DEVICE_TOKEN_HEADER]: cloud.machineA.token,
-            [CLI_VERSION_HEADER]: "0.1.0",
-            "x-forwarded-for": "gc-owner",
+        new Request(
+          `https://cloud.invalid/api/v1/workspaces/${cloud.workspaceId}/artifacts/gc`,
+          {
+            method: "POST",
+            headers: {
+              [DEVICE_TOKEN_HEADER]: cloud.machineA.token,
+              [CLI_VERSION_HEADER]: "0.1.0",
+              "x-forwarded-for": "gc-owner",
+            },
           },
-        }),
+        ),
         cloud.db,
         cloud.bucket,
         cloud.workspaceId,
@@ -965,7 +1447,8 @@ describe("Cloud v2 application/service end-to-end safety", () => {
         deviceId: cloud.foreign.deviceId,
         workspaceId: cloud.workspaceId,
       });
-      const latest = (await cloud.provider(cloud.machineA).pull()).state.lockfile.skills[0]!;
+      const latest = (await cloud.provider(cloud.machineA).pull()).state
+        .lockfile.skills[0]!;
       await expect(stolen.downloadArtifact(latest)).rejects.toThrow();
       expect(cloud.bucket.objects.has(thirdLocator)).toBe(true);
     },

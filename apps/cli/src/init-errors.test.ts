@@ -46,7 +46,10 @@ describe("init provider selection", () => {
         },
         askRepository: async () => "git@example.test:state.git",
       }),
-    ).resolves.toEqual({ kind: "git", repository: "git@example.test:state.git" });
+    ).resolves.toEqual({
+      kind: "git",
+      repository: "git@example.test:state.git",
+    });
     expect(choices).toEqual(["provider"]);
 
     await expect(
@@ -97,33 +100,54 @@ describe("init provider selection", () => {
         nonInteractive: true,
         ...noPrompt,
       }),
-    ).rejects.toMatchObject({ code: "REPOSITORY_REQUIRED", outcome: "INVALID_CONFIG" });
+    ).rejects.toMatchObject({
+      code: "REPOSITORY_REQUIRED",
+      outcome: "INVALID_CONFIG",
+    });
   });
 });
 
 describe("git init error classification", () => {
   test("maps missing Git, invalid repo, unavailable remote, and auth failures", () => {
-    expect(classifyGitInitError(Object.assign(new Error("spawn git ENOENT"), { code: "ENOENT" }))).toMatchObject({
+    expect(
+      classifyGitInitError(
+        Object.assign(new Error("spawn git ENOENT"), { code: "ENOENT" }),
+      ),
+    ).toMatchObject({
       code: "GIT_MISSING",
     });
-    expect(classifyGitInitError(new Error("fatal: not a git repository"))).toMatchObject({
+    expect(
+      classifyGitInitError(new Error("fatal: not a git repository")),
+    ).toMatchObject({
       code: "INVALID_GIT_REPOSITORY",
     });
-    expect(classifyGitInitError(new Error("fatal: unable to access 'https://127.0.0.1:1/repo.git': Failed to connect"))).toMatchObject({
+    expect(
+      classifyGitInitError(
+        new Error(
+          "fatal: unable to access 'https://127.0.0.1:1/repo.git': Failed to connect",
+        ),
+      ),
+    ).toMatchObject({
       code: "REMOTE_UNAVAILABLE",
       outcome: "NETWORK_ERROR",
     });
-    expect(classifyGitInitError(new GitSourceError("AUTH_REQUIRED", "private"))).toMatchObject({
+    expect(
+      classifyGitInitError(new GitSourceError("AUTH_REQUIRED", "private")),
+    ).toMatchObject({
       code: "AUTH_REQUIRED",
       outcome: "AUTH_REQUIRED",
     });
-    expect(classifyGitInitError(new InitError("already", "ALREADY_INITIALIZED"))).toMatchObject({
+    expect(
+      classifyGitInitError(new InitError("already", "ALREADY_INITIALIZED")),
+    ).toMatchObject({
       code: "ALREADY_INITIALIZED",
     });
-    expect(classifyGitInitError(new Error("Git authentication is required."))).toBeInstanceOf(
-      GitCliError,
-    );
-    expect(classifyGitInitError(new Error("Git state operation failed."))).toMatchObject({
+    expect(
+      classifyGitInitError(new Error("Git authentication is required.")),
+    ).toBeInstanceOf(GitCliError);
+    expect(
+      classifyGitInitError(new Error("Git state operation failed.")),
+    ).toMatchObject({
       code: "REMOTE_UNAVAILABLE",
       outcome: "NETWORK_ERROR",
     });
@@ -134,7 +158,10 @@ describe("git init error classification", () => {
           "fatal: does not appear to be a git repository",
         ),
       ),
-    ).toMatchObject({ code: "INVALID_GIT_REPOSITORY", outcome: "INVALID_CONFIG" });
+    ).toMatchObject({
+      code: "INVALID_GIT_REPOSITORY",
+      outcome: "INVALID_CONFIG",
+    });
     expect(
       classifyGitInitError(
         new GitSourceError(

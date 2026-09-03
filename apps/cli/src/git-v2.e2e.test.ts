@@ -21,7 +21,10 @@ const timeout = 60_000;
 afterEach(async () => {
   await Promise.all(
     roots.splice(0).map(async (root) => {
-      await Bun.spawn(["chmod", "-R", "u+rwx", root], { stderr: "pipe", stdout: "pipe" }).exited;
+      await Bun.spawn(["chmod", "-R", "u+rwx", root], {
+        stderr: "pipe",
+        stdout: "pipe",
+      }).exited;
       await rm(root, { force: true, recursive: true });
     }),
   );
@@ -116,7 +119,11 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function writeSkill(directory: string, body: string, extra?: Readonly<Record<string, string>>): Promise<void> {
+async function writeSkill(
+  directory: string,
+  body: string,
+  extra?: Readonly<Record<string, string>>,
+): Promise<void> {
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, "SKILL.md"), body);
   if (extra) {
@@ -126,7 +133,10 @@ async function writeSkill(directory: string, body: string, extra?: Readonly<Reco
   }
 }
 
-async function enableCodex(home: string, extra?: Partial<ReturnType<typeof defaultConfig>>): Promise<void> {
+async function enableCodex(
+  home: string,
+  extra?: Partial<ReturnType<typeof defaultConfig>>,
+): Promise<void> {
   await mkdir(join(home, ".codex", "skills"), { recursive: true });
   const current = paths(home);
   await writeJson(current.configFile, {
@@ -137,10 +147,20 @@ async function enableCodex(home: string, extra?: Partial<ReturnType<typeof defau
   });
 }
 
-async function skillRepo(root: string, name: string, body: string): Promise<{ repository: string; revision: string; contentHash: string }> {
+async function skillRepo(
+  root: string,
+  name: string,
+  body: string,
+): Promise<{ repository: string; revision: string; contentHash: string }> {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await writeSkill(join(repository, "skills", name), body);
   await git(["-C", repository, "add", "."]);
@@ -148,7 +168,8 @@ async function skillRepo(root: string, name: string, body: string): Promise<{ re
   return {
     repository,
     revision: await git(["-C", repository, "rev-parse", "HEAD"]),
-    contentHash: (await scanNormalizedContent(join(repository, "skills", name))).contentHash,
+    contentHash: (await scanNormalizedContent(join(repository, "skills", name)))
+      .contentHash,
   };
 }
 
@@ -188,7 +209,12 @@ async function seedSourceKnown(
   const lockPath = join(home, ".agents", ".skill-lock.json");
   let skills: Record<string, unknown> = {};
   try {
-    skills = (JSON.parse(await readFile(lockPath, "utf8")) as { skills?: Record<string, unknown> }).skills ?? {};
+    skills =
+      (
+        JSON.parse(await readFile(lockPath, "utf8")) as {
+          skills?: Record<string, unknown>;
+        }
+      ).skills ?? {};
   } catch {
     skills = {};
   }
@@ -212,7 +238,12 @@ describe("Git v2 two-home end-to-end safety", () => {
       const homeA = join(root, "home-a");
       const homeB = join(root, "home-b");
       await enableCodex(homeA);
-      await seedSourceKnown(homeA, "public", publicSkill.repository, "# Public locked\n");
+      await seedSourceKnown(
+        homeA,
+        "public",
+        publicSkill.repository,
+        "# Public locked\n",
+      );
       await writeSkill(namedSkill(homeA, "custom"), "# Custom artifact\n");
 
       const initialized = await run(homeA, [
@@ -228,27 +259,55 @@ describe("Git v2 two-home end-to-end safety", () => {
       ]);
       expect(initialized.code).toBe(0);
 
-      const tracked = await git(["--git-dir", remote, "ls-tree", "-r", "--name-only", "HEAD"]);
+      const tracked = await git([
+        "--git-dir",
+        remote,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "HEAD",
+      ]);
       expect(tracked).toContain("corotum.yaml");
       expect(tracked).toContain("corotum.lock");
       expect(tracked).toContain("artifacts/");
-      expect(await readFile(join(namedSkill(homeA, "public"), "SKILL.md"), "utf8")).toBe("# Public locked\n");
-      expect((await lstat(targetSkill(homeA, "public"))).isSymbolicLink()).toBe(true);
-      expect((await lstat(targetSkill(homeA, "custom"))).isSymbolicLink()).toBe(true);
+      expect(
+        await readFile(join(namedSkill(homeA, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Public locked\n");
+      expect((await lstat(targetSkill(homeA, "public"))).isSymbolicLink()).toBe(
+        true,
+      );
+      expect((await lstat(targetSkill(homeA, "custom"))).isSymbolicLink()).toBe(
+        true,
+      );
 
-      await writeFile(join(publicSkill.repository, "skills", "public", "SKILL.md"), "# Public HEAD moved\n");
+      await writeFile(
+        join(publicSkill.repository, "skills", "public", "SKILL.md"),
+        "# Public HEAD moved\n",
+      );
       await git(["-C", publicSkill.repository, "add", "."]);
       await git(["-C", publicSkill.repository, "commit", "-m", "move head"]);
 
       await joinGitHome(homeB, remote);
       const synced = await run(homeB, ["--json", "--non-interactive", "sync"]);
       expect(synced.json?.outcome).toBe("SUCCESS");
-      expect(await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8")).toBe("# Public locked\n");
-      expect(await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8")).toBe("# Custom artifact\n");
-      expect((await scanNormalizedContent(namedSkill(homeB, "public"))).contentHash).toBe(publicSkill.contentHash);
-      expect((await lstat(targetSkill(homeB, "public"))).isSymbolicLink()).toBe(true);
-      expect(await readFile(join(targetSkill(homeB, "public"), "SKILL.md"), "utf8")).toBe("# Public locked\n");
-      const stateB = JSON.parse(await readFile(join(paths(homeB).stateDir, "state.json"), "utf8")) as {
+      expect(
+        await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Public locked\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8"),
+      ).toBe("# Custom artifact\n");
+      expect(
+        (await scanNormalizedContent(namedSkill(homeB, "public"))).contentHash,
+      ).toBe(publicSkill.contentHash);
+      expect((await lstat(targetSkill(homeB, "public"))).isSymbolicLink()).toBe(
+        true,
+      );
+      expect(
+        await readFile(join(targetSkill(homeB, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Public locked\n");
+      const stateB = JSON.parse(
+        await readFile(join(paths(homeB).stateDir, "state.json"), "utf8"),
+      ) as {
         lastAppliedRevision: string | null;
       };
       expect(stateB.lastAppliedRevision).toBe(synced.json?.revision);
@@ -262,11 +321,20 @@ describe("Git v2 two-home end-to-end safety", () => {
       const root = await temp("auth");
       const remote = await stateRemote(root);
       const publicSkill = await skillRepo(root, "public", "# Public locked\n");
-      const privateSkill = await skillRepo(root, "classified", "# Classified locked\n");
+      const privateSkill = await skillRepo(
+        root,
+        "classified",
+        "# Classified locked\n",
+      );
       const homeA = join(root, "home-a");
       const homeB = join(root, "home-b");
       await enableCodex(homeA);
-      await seedSourceKnown(homeA, "public", publicSkill.repository, "# Public locked\n");
+      await seedSourceKnown(
+        homeA,
+        "public",
+        publicSkill.repository,
+        "# Public locked\n",
+      );
       await writeSkill(namedSkill(homeA, "custom"), "# Custom artifact\n");
       expect(
         (
@@ -305,10 +373,18 @@ describe("Git v2 two-home end-to-end safety", () => {
 
       const synced = await run(homeB, ["--json", "--non-interactive", "sync"]);
       expect(synced.json?.outcome).toBe("AUTH_REQUIRED");
-      expect(await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8")).toBe("# Custom artifact\n");
-      expect(await readFile(join(namedSkill(homeB, "notes"), "SKILL.md"), "utf8")).toBe("# Unrelated unmanaged\n");
-      expect(await readFile(join(targetSkill(homeB, "notes"), "SKILL.md"), "utf8")).toBe("# Unrelated unmanaged\n");
-      await expect(readFile(join(namedSkill(homeB, "classified"), "SKILL.md"), "utf8")).rejects.toThrow();
+      expect(
+        await readFile(join(namedSkill(homeB, "custom"), "SKILL.md"), "utf8"),
+      ).toBe("# Custom artifact\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Unrelated unmanaged\n");
+      expect(
+        await readFile(join(targetSkill(homeB, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Unrelated unmanaged\n");
+      await expect(
+        readFile(join(namedSkill(homeB, "classified"), "SKILL.md"), "utf8"),
+      ).rejects.toThrow();
     },
     timeout,
   );
@@ -323,8 +399,18 @@ describe("Git v2 two-home end-to-end safety", () => {
       const homeA = join(root, "home-a");
       const homeB = join(root, "home-b");
       await enableCodex(homeA);
-      await seedSourceKnown(homeA, "public", publicSkill.repository, "# Public locked\n");
-      await seedSourceKnown(homeA, "extra", extra.repository, "# Extra locked\n");
+      await seedSourceKnown(
+        homeA,
+        "public",
+        publicSkill.repository,
+        "# Public locked\n",
+      );
+      await seedSourceKnown(
+        homeA,
+        "extra",
+        extra.repository,
+        "# Extra locked\n",
+      );
       expect(
         (
           await run(homeA, [
@@ -341,21 +427,48 @@ describe("Git v2 two-home end-to-end safety", () => {
       ).toBe(0);
 
       await joinGitHome(homeB, remote);
-      expect((await run(homeB, ["--json", "--non-interactive", "sync"])).json?.outcome).toBe("SUCCESS");
-      expect((await lstat(targetSkill(homeB, "public"))).isSymbolicLink()).toBe(true);
+      expect(
+        (await run(homeB, ["--json", "--non-interactive", "sync"])).json
+          ?.outcome,
+      ).toBe("SUCCESS");
+      expect((await lstat(targetSkill(homeB, "public"))).isSymbolicLink()).toBe(
+        true,
+      );
 
-      expect((await run(homeA, ["--json", "--non-interactive", "remove", "public"])).code).toBe(0);
-      expect((await run(homeA, ["--json", "--non-interactive", "unmanage", "extra"])).code).toBe(0);
-      const afterLedger = await run(homeB, ["--json", "--non-interactive", "sync"]);
+      expect(
+        (await run(homeA, ["--json", "--non-interactive", "remove", "public"]))
+          .code,
+      ).toBe(0);
+      expect(
+        (await run(homeA, ["--json", "--non-interactive", "unmanage", "extra"]))
+          .code,
+      ).toBe(0);
+      const afterLedger = await run(homeB, [
+        "--json",
+        "--non-interactive",
+        "sync",
+      ]);
       expect(afterLedger.json?.outcome).toBe("SUCCESS");
       await expect(lstat(namedSkill(homeB, "public"))).rejects.toThrow();
       await expect(lstat(targetSkill(homeB, "public"))).rejects.toThrow();
-      expect(await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8")).toBe("# Extra locked\n");
-      expect((await lstat(targetSkill(homeB, "extra"))).isSymbolicLink()).toBe(false);
-      expect(await readFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "utf8")).toBe("# Extra locked\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8"),
+      ).toBe("# Extra locked\n");
+      expect((await lstat(targetSkill(homeB, "extra"))).isSymbolicLink()).toBe(
+        false,
+      );
+      expect(
+        await readFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "utf8"),
+      ).toBe("# Extra locked\n");
 
-      await writeFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "# Modified unmanaged\n");
-      await writeFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "# Modified unmanaged\n");
+      await writeFile(
+        join(namedSkill(homeB, "extra"), "SKILL.md"),
+        "# Modified unmanaged\n",
+      );
+      await writeFile(
+        join(targetSkill(homeB, "extra"), "SKILL.md"),
+        "# Modified unmanaged\n",
+      );
       expect(
         (
           await run(homeA, [
@@ -371,9 +484,16 @@ describe("Git v2 two-home end-to-end safety", () => {
         ).code,
       ).toBe(0);
       const readded = await run(homeB, ["--json", "--non-interactive", "sync"]);
-      expect(readded.json?.outcome === "CONFLICT" || readded.json?.status === "LOCAL_CONFLICT").toBe(true);
-      expect(await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8")).toBe("# Modified unmanaged\n");
-      expect(await readFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "utf8")).toBe("# Modified unmanaged\n");
+      expect(
+        readded.json?.outcome === "CONFLICT" ||
+          readded.json?.status === "LOCAL_CONFLICT",
+      ).toBe(true);
+      expect(
+        await readFile(join(namedSkill(homeB, "extra"), "SKILL.md"), "utf8"),
+      ).toBe("# Modified unmanaged\n");
+      expect(
+        await readFile(join(targetSkill(homeB, "extra"), "SKILL.md"), "utf8"),
+      ).toBe("# Modified unmanaged\n");
     },
     timeout,
   );
@@ -387,32 +507,71 @@ describe("Git v2 two-home end-to-end safety", () => {
       const homeA = join(root, "home-a");
       const homeB = join(root, "home-b");
       await enableCodex(homeA);
-      await seedSourceKnown(homeA, "public", publicSkill.repository, "# Public locked\n");
+      await seedSourceKnown(
+        homeA,
+        "public",
+        publicSkill.repository,
+        "# Public locked\n",
+      );
       expect(
-        (await run(homeA, ["--json", "--non-interactive", "init", remote, "--replace", "public"])).code,
+        (
+          await run(homeA, [
+            "--json",
+            "--non-interactive",
+            "init",
+            remote,
+            "--replace",
+            "public",
+          ])
+        ).code,
       ).toBe(0);
       await joinGitHome(homeB, remote);
-      expect((await run(homeB, ["--json", "--non-interactive", "sync"])).json?.outcome).toBe("SUCCESS");
+      expect(
+        (await run(homeB, ["--json", "--non-interactive", "sync"])).json
+          ?.outcome,
+      ).toBe("SUCCESS");
 
       const stateFile = join(paths(homeB).stateDir, "state.json");
       await rm(stateFile, { force: true });
-      const recovered = await run(homeB, ["--json", "--non-interactive", "status"]);
+      const recovered = await run(homeB, [
+        "--json",
+        "--non-interactive",
+        "status",
+      ]);
       expect(recovered.json?.outcome).toBe("SUCCESS");
       expect(JSON.stringify(recovered.json)).toContain("MANAGED_SYNCED");
 
       await writeFile(stateFile, "{not-json");
-      const afterCorrupt = await run(homeB, ["--json", "--non-interactive", "status"]);
+      const afterCorrupt = await run(homeB, [
+        "--json",
+        "--non-interactive",
+        "status",
+      ]);
       expect(afterCorrupt.json?.outcome).toBe("SUCCESS");
-      expect(await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8")).toBe("# Public locked\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Public locked\n");
 
-      await writeFile(join(namedSkill(homeB, "public"), "SKILL.md"), "# Drifted canonical\n");
+      await writeFile(
+        join(namedSkill(homeB, "public"), "SKILL.md"),
+        "# Drifted canonical\n",
+      );
       const drifted = await run(homeB, ["--json", "--non-interactive", "sync"]);
       expect(drifted.json?.status).toBe("DRIFTED");
-      expect(await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8")).toBe("# Drifted canonical\n");
+      expect(
+        await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Drifted canonical\n");
 
-      expect((await run(homeB, ["--json", "--non-interactive", "restore", "public"])).code).toBe(0);
-      expect(await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8")).toBe("# Public locked\n");
-      expect((await lstat(targetSkill(homeB, "public"))).isSymbolicLink()).toBe(true);
+      expect(
+        (await run(homeB, ["--json", "--non-interactive", "restore", "public"]))
+          .code,
+      ).toBe(0);
+      expect(
+        await readFile(join(namedSkill(homeB, "public"), "SKILL.md"), "utf8"),
+      ).toBe("# Public locked\n");
+      expect((await lstat(targetSkill(homeB, "public"))).isSymbolicLink()).toBe(
+        true,
+      );
     },
     timeout,
   );
@@ -424,7 +583,9 @@ describe("Git v2 two-home end-to-end safety", () => {
       const remote = await stateRemote(root);
       const homeA = join(root, "home-a");
       await enableCodex(homeA);
-      await writeSkill(namedSkill(homeA, "secret"), "# Secret\n", { id_rsa: "not-a-real-key\n" });
+      await writeSkill(namedSkill(homeA, "secret"), "# Secret\n", {
+        id_rsa: "not-a-real-key\n",
+      });
       const secretInit = await run(homeA, [
         "--json",
         "--non-interactive",
@@ -434,15 +595,31 @@ describe("Git v2 two-home end-to-end safety", () => {
         "--adopt-artifact",
         "secret",
       ]);
-      expect(secretInit.code === 0 || secretInit.json?.outcome !== undefined).toBe(true);
-      expect(await readFile(join(namedSkill(homeA, "secret"), "id_rsa"), "utf8")).toBe("not-a-real-key\n");
-      expect(await git(["--git-dir", remote, "ls-tree", "-r", "--name-only", "HEAD"])).not.toContain("id_rsa");
+      expect(
+        secretInit.code === 0 || secretInit.json?.outcome !== undefined,
+      ).toBe(true);
+      expect(
+        await readFile(join(namedSkill(homeA, "secret"), "id_rsa"), "utf8"),
+      ).toBe("not-a-real-key\n");
+      expect(
+        await git([
+          "--git-dir",
+          remote,
+          "ls-tree",
+          "-r",
+          "--name-only",
+          "HEAD",
+        ]),
+      ).not.toContain("id_rsa");
 
       const consentRoot = await temp("consent");
       const consentRemote = await stateRemote(consentRoot);
       const consentHome = join(consentRoot, "home-a");
       await enableCodex(consentHome);
-      await writeSkill(namedSkill(consentHome, "custom"), "# Custom artifact\n");
+      await writeSkill(
+        namedSkill(consentHome, "custom"),
+        "# Custom artifact\n",
+      );
       const refused = await run(consentHome, [
         "--json",
         "--non-interactive",
@@ -452,24 +629,69 @@ describe("Git v2 two-home end-to-end safety", () => {
         "custom",
       ]);
       expect(refused.json?.outcome).toBe("CONFIRMATION_REQUIRED");
-      expect(await readFile(join(namedSkill(consentHome, "custom"), "SKILL.md"), "utf8")).toBe("# Custom artifact\n");
-      expect(await git(["--git-dir", consentRemote, "ls-tree", "-r", "--name-only", "HEAD"])).not.toContain("artifacts/");
+      expect(
+        await readFile(
+          join(namedSkill(consentHome, "custom"), "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("# Custom artifact\n");
+      expect(
+        await git([
+          "--git-dir",
+          consentRemote,
+          "ls-tree",
+          "-r",
+          "--name-only",
+          "HEAD",
+        ]),
+      ).not.toContain("artifacts/");
 
       const partialRoot = await temp("partial");
       const partialRemote = await stateRemote(partialRoot);
-      const publicSkill = await skillRepo(partialRoot, "public", "# Public locked\n");
+      const publicSkill = await skillRepo(
+        partialRoot,
+        "public",
+        "# Public locked\n",
+      );
       const partialA = join(partialRoot, "home-a");
       const partialB = join(partialRoot, "home-b");
       await enableCodex(partialA);
-      await seedSourceKnown(partialA, "public", publicSkill.repository, "# Public locked\n");
+      await seedSourceKnown(
+        partialA,
+        "public",
+        publicSkill.repository,
+        "# Public locked\n",
+      );
       expect(
-        (await run(partialA, ["--json", "--non-interactive", "init", partialRemote, "--replace", "public"])).code,
+        (
+          await run(partialA, [
+            "--json",
+            "--non-interactive",
+            "init",
+            partialRemote,
+            "--replace",
+            "public",
+          ])
+        ).code,
       ).toBe(0);
       await joinGitHome(partialB, partialRemote);
       await writeSkill(targetSkill(partialB, "public"), "# Unmanaged target\n");
-      const partial = await run(partialB, ["--json", "--non-interactive", "sync"]);
-      expect(partial.json?.outcome === "CONFLICT" || partial.json?.status === "LOCAL_CONFLICT" || partial.json?.outcome === "PARTIAL_SUCCESS").toBe(true);
-      expect(await readFile(join(targetSkill(partialB, "public"), "SKILL.md"), "utf8")).toBe("# Unmanaged target\n");
+      const partial = await run(partialB, [
+        "--json",
+        "--non-interactive",
+        "sync",
+      ]);
+      expect(
+        partial.json?.outcome === "CONFLICT" ||
+          partial.json?.status === "LOCAL_CONFLICT" ||
+          partial.json?.outcome === "PARTIAL_SUCCESS",
+      ).toBe(true);
+      expect(
+        await readFile(
+          join(targetSkill(partialB, "public"), "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("# Unmanaged target\n");
 
       const legacyRoot = await temp("legacy");
       const legacyHome = join(legacyRoot, "home");
@@ -477,7 +699,9 @@ describe("Git v2 two-home end-to-end safety", () => {
       const current = paths(legacyHome);
       const legacy = resolveLegacyPlatformPaths(platformEnv(legacyHome));
       await writeSkill(join(legacy.skillsDir, "sk_example"), "# Legacy\n");
-      const hash = (await scanNormalizedContent(join(legacy.skillsDir, "sk_example"))).contentHash;
+      const hash = (
+        await scanNormalizedContent(join(legacy.skillsDir, "sk_example"))
+      ).contentHash;
       await mkdir(join(legacy.gitDir, "cache"), { recursive: true });
       await writeFile(
         join(legacy.gitDir, "cache", "toolmirror.yaml"),
@@ -485,19 +709,25 @@ describe("Git v2 two-home end-to-end safety", () => {
       );
       await writeFile(
         join(legacy.gitDir, "cache", "toolmirror.lock"),
-        `${JSON.stringify({
-          version: 1,
-          skills: [{
-            id: "sk_example",
-            source: "https://example.test/skills.git",
-            skill: "example",
-            ref: "main",
-            repository: "https://example.test/skills.git",
-            revision: "a".repeat(40),
-            path: "example",
-            contentHash: hash,
-          }],
-        }, null, 2)}\n`,
+        `${JSON.stringify(
+          {
+            version: 1,
+            skills: [
+              {
+                id: "sk_example",
+                source: "https://example.test/skills.git",
+                skill: "example",
+                ref: "main",
+                repository: "https://example.test/skills.git",
+                revision: "a".repeat(40),
+                path: "example",
+                contentHash: hash,
+              },
+            ],
+          },
+          null,
+          2,
+        )}\n`,
       );
       await mkdir(legacy.configDir, { recursive: true });
       await mkdir(legacy.stateDir, { recursive: true });
@@ -510,9 +740,21 @@ describe("Git v2 two-home end-to-end safety", () => {
         agents: { codex: { enabled: true } },
       });
       await mkdir(join(legacyHome, ".codex", "skills"), { recursive: true });
-      const migrated = await run(legacyHome, ["--json", "--non-interactive", "migrate", "legacy"]);
-      expect(migrated.code === 0 || migrated.json?.outcome === "SUCCESS").toBe(true);
-      expect(await readFile(join(legacy.skillsDir, "sk_example", "SKILL.md"), "utf8")).toBe("# Legacy\n");
+      const migrated = await run(legacyHome, [
+        "--json",
+        "--non-interactive",
+        "migrate",
+        "legacy",
+      ]);
+      expect(migrated.code === 0 || migrated.json?.outcome === "SUCCESS").toBe(
+        true,
+      );
+      expect(
+        await readFile(
+          join(legacy.skillsDir, "sk_example", "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("# Legacy\n");
       expect(current.configFile).toContain("Corotum");
     },
     timeout,

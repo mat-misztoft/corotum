@@ -7,15 +7,18 @@ import {
   type DispositionLedger,
   type SkillId,
   type SourceMetadata,
+  skillId,
   type V2DesiredState,
   type V2LockedSkill,
-  skillId,
   validateV2DesiredState,
 } from "../../../packages/core/src/index";
-import { gitTreeHash, V2ArtifactConsentRequiredError } from "../../../packages/git-provider/src/index";
+import {
+  gitTreeHash,
+  V2ArtifactConsentRequiredError,
+} from "../../../packages/git-provider/src/index";
 import { createArtifactArchive } from "../../../packages/skills-adapter/src/artifact-archive";
 import {
-  CanonicalSkillStore,
+  type CanonicalSkillStore,
   hashSkillDirectory,
 } from "../../../packages/skills-adapter/src/canonical-store";
 import { ExactContentMaterializer } from "../../../packages/skills-adapter/src/exact-materializer";
@@ -88,14 +91,20 @@ export type InitTransactionResult =
       phase: InitRecoveryPhase;
       outcomes: readonly InitSkillOutcome[];
     }>
-  | Readonly<{ kind: "refused"; reason: string; outcomes: readonly InitSkillOutcome[] }>;
+  | Readonly<{
+      kind: "refused";
+      reason: string;
+      outcomes: readonly InitSkillOutcome[];
+    }>;
 
 export class InitRecoveryStore {
   constructor(private readonly file: string) {}
 
   async load(): Promise<InitRecoveryMarker | null> {
     try {
-      const parsed = JSON.parse(await readFile(this.file, "utf8")) as InitRecoveryMarker;
+      const parsed = JSON.parse(
+        await readFile(this.file, "utf8"),
+      ) as InitRecoveryMarker;
       if (parsed.schemaVersion !== 1 || !parsed.phase) return null;
       return parsed;
     } catch {
@@ -105,7 +114,9 @@ export class InitRecoveryStore {
 
   async save(marker: InitRecoveryMarker): Promise<void> {
     await mkdir(dirname(this.file), { recursive: true, mode: 0o700 });
-    await writeFile(this.file, `${JSON.stringify(marker, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(this.file, `${JSON.stringify(marker, null, 2)}\n`, {
+      mode: 0o600,
+    });
   }
 
   async clear(): Promise<void> {
@@ -148,7 +159,12 @@ export class InitTransactionService {
   }): Promise<InitTransactionResult> {
     const outcomes = input.outcomes;
     const adopted = outcomes.filter(
-      (outcome): outcome is Extract<InitSkillOutcome, { kind: "source-backed" | "artifact-backed" }> =>
+      (
+        outcome,
+      ): outcome is Extract<
+        InitSkillOutcome,
+        { kind: "source-backed" | "artifact-backed" }
+      > =>
         outcome.kind === "source-backed" || outcome.kind === "artifact-backed",
     );
 
@@ -225,7 +241,11 @@ export class InitTransactionService {
       sameAdoption(current.state, marker.skillIds) &&
       current.revisionId
     ) {
-      marker = { ...marker, phase: "desired-persisted", revision: current.revisionId };
+      marker = {
+        ...marker,
+        phase: "desired-persisted",
+        revision: current.revisionId,
+      };
       await this.deps.recovery.save(marker);
     } else if (marker.phase === "prepared") {
       const prepared = await this.buildState(adopted, marker, current.ledger);
@@ -246,7 +266,10 @@ export class InitTransactionService {
         if (error instanceof V2ArtifactConsentRequiredError) throw error;
         return {
           kind: "refused",
-          reason: error instanceof Error ? error.message : "Initial desired state could not be saved.",
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Initial desired state could not be saved.",
           outcomes,
         };
       }
@@ -254,7 +277,11 @@ export class InitTransactionService {
 
     const revision = marker.revision;
     if (!revision) {
-      return { kind: "refused", reason: "Init recovery is missing the persisted revision.", outcomes };
+      return {
+        kind: "refused",
+        reason: "Init recovery is missing the persisted revision.",
+        outcomes,
+      };
     }
 
     if (marker.phase === "desired-persisted") {
@@ -268,7 +295,10 @@ export class InitTransactionService {
           kind: "partial",
           revision,
           skillIds: marker.skillIds,
-          reason: error instanceof Error ? error.message : "Local skill targets could not be adopted.",
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Local skill targets could not be adopted.",
           phase: "desired-persisted",
           outcomes,
         };
@@ -285,7 +315,10 @@ export class InitTransactionService {
           kind: "partial",
           revision,
           skillIds: marker.skillIds,
-          reason: error instanceof Error ? error.message : "Local configuration could not be saved.",
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Local configuration could not be saved.",
           phase: "locally-verified",
           outcomes,
         };
@@ -293,15 +326,26 @@ export class InitTransactionService {
     }
 
     await this.deps.recovery.clear();
-    return { kind: "initialized", revision, skillIds: marker.skillIds, outcomes };
+    return {
+      kind: "initialized",
+      revision,
+      skillIds: marker.skillIds,
+      outcomes,
+    };
   }
 
   private nextId(): SkillId {
-    return this.deps.createSkillId?.() ?? skillId(`sk_${crypto.randomUUID().replaceAll("-", "")}`);
+    return (
+      this.deps.createSkillId?.() ??
+      skillId(`sk_${crypto.randomUUID().replaceAll("-", "")}`)
+    );
   }
 
   private async buildState(
-    adopted: readonly Extract<InitSkillOutcome, { kind: "source-backed" | "artifact-backed" }>[],
+    adopted: readonly Extract<
+      InitSkillOutcome,
+      { kind: "source-backed" | "artifact-backed" }
+    >[],
     marker: InitRecoveryMarker,
     ledger: DispositionLedger,
   ): Promise<{
@@ -332,14 +376,19 @@ export class InitTransactionService {
           id,
           name: outcome.name,
           source: outcome.source,
-          materialization: { kind: "source", contentHash: outcome.source.contentHash },
+          materialization: {
+            kind: "source",
+            contentHash: outcome.source.contentHash,
+          },
         });
         continue;
       }
 
       const scanned = await scanNormalizedContent(outcome.path);
       if (scanned.contentHash !== outcome.localContentHash) {
-        throw new Error(`Local content for ${outcome.name} changed after adoption selection.`);
+        throw new Error(
+          `Local content for ${outcome.name} changed after adoption selection.`,
+        );
       }
       const artifact = await this.artifactMetadata(id, outcome.path, scanned);
       artifacts[id] = outcome.path;
@@ -382,7 +431,10 @@ export class InitTransactionService {
     path: string,
     scanned: Awaited<ReturnType<typeof scanNormalizedContent>>,
   ) {
-    const sizeBytes = scanned.files.reduce((total, file) => total + file.content.byteLength, 0);
+    const sizeBytes = scanned.files.reduce(
+      (total, file) => total + file.content.byteLength,
+      0,
+    );
     if (this.deps.backend.kind === "cloud") {
       const archive = await createArtifactArchive(path);
       return {
@@ -426,10 +478,11 @@ export class InitTransactionService {
     const nextSkills = { ...saved.skills };
     let ownership = managedTargetsFromState(saved);
     const targets = new AgentTargetManager();
-    const gitArtifactPath = this.deps.gitStoragePath && this.deps.gitRepository
-      ? (locator: string) =>
-          `${this.deps.gitStoragePath}/${sourceKey(this.deps.gitRepository!)}/${locator}`
-      : undefined;
+    const gitArtifactPath =
+      this.deps.gitStoragePath && this.deps.gitRepository
+        ? (locator: string) =>
+            `${this.deps.gitStoragePath}/${sourceKey(this.deps.gitRepository!)}/${locator}`
+        : undefined;
     const resolveGitArtifactTree = gitArtifactPath
       ? async (locator: string) => gitArtifactPath(locator)
       : undefined;
@@ -442,19 +495,25 @@ export class InitTransactionService {
                 skill.materialization.kind === "artifact" &&
                 skill.materialization.artifact.locator === locator,
             );
-            if (!lock) throw new Error("Artifact locator is not in desired state.");
+            if (!lock)
+              throw new Error("Artifact locator is not in desired state.");
             return this.deps.downloadArtifact!(lock);
           }
         : gitArtifactPath
-          ? async (locator) => new Uint8Array(await readFile(gitArtifactPath(locator)))
+          ? async (locator) =>
+              new Uint8Array(await readFile(gitArtifactPath(locator)))
           : undefined,
       resolveGitArtifactTree,
     );
 
     let installed = 0;
     for (const prepared of skills) {
-      const lock = state.lockfile.skills.find((skill) => skill.id === prepared.id);
-      const manifest = state.manifest.skills.find((skill) => skill.id === prepared.id);
+      const lock = state.lockfile.skills.find(
+        (skill) => skill.id === prepared.id,
+      );
+      const manifest = state.manifest.skills.find(
+        (skill) => skill.id === prepared.id,
+      );
       if (!lock || !manifest) throw new Error("Persisted skill is incomplete.");
       installed += 1;
       this.deps.onProgress?.(
@@ -496,9 +555,15 @@ export class InitTransactionService {
           ownership,
           expectedContentHash: expected,
         });
-        if (exposed.outcomes.some((outcome) => outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT")) {
+        if (
+          exposed.outcomes.some(
+            (outcome) =>
+              outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT",
+          )
+        ) {
           throw new Error(
-            exposed.outcomes.find((outcome) => outcome.error)?.error ?? "Local target application failed.",
+            exposed.outcomes.find((outcome) => outcome.error)?.error ??
+              "Local target application failed.",
           );
         }
         ownership = exposed.ownership;
@@ -534,13 +599,21 @@ export class InitTransactionService {
   }
 }
 
-function sameAdoption(state: V2DesiredState, skillIds: readonly SkillId[]): boolean {
+function sameAdoption(
+  state: V2DesiredState,
+  skillIds: readonly SkillId[],
+): boolean {
   const current = [...state.manifest.skills.map((skill) => skill.id)].sort();
   const expected = [...skillIds].sort();
-  return current.length === expected.length && current.every((id, index) => id === expected[index]);
+  return (
+    current.length === expected.length &&
+    current.every((id, index) => id === expected[index])
+  );
 }
 
-function retainedManifestSource(source: InitSkillOutcome["source"]): SourceMetadata | null {
+function retainedManifestSource(
+  source: InitSkillOutcome["source"],
+): SourceMetadata | null {
   if (!source?.repository || !source.path || !source.ref) return null;
   return { repository: source.repository, path: source.path, ref: source.ref };
 }

@@ -1,8 +1,8 @@
 "use client";
 import { type FormEvent, useEffect, useState } from "react";
 import { authClient } from "../src/auth-client";
-import { SiteFooter } from "./site-footer";
 import { validEmail } from "./sign-in/sign-in-form";
+import { SiteFooter } from "./site-footer";
 import { WebMcpTools } from "./webmcp-tools";
 
 type View = "overview" | "skills" | "devices" | "billing" | "settings";
@@ -219,8 +219,10 @@ export function DashboardSurface({ view }: { view: View }) {
           else setError(body.error ?? "Unable to load settings");
         })
         .catch(() => setError("Unable to load settings"));
-    if (view === "settings" &&
-      new URLSearchParams(window.location.search).get("error"))
+    if (
+      view === "settings" &&
+      new URLSearchParams(window.location.search).get("error")
+    )
       setAccountError("Unable to connect that account. Try again.");
   }, [view]);
 
@@ -272,7 +274,8 @@ export function DashboardSurface({ view }: { view: View }) {
       const fresh = await fetch("/api/v1/dashboard");
       if (fresh.ok) setData((await fresh.json()) as Dashboard);
       throw new Error(
-        body.error ?? "The workspace changed before this mutation could be applied.",
+        body.error ??
+          "The workspace changed before this mutation could be applied.",
       );
     }
     if (!response.ok) throw new Error(body.error ?? "Unable to update skills");
@@ -327,7 +330,11 @@ export function DashboardSurface({ view }: { view: View }) {
   }
 
   async function removeSkill(skillId: string, name: string) {
-    if (!window.confirm(`Remove ${name} from desired state? Devices apply on corotum sync.`))
+    if (
+      !window.confirm(
+        `Remove ${name} from desired state? Devices apply on corotum sync.`,
+      )
+    )
       return;
     setAction(skillId);
     try {
@@ -428,8 +435,7 @@ export function DashboardSurface({ view }: { view: View }) {
       }
       if (!response.ok || !url)
         throw new Error(body?.error ?? "Unable to open billing");
-      if (path === "portal")
-        window.open(url, "_blank", "noopener,noreferrer");
+      if (path === "portal") window.open(url, "_blank", "noopener,noreferrer");
       else window.location.assign(url);
     } catch (cause) {
       setError(
@@ -590,9 +596,7 @@ export function DashboardSurface({ view }: { view: View }) {
               </p>
             )}
             {data.skills.length === 0 ? (
-              <p className="dashboard-empty">
-                No managed skills yet.
-              </p>
+              <p className="dashboard-empty">No managed skills yet.</p>
             ) : (
               <div className="dashboard-table-wrap">
                 <table className="dashboard-skills">
@@ -632,7 +636,9 @@ export function DashboardSurface({ view }: { view: View }) {
               </div>
             )}
             <form className="dashboard-add-skill" onSubmit={addSkill}>
-              <p className="dashboard-add-skill-kicker">Add a Git-backed skill</p>
+              <p className="dashboard-add-skill-kicker">
+                Add a Git-backed skill
+              </p>
               {!data.cloudAllowed && (
                 <p className="dashboard-add-skill-note">
                   Cloud changes and sync require a Cloud subscription.
@@ -669,17 +675,25 @@ export function DashboardSurface({ view }: { view: View }) {
                   spellCheck={false}
                 />
               </label>
-              <button type="submit" disabled={!data.cloudAllowed || action === "add"}>
+              <button
+                type="submit"
+                disabled={!data.cloudAllowed || action === "add"}
+              >
                 {action === "add" ? "Adding…" : "Add skill"}
               </button>
               <p className="dashboard-add-skill-note">
-                New skills stay pending until a device with Git access resolves them. Devices apply on <code>corotum sync</code>. No remote sync is requested.
+                New skills stay pending until a device with Git access resolves
+                them. Devices apply on <code>corotum sync</code>. No remote sync
+                is requested.
               </p>
             </form>
           </section>
         )}
         {view === "devices" && (
-          <section className="dashboard-overview-block" aria-labelledby="device-reports">
+          <section
+            className="dashboard-overview-block"
+            aria-labelledby="device-reports"
+          >
             <h2 id="device-reports">Device reports</h2>
             {data.devices.length === 0 ? (
               <p className="dashboard-empty">
@@ -702,7 +716,9 @@ export function DashboardSurface({ view }: { view: View }) {
                       <span>rev {device.appliedRevisionSequence}</span>
                     </p>
                     {device.targets.length === 0 ? (
-                      <p className="dashboard-target-empty">No target report.</p>
+                      <p className="dashboard-target-empty">
+                        No target report.
+                      </p>
                     ) : (
                       <ul className="dashboard-targets">
                         {device.targets.map((target) => (
@@ -814,10 +830,12 @@ export function DashboardSurface({ view }: { view: View }) {
                   className="dashboard-billing-actions"
                   aria-label="Billing actions"
                 >
-                  {!(settings.subscription &&
+                  {!(
+                    settings.subscription &&
                     (settings.subscription.status === "active" ||
                       settings.subscription.status === "trialing" ||
-                      settings.subscription.status === "paid")) && (
+                      settings.subscription.status === "paid")
+                  ) && (
                     <>
                       <button
                         className="dashboard-primary-button"
@@ -883,129 +901,133 @@ export function DashboardSurface({ view }: { view: View }) {
         <Loading />
       ) : (
         <>
-      <section
-        className="dashboard-panel dashboard-settings-panel"
-        aria-labelledby="sign-in-methods"
-      >
-        <h2 id="sign-in-methods">Sign-in methods</h2>
-        <p>
-          Magic link uses {settings.email ?? "your Corotum email"}. GitHub and
-          Google can use a different address; they stay on this account after
-          you connect them here.
-        </p>
-        {accountError && (
-          <p className="dashboard-pending" role="alert">
-            {accountError}
-          </p>
-        )}
-        {(["github", "google"] as const).map((provider) => {
-          const linked = settings.accounts.find(
-            (account) => account.providerId === provider,
-          );
-          const label = provider === "github" ? "GitHub" : "Google";
-          return (
-            <div className="dashboard-account-row" key={provider}>
-              <p className="dashboard-billing-label">
-                {label}
-                {linked ? ` · ${linked.label}` : ""}
+          <section
+            className="dashboard-panel dashboard-settings-panel"
+            aria-labelledby="sign-in-methods"
+          >
+            <h2 id="sign-in-methods">Sign-in methods</h2>
+            <p>
+              Magic link uses {settings.email ?? "your Corotum email"}. GitHub
+              and Google can use a different address; they stay on this account
+              after you connect them here.
+            </p>
+            {accountError && (
+              <p className="dashboard-pending" role="alert">
+                {accountError}
               </p>
-              <button
-                className="dashboard-secondary-button"
-                type="button"
-                disabled={action !== null}
-                onClick={() =>
-                  linked
-                    ? unlinkProvider(provider, linked.accountId)
-                    : linkProvider(provider)
-                }
+            )}
+            {(["github", "google"] as const).map((provider) => {
+              const linked = settings.accounts.find(
+                (account) => account.providerId === provider,
+              );
+              const label = provider === "github" ? "GitHub" : "Google";
+              return (
+                <div className="dashboard-account-row" key={provider}>
+                  <p className="dashboard-billing-label">
+                    {label}
+                    {linked ? ` · ${linked.label}` : ""}
+                  </p>
+                  <button
+                    className="dashboard-secondary-button"
+                    type="button"
+                    disabled={action !== null}
+                    onClick={() =>
+                      linked
+                        ? unlinkProvider(provider, linked.accountId)
+                        : linkProvider(provider)
+                    }
+                  >
+                    {action === provider || action === `unlink-${provider}`
+                      ? linked
+                        ? `Disconnecting ${label}…`
+                        : `Connecting ${label}…`
+                      : linked
+                        ? `Disconnect ${label}`
+                        : `Connect ${label}`}
+                  </button>
+                </div>
+              );
+            })}
+          </section>
+          <section
+            className="dashboard-panel dashboard-settings-panel"
+            aria-labelledby="magic-link-email-heading"
+          >
+            <h2 id="magic-link-email-heading">Magic link email</h2>
+            <p>
+              Sign-in links go to this address. GitHub and Google stay connected
+              if you change it.
+            </p>
+            {emailSent ? (
+              <p className="dashboard-pending">
+                We sent a confirmation link to the new address.
+              </p>
+            ) : (
+              <form
+                className="dashboard-email-change"
+                onSubmit={submitEmailChange}
               >
-                {action === provider || action === `unlink-${provider}`
-                  ? linked
-                    ? `Disconnecting ${label}…`
-                    : `Connecting ${label}…`
-                  : linked
-                    ? `Disconnect ${label}`
-                    : `Connect ${label}`}
-              </button>
-            </div>
-          );
-        })}
-      </section>
-      <section
-        className="dashboard-panel dashboard-settings-panel"
-        aria-labelledby="magic-link-email-heading"
-      >
-        <h2 id="magic-link-email-heading">Magic link email</h2>
-        <p>
-          Sign-in links go to this address. GitHub and Google stay connected
-          if you change it.
-        </p>
-        {emailSent ? (
-          <p className="dashboard-pending">
-            We sent a confirmation link to the new address.
-          </p>
-        ) : (
-          <form className="dashboard-email-change" onSubmit={submitEmailChange}>
-            <label htmlFor="magic-link-email">Email</label>
-            <input
-              autoComplete="email"
-              disabled={action !== null}
-              id="magic-link-email"
-              inputMode="email"
-              name="email"
-              onChange={(event) => setEmailDraft(event.target.value)}
-              placeholder={settings.email ?? undefined}
-              required
-              type="email"
-              value={emailDraft}
-            />
+                <label htmlFor="magic-link-email">Email</label>
+                <input
+                  autoComplete="email"
+                  disabled={action !== null}
+                  id="magic-link-email"
+                  inputMode="email"
+                  name="email"
+                  onChange={(event) => setEmailDraft(event.target.value)}
+                  placeholder={settings.email ?? undefined}
+                  required
+                  type="email"
+                  value={emailDraft}
+                />
+                <button
+                  className="dashboard-secondary-button"
+                  disabled={action !== null}
+                  type="submit"
+                >
+                  {action === "email" ? "Sending link…" : "Change email"}
+                </button>
+              </form>
+            )}
+          </section>
+          <section
+            className="dashboard-panel dashboard-settings-panel"
+            aria-labelledby="cli-preferences"
+          >
+            <h2 id="cli-preferences">Local CLI preferences</h2>
+            <p>
+              Telemetry is an anonymous, opt-in preference stored locally by the
+              Corotum CLI. It is not a dashboard setting and is never tied to
+              your account or devices.
+            </p>
+            <p className="dashboard-settings-instruction">
+              Change the preference separately on each machine:
+            </p>
+            <code className="dashboard-command">
+              corotum config set telemetry true
+              <br />
+              corotum config set telemetry false
+            </code>
+          </section>
+          <section
+            className="dashboard-panel dashboard-settings-panel"
+            aria-labelledby="cloud-data-heading"
+          >
+            <h2 id="cloud-data-heading">Cloud data</h2>
+            <p>
+              Delete desired-state skills stored in Cloud. Local skill files on
+              devices are not deleted. Remove a paired device on the Devices
+              page.
+            </p>
             <button
               className="dashboard-secondary-button"
+              type="button"
               disabled={action !== null}
-              type="submit"
+              onClick={() => clearCloudData()}
             >
-              {action === "email" ? "Sending link…" : "Change email"}
+              {action === "clear-cloud" ? "Deleting…" : "Delete Cloud skills"}
             </button>
-          </form>
-        )}
-      </section>
-      <section
-        className="dashboard-panel dashboard-settings-panel"
-        aria-labelledby="cli-preferences"
-      >
-        <h2 id="cli-preferences">Local CLI preferences</h2>
-        <p>
-          Telemetry is an anonymous, opt-in preference stored locally by the
-          Corotum CLI. It is not a dashboard setting and is never tied to
-          your account or devices.
-        </p>
-        <p className="dashboard-settings-instruction">
-          Change the preference separately on each machine:
-        </p>
-        <code className="dashboard-command">
-          corotum config set telemetry true
-          <br />
-          corotum config set telemetry false
-        </code>
-      </section>
-      <section
-        className="dashboard-panel dashboard-settings-panel"
-        aria-labelledby="cloud-data-heading"
-      >
-        <h2 id="cloud-data-heading">Cloud data</h2>
-        <p>
-          Delete desired-state skills stored in Cloud. Local skill files on
-          devices are not deleted. Remove a paired device on the Devices page.
-        </p>
-        <button
-          className="dashboard-secondary-button"
-          type="button"
-          disabled={action !== null}
-          onClick={() => clearCloudData()}
-        >
-          {action === "clear-cloud" ? "Deleting…" : "Delete Cloud skills"}
-        </button>
-      </section>
+          </section>
         </>
       )}
     </DashboardShell>

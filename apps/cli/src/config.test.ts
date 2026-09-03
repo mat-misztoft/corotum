@@ -9,7 +9,7 @@ import {
   defaultConfig,
   effectiveStoragePaths,
 } from "./config";
-import { resolvePlatformPaths, type CorotumPaths } from "./platform";
+import { type CorotumPaths, resolvePlatformPaths } from "./platform";
 
 const temporaryDirectories: string[] = [];
 

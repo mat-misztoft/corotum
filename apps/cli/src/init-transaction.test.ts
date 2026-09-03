@@ -8,9 +8,12 @@ import {
   skillId,
   type V2DesiredState,
 } from "../../../packages/core/src/index";
-import { gitTreeHash, V2GitStateProvider } from "../../../packages/git-provider/src/index";
+import {
+  gitTreeHash,
+  V2GitStateProvider,
+} from "../../../packages/git-provider/src/index";
 import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
-import { SOURCE_REFRESH_NOTICE, type InitSkillOutcome } from "./init-adoption";
+import { type InitSkillOutcome, SOURCE_REFRESH_NOTICE } from "./init-adoption";
 import {
   InitRecoveryStore,
   InitTransactionService,
@@ -20,11 +23,16 @@ import {
 const roots: string[] = [];
 const hash = `sha256:${"a".repeat(64)}` as const;
 const revision = "a".repeat(40);
-const empty: V2DesiredState = { manifest: { version: 2, skills: [] }, lockfile: { version: 2, skills: [] } };
+const empty: V2DesiredState = {
+  manifest: { version: 2, skills: [] },
+  lockfile: { version: 2, skills: [] },
+};
 const emptyLedger: DispositionLedger = { version: 2, activeDispositions: {} };
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+  );
 });
 
 async function tempDir(prefix: string): Promise<string> {
@@ -65,11 +73,17 @@ function unmanaged(name: string, path: string): InitSkillOutcome {
 function memoryProvider(options?: {
   failPush?: boolean;
   existing?: V2DesiredState;
-}): InitV2Provider & { pushes: number; last?: Parameters<InitV2Provider["push"]>[0] } {
+}): InitV2Provider & {
+  pushes: number;
+  last?: Parameters<InitV2Provider["push"]>[0];
+} {
   let state = options?.existing ?? empty;
   let ledger: DispositionLedger = emptyLedger;
   let revisionId: string | null = options?.existing ? "base" : "empty";
-  const provider: InitV2Provider & { pushes: number; last?: Parameters<InitV2Provider["push"]>[0] } = {
+  const provider: InitV2Provider & {
+    pushes: number;
+    last?: Parameters<InitV2Provider["push"]>[0];
+  } = {
     pushes: 0,
     pull: async () => ({ revisionId, state, ledger }),
     push: async (input) => {
@@ -104,15 +118,31 @@ describe("init transaction", () => {
       },
     });
     const result = await service.run({
-      outcomes: [sourceOutcome("alpha", "/tmp/alpha"), sourceOutcome("beta", "/tmp/beta"), unmanaged("gamma", "/tmp/gamma")],
+      outcomes: [
+        sourceOutcome("alpha", "/tmp/alpha"),
+        sourceOutcome("beta", "/tmp/beta"),
+        unmanaged("gamma", "/tmp/gamma"),
+      ],
     });
     expect(result.kind).toBe("initialized");
     expect(provider.pushes).toBe(1);
-    expect(provider.last?.ledger.audit?.map((entry) => entry.skillId)).toEqual(["sk_init0", "sk_init1"]);
-    expect(provider.last?.ledger.audit?.every((entry) => entry.type === "ADOPT")).toBe(true);
-    expect(provider.last?.state.manifest.skills.map((skill) => skill.name)).toEqual(["alpha", "beta"]);
+    expect(provider.last?.ledger.audit?.map((entry) => entry.skillId)).toEqual([
+      "sk_init0",
+      "sk_init1",
+    ]);
+    expect(
+      provider.last?.ledger.audit?.every((entry) => entry.type === "ADOPT"),
+    ).toBe(true);
+    expect(
+      provider.last?.state.manifest.skills.map((skill) => skill.name),
+    ).toEqual(["alpha", "beta"]);
     expect(applied).toEqual(["sk_init0", "sk_init1"]);
-    expect(result.kind === "initialized" && result.outcomes.some((outcome) => outcome.name === "gamma" && outcome.kind === "unmanaged")).toBe(true);
+    expect(
+      result.kind === "initialized" &&
+        result.outcomes.some(
+          (outcome) => outcome.name === "gamma" && outcome.kind === "unmanaged",
+        ),
+    ).toBe(true);
   });
 
   test("resumes a prepared git init without rebuilding when desired state already matches", async () => {
@@ -124,7 +154,9 @@ describe("init transaction", () => {
       phase: "prepared",
       backend: "git",
       skillIds: [id],
-      skills: [{ id, name: "alpha", path: "/tmp/alpha", kind: "source-backed" }],
+      skills: [
+        { id, name: "alpha", path: "/tmp/alpha", kind: "source-backed" },
+      ],
       gitRepository: "https://example.test/state.git",
     });
     const outcome = sourceOutcome("alpha", "/tmp/alpha");
@@ -132,26 +164,30 @@ describe("init transaction", () => {
     const existing: V2DesiredState = {
       manifest: {
         version: 2,
-        skills: [{
-          id,
-          name: "alpha",
-          targets: "all",
-          source: {
-            repository: outcome.source.repository,
-            path: outcome.source.path,
-            ref: outcome.source.ref,
+        skills: [
+          {
+            id,
+            name: "alpha",
+            targets: "all",
+            source: {
+              repository: outcome.source.repository,
+              path: outcome.source.path,
+              ref: outcome.source.ref,
+            },
+            resolutionStatus: "RESOLVED",
           },
-          resolutionStatus: "RESOLVED",
-        }],
+        ],
       },
       lockfile: {
         version: 2,
-        skills: [{
-          id,
-          name: "alpha",
-          source: outcome.source,
-          materialization: { kind: "source", contentHash: hash },
-        }],
+        skills: [
+          {
+            id,
+            name: "alpha",
+            source: outcome.source,
+            materialization: { kind: "source", contentHash: hash },
+          },
+        ],
       },
     };
     const provider = memoryProvider({ existing });
@@ -185,10 +221,18 @@ describe("init transaction", () => {
       },
     });
     const result = await service.run({
-      outcomes: [sourceOutcome("alpha", "/tmp/alpha"), unmanaged("gamma", unselected)],
+      outcomes: [
+        sourceOutcome("alpha", "/tmp/alpha"),
+        unmanaged("gamma", unselected),
+      ],
     });
-    expect(result).toMatchObject({ kind: "refused", reason: "desired-state push failed" });
-    expect(await readFile(join(unselected, "SKILL.md"), "utf8")).toBe("leave me\n");
+    expect(result).toMatchObject({
+      kind: "refused",
+      reason: "desired-state push failed",
+    });
+    expect(await readFile(join(unselected, "SKILL.md"), "utf8")).toBe(
+      "leave me\n",
+    );
   });
 
   test("a local install failure after persist is retryable without duplicate IDs", async () => {
@@ -208,12 +252,18 @@ describe("init transaction", () => {
     });
     const outcomes = [sourceOutcome("alpha", "/tmp/alpha")];
     const first = await service.run({ outcomes });
-    expect(first).toMatchObject({ kind: "partial", phase: "desired-persisted", skillIds: ["sk_retry1"] });
+    expect(first).toMatchObject({
+      kind: "partial",
+      phase: "desired-persisted",
+      skillIds: ["sk_retry1"],
+    });
     expect(provider.pushes).toBe(1);
     const retry = await service.run({ outcomes });
     expect(retry.kind).toBe("initialized");
     expect(provider.pushes).toBe(1);
-    expect(retry.kind === "initialized" && retry.skillIds).toEqual(["sk_retry1"]);
+    expect(retry.kind === "initialized" && retry.skillIds).toEqual([
+      "sk_retry1",
+    ]);
   });
 
   test("a config failure after local verification retries config only", async () => {
@@ -239,7 +289,10 @@ describe("init transaction", () => {
       kind: "partial",
       phase: "locally-verified",
     });
-    expect(await service.run({ outcomes })).toMatchObject({ kind: "initialized", skillIds: ["sk_cfg1"] });
+    expect(await service.run({ outcomes })).toMatchObject({
+      kind: "initialized",
+      skillIds: ["sk_cfg1"],
+    });
     expect(provider.pushes).toBe(1);
     expect(applies).toBe(1);
     expect(configs).toBe(2);
@@ -250,32 +303,36 @@ describe("init transaction", () => {
     const existing: V2DesiredState = {
       manifest: {
         version: 2,
-        skills: [{
-          id: skillId("sk_remote"),
-          name: "notes",
-          targets: "all",
-          source: {
-            repository: "https://example.test/skills.git",
-            path: "notes",
-            ref: "main",
+        skills: [
+          {
+            id: skillId("sk_remote"),
+            name: "notes",
+            targets: "all",
+            source: {
+              repository: "https://example.test/skills.git",
+              path: "notes",
+              ref: "main",
+            },
+            resolutionStatus: "RESOLVED",
           },
-          resolutionStatus: "RESOLVED",
-        }],
+        ],
       },
       lockfile: {
         version: 2,
-        skills: [{
-          id: skillId("sk_remote"),
-          name: "notes",
-          source: {
-            repository: "https://example.test/skills.git",
-            path: "notes",
-            ref: "main",
-            revision,
-            contentHash: hash,
+        skills: [
+          {
+            id: skillId("sk_remote"),
+            name: "notes",
+            source: {
+              repository: "https://example.test/skills.git",
+              path: "notes",
+              ref: "main",
+              revision,
+              contentHash: hash,
+            },
+            materialization: { kind: "source", contentHash: hash },
           },
-          materialization: { kind: "source", contentHash: hash },
-        }],
+        ],
       },
     };
     const provider = memoryProvider({ existing });
@@ -294,7 +351,11 @@ describe("init transaction", () => {
     const result = await service.run({
       outcomes: [unmanaged("keep-me", "/tmp/keep")],
     });
-    expect(result).toMatchObject({ kind: "initialized", revision: "base", skillIds: [] });
+    expect(result).toMatchObject({
+      kind: "initialized",
+      revision: "base",
+      skillIds: [],
+    });
     expect(provider.pushes).toBe(0);
     expect(configured).toBe(1);
   });
@@ -304,20 +365,24 @@ describe("init transaction", () => {
     const existing: V2DesiredState = {
       manifest: {
         version: 2,
-        skills: [{
-          id: skillId("sk_remote"),
-          name: "notes",
-          targets: "all",
-          resolutionStatus: "RESOLVED",
-        }],
+        skills: [
+          {
+            id: skillId("sk_remote"),
+            name: "notes",
+            targets: "all",
+            resolutionStatus: "RESOLVED",
+          },
+        ],
       },
       lockfile: {
         version: 2,
-        skills: [{
-          id: skillId("sk_remote"),
-          name: "notes",
-          materialization: { kind: "source", contentHash: hash },
-        }],
+        skills: [
+          {
+            id: skillId("sk_remote"),
+            name: "notes",
+            materialization: { kind: "source", contentHash: hash },
+          },
+        ],
       },
     };
     const provider = memoryProvider({ existing });
@@ -327,7 +392,9 @@ describe("init transaction", () => {
       persistConfig: async () => undefined,
       backend: { kind: "git" },
     });
-    expect(await service.run({ outcomes: [sourceOutcome("alpha", "/tmp/alpha")] })).toMatchObject({
+    expect(
+      await service.run({ outcomes: [sourceOutcome("alpha", "/tmp/alpha")] }),
+    ).toMatchObject({
       kind: "refused",
       reason: "Corotum is already initialized for this Git repository.",
     });
@@ -341,7 +408,13 @@ describe("Git init artifacts and consent", () => {
     const worktree = join(root, "worktree");
     const bare = join(root, "remote.git");
     await git(["init", "--initial-branch=main", worktree]);
-    await git(["-C", worktree, "config", "user.email", "tests@corotum.invalid"]);
+    await git([
+      "-C",
+      worktree,
+      "config",
+      "user.email",
+      "tests@corotum.invalid",
+    ]);
     await git(["-C", worktree, "config", "user.name", "Corotum tests"]);
     await git(["-C", worktree, "commit", "--allow-empty", "-m", "initial"]);
     await git(["init", "--bare", bare]);
@@ -362,10 +435,15 @@ describe("Git init artifacts and consent", () => {
     const integrity = await gitTreeHash(skill);
     const bare = await gitRemote();
     let prompted = 0;
-    const gitProvider = new V2GitStateProvider(join(root, "cache"), bare, undefined, async (changes) => {
-      prompted += 1;
-      expect(changes.length).toBe(1);
-    });
+    const gitProvider = new V2GitStateProvider(
+      join(root, "cache"),
+      bare,
+      undefined,
+      async (changes) => {
+        prompted += 1;
+        expect(changes.length).toBe(1);
+      },
+    );
     const service = new InitTransactionService({
       provider: {
         pull: () => gitProvider.pullAllowEmpty(),
@@ -391,12 +469,20 @@ describe("Git init artifacts and consent", () => {
     });
     expect(result.kind).toBe("initialized");
     expect(prompted).toBe(1);
-    expect(await readFile(join(leftover, "SKILL.md"), "utf8")).toBe("unmanaged\n");
+    expect(await readFile(join(leftover, "SKILL.md"), "utf8")).toBe(
+      "unmanaged\n",
+    );
     const pulled = await gitProvider.pull();
-    expect(pulled.ledger.audit?.map((entry) => entry.skillId)).toEqual(["sk_art1"]);
+    expect(pulled.ledger.audit?.map((entry) => entry.skillId)).toEqual([
+      "sk_art1",
+    ]);
     expect(pulled.state.lockfile.skills[0]?.materialization).toMatchObject({
       kind: "artifact",
-      artifact: { kind: "git-tree", contentHash: scanned.contentHash, integrityHash: integrity },
+      artifact: {
+        kind: "git-tree",
+        contentHash: scanned.contentHash,
+        integrityHash: integrity,
+      },
     });
   });
 
@@ -404,9 +490,14 @@ describe("Git init artifacts and consent", () => {
     const root = await tempDir("corotum-init-source-");
     const bare = await gitRemote();
     let prompted = 0;
-    const gitProvider = new V2GitStateProvider(join(root, "cache"), bare, undefined, async () => {
-      prompted += 1;
-    });
+    const gitProvider = new V2GitStateProvider(
+      join(root, "cache"),
+      bare,
+      undefined,
+      async () => {
+        prompted += 1;
+      },
+    );
     const service = new InitTransactionService({
       provider: {
         pull: () => gitProvider.pullAllowEmpty(),
@@ -418,7 +509,11 @@ describe("Git init artifacts and consent", () => {
       createSkillId: () => skillId("sk_src1"),
       apply: async () => undefined,
     });
-    expect(await service.run({ outcomes: [sourceOutcome("alpha", join(root, "alpha"))] })).toMatchObject({
+    expect(
+      await service.run({
+        outcomes: [sourceOutcome("alpha", join(root, "alpha"))],
+      }),
+    ).toMatchObject({
       kind: "initialized",
     });
     expect(prompted).toBe(0);
@@ -435,14 +530,28 @@ describe("Cloud init transaction", () => {
     const uploads: string[] = [];
     const service = new InitTransactionService({
       provider: {
-        pull: async () => ({ revisionId: null, state: empty, ledger: emptyLedger }),
+        pull: async () => ({
+          revisionId: null,
+          state: empty,
+          ledger: emptyLedger,
+        }),
         push: async (input) => {
           uploads.push(...Object.keys(input.artifacts));
-          expect(input.ledger.audit?.map((entry) => entry.skillId).sort()).toEqual(["sk_c0", "sk_c1"]);
-          expect(input.state.lockfile.skills.every((lock) =>
-            lock.materialization.kind === "source" || lock.materialization.artifact.kind === "r2-tar-zst",
-          )).toBe(true);
-          return { revisionId: "cloud-1", state: input.state, ledger: input.ledger };
+          expect(
+            input.ledger.audit?.map((entry) => entry.skillId).sort(),
+          ).toEqual(["sk_c0", "sk_c1"]);
+          expect(
+            input.state.lockfile.skills.every(
+              (lock) =>
+                lock.materialization.kind === "source" ||
+                lock.materialization.artifact.kind === "r2-tar-zst",
+            ),
+          ).toBe(true);
+          return {
+            revisionId: "cloud-1",
+            state: input.state,
+            ledger: input.ledger,
+          };
         },
       },
       recovery: new InitRecoveryStore(join(root, "init.json")),
@@ -472,7 +581,10 @@ describe("Cloud init transaction", () => {
 });
 
 async function git(args: readonly string[]): Promise<string> {
-  const process = Bun.spawn(["git", ...args], { stderr: "pipe", stdout: "pipe" });
+  const process = Bun.spawn(["git", ...args], {
+    stderr: "pipe",
+    stdout: "pipe",
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(process.stdout).text(),
     new Response(process.stderr).text(),

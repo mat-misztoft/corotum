@@ -36,7 +36,9 @@ afterEach(async () => {
 });
 
 async function temp(name: string): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), `corotum-cloud-mutations-${name}-`));
+  const path = await mkdtemp(
+    join(tmpdir(), `corotum-cloud-mutations-${name}-`),
+  );
   roots.push(path);
   return path;
 }
@@ -174,7 +176,13 @@ async function skillRepo(
 ): Promise<{ repository: string; revision: string; contentHash: string }> {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await writeSkill(join(repository, "skills", name), body);
   await git(["-C", repository, "add", "."]);
@@ -182,9 +190,8 @@ async function skillRepo(
   return {
     repository,
     revision: await git(["-C", repository, "rev-parse", "HEAD"]),
-    contentHash: (
-      await scanNormalizedContent(join(repository, "skills", name))
-    ).contentHash,
+    contentHash: (await scanNormalizedContent(join(repository, "skills", name)))
+      .contentHash,
   };
 }
 
@@ -346,7 +353,10 @@ describe("real corotum Cloud skill mutation CLI", () => {
           await readFile(join(namedSkill(home, "tasks"), "SKILL.md"), "utf8"),
         ).toBe("# Local tasks\n");
 
-        await writeSkill(join(notes.repository, "skills", "notes"), "# Notes v2\n");
+        await writeSkill(
+          join(notes.repository, "skills", "notes"),
+          "# Notes v2\n",
+        );
         await git(["-C", notes.repository, "add", "."]);
         await git(["-C", notes.repository, "commit", "-m", "notes v2"]);
         await git(["-C", notes.repository, "tag", "v2"]);
@@ -357,9 +367,9 @@ describe("real corotum Cloud skill mutation CLI", () => {
           env,
         );
         expect(checked.json).toMatchObject({ status: "CHECKED" });
-        expect(
-          (checked.json?.skills as { status: string }[])[0]?.status,
-        ).toBe("UPDATE_AVAILABLE");
+        expect((checked.json?.skills as { status: string }[])[0]?.status).toBe(
+          "UPDATE_AVAILABLE",
+        );
 
         const updated = await spawnCli(
           home,
@@ -380,7 +390,10 @@ describe("real corotum Cloud skill mutation CLI", () => {
         expect(setRef.code).toBe(0);
         expect(setRef.json).toMatchObject({ status: "SET_REF", ref: "v2" });
 
-        await writeFile(join(namedSkill(home, "notes"), "SKILL.md"), "# Drift\n");
+        await writeFile(
+          join(namedSkill(home, "notes"), "SKILL.md"),
+          "# Drift\n",
+        );
         const restored = await spawnCli(
           home,
           ["--json", "--non-interactive", "restore", "notes"],
@@ -413,7 +426,9 @@ describe("real corotum Cloud skill mutation CLI", () => {
         expect(
           await readFile(join(namedSkill(home, "keep-me"), "SKILL.md"), "utf8"),
         ).toBe("# Unmanaged\n");
-        expect(JSON.parse(await readFile(paths(home).configFile, "utf8"))).toMatchObject({
+        expect(
+          JSON.parse(await readFile(paths(home).configFile, "utf8")),
+        ).toMatchObject({
           mode: "cloud",
           agents: {},
         });
@@ -525,7 +540,10 @@ describe("real corotum Cloud skill mutation CLI", () => {
         },
         lockfile: { version: 2, skills: [] },
       };
-      const cloud = startCloudServer({ state: pending, revisionId: "rev_pending" });
+      const cloud = startCloudServer({
+        state: pending,
+        revisionId: "rev_pending",
+      });
       try {
         const updated = await spawnCli(
           home,

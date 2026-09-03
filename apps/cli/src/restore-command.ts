@@ -3,8 +3,8 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import type { CliIo } from "./cli";
 import { writeLifecycleResult } from "./remove-command";
-import { withV2MutationRuntime } from "./v2-mutation-session";
 import { LifecycleRecoveryStore, V2LifecycleService } from "./v2-lifecycle";
+import { withV2MutationRuntime } from "./v2-mutation-session";
 
 /** Registers local-only exact-lock repair commands. */
 export function registerRestoreCommand(program: Command, io: CliIo): void {

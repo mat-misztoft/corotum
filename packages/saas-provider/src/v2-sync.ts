@@ -8,9 +8,9 @@ import {
 } from "../../skills-adapter/src/canonical-store";
 import {
   ExactContentMaterializer,
-  mapMaterializationError,
   MaterializationError,
   type MaterializationErrorCode,
+  mapMaterializationError,
 } from "../../skills-adapter/src/exact-materializer";
 import { scanNormalizedContent } from "../../skills-adapter/src/normalized-content";
 import {
@@ -71,12 +71,14 @@ export class V2CloudNormalSync {
     }>,
   ) {}
 
-  async sync(input: Readonly<{
-    lastVerified: LastVerifiedLocalState;
-    canonicalRoot: string;
-    targets: readonly ApplicableTarget[];
-  }>): Promise<V2CloudSyncResult> {
-    let pulled;
+  async sync(
+    input: Readonly<{
+      lastVerified: LastVerifiedLocalState;
+      canonicalRoot: string;
+      targets: readonly ApplicableTarget[];
+    }>,
+  ): Promise<V2CloudSyncResult> {
+    let pulled: Awaited<ReturnType<V2SaaSProvider["pull"]>>;
     try {
       pulled = await this.provider.pull();
     } catch (error) {
@@ -90,7 +92,9 @@ export class V2CloudNormalSync {
     }
 
     const store = new CanonicalSkillStore(input.canonicalRoot);
-    const canonical: Record<string, LastVerifiedCanonical> = { ...input.lastVerified.canonical };
+    const canonical: Record<string, LastVerifiedCanonical> = {
+      ...input.lastVerified.canonical,
+    };
     const skillResults: V2CloudSkillResult[] = [];
     const targetReports: DeviceTargetReport[] = [];
     let verificationComplete = true;
@@ -101,16 +105,25 @@ export class V2CloudNormalSync {
         const staged = await this.stageLock(lock);
         try {
           const existing = canonical[lock.id];
-          let ownership: { skillId: typeof lock.id; contentHash: string; allowDrift: true } | undefined;
+          let ownership:
+            | { skillId: typeof lock.id; contentHash: string; allowDrift: true }
+            | undefined;
           if (existing?.skillId === lock.id) {
             const actual = await scanNormalizedContent(existing.path);
             if (actual.contentHash !== existing.contentHash) {
-              throw new MaterializationError("DRIFTED", "Canonical content differs from the last verified copy.");
+              throw new MaterializationError(
+                "DRIFTED",
+                "Canonical content differs from the last verified copy.",
+              );
             }
             // CanonicalSkillStore predates normalized v2 hashes. We verified the
             // recorded normalized hash above, so its legacy hash check is not an
             // ownership signal for a v2 managed copy.
-            ownership = { skillId: lock.id, contentHash: existing.contentHash, allowDrift: true };
+            ownership = {
+              skillId: lock.id,
+              contentHash: existing.contentHash,
+              allowDrift: true,
+            };
           }
           await store.replaceFromDirectory(
             lock.id,
@@ -125,11 +138,24 @@ export class V2CloudNormalSync {
         const path = store.pathFor(lock.name);
         const scanned = await scanNormalizedContent(path);
         if (scanned.contentHash !== expected) {
-          throw new MaterializationError("CONTENT_HASH_MISMATCH", "Canonical content does not match the locked hash.");
+          throw new MaterializationError(
+            "CONTENT_HASH_MISMATCH",
+            "Canonical content does not match the locked hash.",
+          );
         }
-        canonical[lock.id] = { skillId: lock.id, path, contentHash: scanned.contentHash };
-        skillResults.push({ skillId: lock.id, name: lock.name, contentHash: scanned.contentHash });
-        for (const target of input.targets.filter((item) => item.skillId === lock.id)) {
+        canonical[lock.id] = {
+          skillId: lock.id,
+          path,
+          contentHash: scanned.contentHash,
+        };
+        skillResults.push({
+          skillId: lock.id,
+          name: lock.name,
+          contentHash: scanned.contentHash,
+        });
+        for (const target of input.targets.filter(
+          (item) => item.skillId === lock.id,
+        )) {
           const report = await verifyTarget(target, path, scanned.contentHash);
           targetReports.push(report);
           if (report.status !== "SYNCED") verificationComplete = false;
@@ -137,8 +163,14 @@ export class V2CloudNormalSync {
       } catch (error) {
         verificationComplete = false;
         const mapped = mapCloudError(error, lock.materialization.kind);
-        skillResults.push({ skillId: lock.id, name: lock.name, code: mapped.code });
-        for (const target of input.targets.filter((item) => item.skillId === lock.id)) {
+        skillResults.push({
+          skillId: lock.id,
+          name: lock.name,
+          code: mapped.code,
+        });
+        for (const target of input.targets.filter(
+          (item) => item.skillId === lock.id,
+        )) {
           targetReports.push({
             skillId: target.skillId,
             agentId: target.agentId,
@@ -155,9 +187,10 @@ export class V2CloudNormalSync {
     if (syncStatus === "SYNCED" && skillResults.some((result) => result.code)) {
       throw new Error("A failed skill cannot be reported as SYNCED.");
     }
-    const appliedRevisionId = verificationComplete && pulled.revisionId
-      ? pulled.revisionId
-      : input.lastVerified.appliedRevisionId;
+    const appliedRevisionId =
+      verificationComplete && pulled.revisionId
+        ? pulled.revisionId
+        : input.lastVerified.appliedRevisionId;
     const failed = skillResults.find((result) => result.code);
     const report: DeviceSyncReportPayload = {
       appliedRevisionId,
@@ -167,7 +200,10 @@ export class V2CloudNormalSync {
       targets: targetReports,
     };
 
-    const lastVerified: LastVerifiedLocalState = { appliedRevisionId, canonical };
+    const lastVerified: LastVerifiedLocalState = {
+      appliedRevisionId,
+      canonical,
+    };
     const posted = await postDeviceSyncReport({
       origin: this.options.origin,
       deviceId: this.options.deviceId,
@@ -190,8 +226,14 @@ export class V2CloudNormalSync {
     }
     const provider = this.provider;
     return new ExactContentMaterializer(this.options.git, async (locator) => {
-      if (lock.materialization.kind !== "artifact" || locator !== lock.materialization.artifact.locator) {
-        throw new MaterializationError("ARTIFACT_UNAVAILABLE", "Artifact reader refused a source or mismatched locator.");
+      if (
+        lock.materialization.kind !== "artifact" ||
+        locator !== lock.materialization.artifact.locator
+      ) {
+        throw new MaterializationError(
+          "ARTIFACT_UNAVAILABLE",
+          "Artifact reader refused a source or mismatched locator.",
+        );
       }
       try {
         return await provider.downloadArtifact(lock);
@@ -208,7 +250,10 @@ function expectedHash(lock: V2LockedSkill): `sha256:${string}` {
     : lock.materialization.artifact.contentHash;
 }
 
-function mapCloudError(error: unknown, transport: "source" | "artifact"): MaterializationError {
+function mapCloudError(
+  error: unknown,
+  transport: "source" | "artifact",
+): MaterializationError {
   if (error instanceof MaterializationError) return error;
   if (error instanceof V2CloudProviderError) {
     if (
@@ -248,7 +293,8 @@ async function verifyTarget(
           agentId: target.agentId,
           status: "DRIFTED",
           errorCode: "DRIFTED",
-          errorMessage: "Target symlink does not point at the verified canonical copy.",
+          errorMessage:
+            "Target symlink does not point at the verified canonical copy.",
           contentHash: null,
         };
       }
@@ -266,7 +312,8 @@ async function verifyTarget(
         agentId: target.agentId,
         status: "DRIFTED",
         errorCode: "DRIFTED",
-        errorMessage: "Target content does not match the verified canonical copy.",
+        errorMessage:
+          "Target content does not match the verified canonical copy.",
         contentHash: actual,
       };
     }
@@ -292,15 +339,26 @@ function aggregateStatus(
   targets: readonly DeviceTargetReport[],
   skills: readonly V2CloudSkillResult[],
 ): DeviceSyncStatus {
-  if (skills.some((skill) => skill.code) || targets.some((target) => target.status !== "SYNCED")) {
-    if (targets.some((target) => target.status === "DRIFTED") && targets.every((target) => target.status === "SYNCED" || target.status === "DRIFTED") && !skills.some((skill) => skill.code)) {
+  if (
+    skills.some((skill) => skill.code) ||
+    targets.some((target) => target.status !== "SYNCED")
+  ) {
+    if (
+      targets.some((target) => target.status === "DRIFTED") &&
+      targets.every(
+        (target) => target.status === "SYNCED" || target.status === "DRIFTED",
+      ) &&
+      !skills.some((skill) => skill.code)
+    ) {
       return "DRIFTED";
     }
-    if (targets.some((target) => target.status === "SYNCED") || skills.some((skill) => !skill.code)) {
+    if (
+      targets.some((target) => target.status === "SYNCED") ||
+      skills.some((skill) => !skill.code)
+    ) {
       return "PARTIALLY_SYNCED";
     }
     return "ERROR";
   }
   return "SYNCED";
 }
-

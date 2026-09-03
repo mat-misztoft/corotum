@@ -1,8 +1,8 @@
 import { Command, CommanderError } from "commander";
 import { V2ArtifactConsentRequiredError } from "../../../packages/git-provider/src/index";
 import { registerAddCommand } from "./add-command";
-import { registerAgentsCommand } from "./agents-command";
 import { registerAdoptCommand } from "./adopt-command";
+import { registerAgentsCommand } from "./agents-command";
 import {
   type CliOutcome,
   ExitCode,
@@ -11,18 +11,18 @@ import {
 } from "./cli-contracts";
 import { registerCliUpdateCommand } from "./cli-update-command";
 import { CloudAuthError } from "./cloud-auth";
-import { CloudInitError } from "./init-cloud";
 import { registerCloudAuthCommands } from "./cloud-auth-command";
 import { ConfigError, registerConfigCommand } from "./config-command";
-import { classifyGitInitError, GitCliError, InitError } from "./init-errors";
+import { CloudInitError } from "./init-cloud";
 import { registerInitCommand } from "./init-command";
+import { classifyGitInitError, GitCliError, InitError } from "./init-errors";
 import { registerMigrateCommand } from "./migrate-command";
 import { registerRemoveCommands } from "./remove-command";
 import { registerResetCommand } from "./reset-command";
 import { registerRestoreCommand } from "./restore-command";
 import { registerSetRefCommand } from "./set-ref-command";
 import { registerSyncCommands } from "./sync-command";
-import { isHelpOrVersionArgv, type CliTelemetry } from "./telemetry";
+import { type CliTelemetry, isHelpOrVersionArgv } from "./telemetry";
 import { registerUpdateCommand } from "./update-command";
 import {
   collectWelcomeSnapshot,
@@ -107,9 +107,7 @@ export function createCli(
       );
       return;
     }
-    io.writeOutput(
-      formatWelcomeScreen(await collectWelcomeSnapshot(welcome)),
-    );
+    io.writeOutput(formatWelcomeScreen(await collectWelcomeSnapshot(welcome)));
   });
 
   return program;

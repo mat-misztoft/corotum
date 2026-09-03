@@ -43,7 +43,12 @@ export function registerResetCommand(program: Command, io: CliIo): void {
           false,
         );
         if (!ok) {
-          write(io, json, { outcome: "SUCCESS", cancelled: true }, "Cancelled.\n");
+          write(
+            io,
+            json,
+            { outcome: "SUCCESS", cancelled: true },
+            "Cancelled.\n",
+          );
           return;
         }
       }

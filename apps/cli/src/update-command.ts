@@ -83,7 +83,11 @@ function formatUpdateHuman(result: Record<string, unknown>): string {
     if (skills.length === 0) return "No managed skills.\n";
     return `${skills
       .map((skill) => {
-        const row = skill as { name?: string; skillId?: string; status?: string };
+        const row = skill as {
+          name?: string;
+          skillId?: string;
+          status?: string;
+        };
         return `${row.name ?? row.skillId ?? "skill"}\t${row.status ?? ""}`;
       })
       .join("\n")}\n`;

@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -32,13 +40,7 @@ async function fixture(): Promise<{
   const directory = await mkdtemp(join(tmpdir(), "corotum-source-fixture-"));
   temporaryDirectories.push(directory);
   await git(["init", "--initial-branch=main", directory]);
-  await git([
-    "-C",
-    directory,
-    "config",
-    "user.email",
-    "tests@corotum.invalid",
-  ]);
+  await git(["-C", directory, "config", "user.email", "tests@corotum.invalid"]);
   await git(["-C", directory, "config", "user.name", "Corotum tests"]);
   await mkdir(join(directory, "skills", "example"), { recursive: true });
   await writeFile(
@@ -115,17 +117,17 @@ describe("GitSkillMaterializer", () => {
       }
       return runSystemGit(command);
     };
-    const resolved = await new GitSkillMaterializer(runGit).resolveNormalizedGroup(
-      source.directory,
-      "main",
-      [
-        { skill: "example", path: "skills/example" },
-        { skill: "second", path: "skills/second" },
-      ],
-    );
+    const resolved = await new GitSkillMaterializer(
+      runGit,
+    ).resolveNormalizedGroup(source.directory, "main", [
+      { skill: "example", path: "skills/example" },
+      { skill: "second", path: "skills/second" },
+    ]);
     expect(clones).toBe(1);
     expect(resolved).toHaveLength(2);
-    expect(resolved.every((item) => !(item instanceof GitSourceError))).toBe(true);
+    expect(resolved.every((item) => !(item instanceof GitSourceError))).toBe(
+      true,
+    );
     expect(resolved.map((item) => "path" in item && item.path)).toEqual([
       "skills/example",
       "skills/second",
@@ -203,10 +205,15 @@ describe("GitSkillMaterializer", () => {
 
   test("rejects a Git skill archive that contains a symlink", async () => {
     const source = await fixture();
-    await symlink("SKILL.md", join(source.directory, "skills", "example", "linked.md"));
+    await symlink(
+      "SKILL.md",
+      join(source.directory, "skills", "example", "linked.md"),
+    );
     await git(["-C", source.directory, "add", "."]);
     await git(["-C", source.directory, "commit", "-m", "symlink"]);
-    const revision = (await git(["-C", source.directory, "rev-parse", "HEAD"])).trim();
+    const revision = (
+      await git(["-C", source.directory, "rev-parse", "HEAD"])
+    ).trim();
     const destination = join(source.directory, "materialized-link");
     await expect(
       new GitSkillMaterializer().materializeLockedSource(

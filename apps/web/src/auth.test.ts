@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { createMagicLinkPlugin, validateAuthConfiguration } from "./auth";
 import type { EmailService } from "./email";
@@ -91,7 +91,9 @@ function requestMagicLink(auth: ReturnType<typeof betterAuth>, email: string) {
   });
 }
 
-function magicLinkToken(message: Parameters<EmailService["sendAuthenticationEmail"]>[0]) {
+function magicLinkToken(
+  message: Parameters<EmailService["sendAuthenticationEmail"]>[0],
+) {
   return new URL(message.link).searchParams.get("token")!;
 }
 
@@ -147,7 +149,9 @@ test("magic links create or reuse an account, persist a hash, and consume tokens
   );
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe(`${authOrigin}/dashboard`);
-  expect(response.headers.get("set-cookie")).toContain("better-auth.session_token");
+  expect(response.headers.get("set-cookie")).toContain(
+    "better-auth.session_token",
+  );
   expect(database.query("SELECT * FROM user").all()).toHaveLength(2);
   expect(database.query("SELECT * FROM session").all()).toHaveLength(1);
 
@@ -173,7 +177,9 @@ test("magic links reject unsafe redirects and expired or malformed tokens withou
       `${authOrigin}/api/auth/magic-link/verify?token=malformed&callbackURL=/dashboard`,
     ),
   );
-  expect(malformedToken.headers.get("location")).toContain("error=INVALID_TOKEN");
+  expect(malformedToken.headers.get("location")).toContain(
+    "error=INVALID_TOKEN",
+  );
   expect(database.query("SELECT * FROM session").all()).toHaveLength(0);
 
   await requestMagicLink(auth, "ada@example.com");

@@ -3,8 +3,8 @@ import {
   lstat,
   mkdir,
   mkdtemp,
-  readFile,
   readdir,
+  readFile,
   realpath,
   rm,
   symlink,
@@ -14,8 +14,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { skillId } from "../../core/src/index";
-import type { AgentAdapter } from "./index";
 import { hashSkillDirectory } from "../../skills-adapter/src/canonical-store";
+import type { AgentAdapter } from "./index";
 import {
   type AgentTargetFileSystem,
   AgentTargetManager,
@@ -128,7 +128,9 @@ describe("AgentTargetManager exposure", () => {
     const path = join(root, "codex-skills", "example");
 
     expect(result.ownership[0]?.mode).toBe("copy");
-    expect(result.ownership[0]?.expectedHash).toBe(await hashSkillDirectory(path));
+    expect(result.ownership[0]?.expectedHash).toBe(
+      await hashSkillDirectory(path),
+    );
     expect((await lstat(path)).isSymbolicLink()).toBe(false);
     expect(await readFile(join(path, "SKILL.md"), "utf8")).toBe(
       "# Managed skill\n",
@@ -174,17 +176,21 @@ describe("AgentTargetManager exposure", () => {
     const result = await manager.expose({
       ...input(root, namedCanonicalPath, ["codex"], ["codex"]),
       expectedContentHash: newHash,
-      ownership: [{
-        skillId: id,
-        agentId: "codex",
-        path,
-        canonicalPath: oldCanonicalPath,
-        mode: "symlink",
-        expectedHash: oldHash,
-      }],
+      ownership: [
+        {
+          skillId: id,
+          agentId: "codex",
+          path,
+          canonicalPath: oldCanonicalPath,
+          mode: "symlink",
+          expectedHash: oldHash,
+        },
+      ],
     });
 
-    expect(result.outcomes).toEqual([{ agentId: "codex", path, status: "EXPOSED", mode: "symlink" }]);
+    expect(result.outcomes).toEqual([
+      { agentId: "codex", path, status: "EXPOSED", mode: "symlink" },
+    ]);
     expect(await realpath(path)).toBe(await realpath(namedCanonicalPath));
   });
 
@@ -192,14 +198,18 @@ describe("AgentTargetManager exposure", () => {
     const { root, canonicalPath } = await fixture();
     const path = join(root, "codex-skills", "example");
     const hash = await hashSkillDirectory(canonicalPath);
-    const initial = await new AgentTargetManager(localTargetFileSystem, adapters).expose({
+    const initial = await new AgentTargetManager(
+      localTargetFileSystem,
+      adapters,
+    ).expose({
       ...input(root, canonicalPath, ["codex"], ["codex"]),
       expectedContentHash: hash,
     });
     const failingMove: AgentTargetFileSystem = {
       ...localTargetFileSystem,
       move: async (from, to) => {
-        if (from.includes(".staging") && to === path) throw new Error("replacement failed");
+        if (from.includes(".staging") && to === path)
+          throw new Error("replacement failed");
         await localTargetFileSystem.move(from, to);
       },
     };
@@ -211,7 +221,11 @@ describe("AgentTargetManager exposure", () => {
 
     expect(result.outcomes[0]?.status).toBe("ERROR");
     expect(await realpath(path)).toBe(await realpath(canonicalPath));
-    expect((await readdir(join(root, "codex-skills"))).some((name) => name.includes(".staging") || name.includes(".backup"))).toBe(false);
+    expect(
+      (await readdir(join(root, "codex-skills"))).some(
+        (name) => name.includes(".staging") || name.includes(".backup"),
+      ),
+    ).toBe(false);
   });
 
   test("never changes an unowned target during enable, disable, remove, unmanage, or restore", async () => {

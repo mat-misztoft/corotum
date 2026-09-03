@@ -68,7 +68,9 @@ export default function Home() {
           {isLaunchFreePeriod() && (
             <aside className="launch-promotion" aria-label="Free Launch Month">
               <strong>FREE LAUNCH MONTH</strong>
-              <span>Cloud free until September 30, 2026 · No card required</span>
+              <span>
+                Cloud free until September 30, 2026 · No card required
+              </span>
               <small>$5.99/month or $59.90/year from October 1</small>
             </aside>
           )}
@@ -284,7 +286,9 @@ export default function Home() {
             {isLaunchFreePeriod() && (
               <aside className="launch-promotion pricing-launch-promotion">
                 <strong>FREE LAUNCH MONTH</strong>
-                <span>Cloud free until September 30, 2026 · No card required</span>
+                <span>
+                  Cloud free until September 30, 2026 · No card required
+                </span>
                 <small>$5.99/month or $59.90/year from October 1</small>
               </aside>
             )}

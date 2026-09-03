@@ -5,18 +5,24 @@ import { join } from "node:path";
 
 import {
   type DesiredState,
+  type LockedSkill,
   planReconcile,
   revisionId,
   skillId,
-  type LockedSkill,
 } from "../../../packages/core/src/index";
 import { GitStateProvider } from "../../../packages/git-provider/src/index";
 import {
-  GitSkillMaterializer,
+  CanonicalSkillStore,
+  hashSkillDirectory,
+} from "../../../packages/skills-adapter/src/canonical-store";
+import {
   type GitCommandRunner,
+  GitSkillMaterializer,
 } from "../../../packages/skills-adapter/src/git-source";
-import { CanonicalSkillStore, hashSkillDirectory } from "../../../packages/skills-adapter/src/canonical-store";
-import { LocalOperationalStateStore, type LocalOperationalState } from "./local-state";
+import {
+  type LocalOperationalState,
+  LocalOperationalStateStore,
+} from "./local-state";
 import { LocalReconcileExecutor } from "./reconcile-executor";
 import { RestoreService } from "./restore";
 import { SyncService } from "./sync";
@@ -24,11 +30,16 @@ import { SyncService } from "./sync";
 const roots: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+  );
 });
 
 async function git(args: readonly string[]): Promise<string> {
-  const process = Bun.spawn(["git", ...args], { stderr: "pipe", stdout: "pipe" });
+  const process = Bun.spawn(["git", ...args], {
+    stderr: "pipe",
+    stdout: "pipe",
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(process.stdout).text(),
     new Response(process.stderr).text(),
@@ -47,7 +58,10 @@ async function fixture() {
   await git(["init", "--initial-branch=main", source]);
   await git(["-C", source, "config", "user.email", "tests@corotum.invalid"]);
   await git(["-C", source, "config", "user.name", "Corotum tests"]);
-  for (const [name, contents] of [["adopted", "adopted exact bytes\n"], ["added", "added exact bytes\n"]] as const) {
+  for (const [name, contents] of [
+    ["adopted", "adopted exact bytes\n"],
+    ["added", "added exact bytes\n"],
+  ] as const) {
     await mkdir(join(source, "skills", name), { recursive: true });
     await writeFile(join(source, "skills", name, "SKILL.md"), contents);
   }
@@ -55,7 +69,13 @@ async function fixture() {
   await git(["-C", source, "commit", "-m", "skills"]);
 
   await git(["init", "--initial-branch=main", stateWorktree]);
-  await git(["-C", stateWorktree, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    stateWorktree,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", stateWorktree, "config", "user.name", "Corotum tests"]);
   await git(["-C", stateWorktree, "commit", "--allow-empty", "-m", "initial"]);
   await git(["init", "--bare", remote]);
@@ -107,7 +127,9 @@ describe("Git Sync two-home safety", () => {
     const adopted = await lockFor(source, skillId("sk_adopted"), "adopted");
     const added = await lockFor(source, skillId("sk_added"), "added");
     const machineA = new GitStateProvider(join(root, "home-a", "git"), remote);
-    const base = revisionId((await git(["-C", stateWorktree, "rev-parse", "HEAD"])).trim());
+    const base = revisionId(
+      (await git(["-C", stateWorktree, "rev-parse", "HEAD"])).trim(),
+    );
     const adoption = await machineA.push(
       { state: desired([adopted]), baseRevision: base },
       { type: "ADOPT", skillId: adopted.id, metadata: {} },
@@ -115,7 +137,10 @@ describe("Git Sync two-home safety", () => {
     expect(adoption).toMatchObject({ kind: "success" });
     if (adoption.kind !== "success") throw new Error("adoption fixture failed");
     const addition = await machineA.push(
-      { state: desired([adopted, added]), baseRevision: adoption.value.revisionId },
+      {
+        state: desired([adopted, added]),
+        baseRevision: adoption.value.revisionId,
+      },
       { type: "ADD", skillId: added.id, metadata: {} },
     );
     expect(addition).toMatchObject({ kind: "success" });
@@ -128,14 +153,18 @@ describe("Git Sync two-home safety", () => {
     const synced = await new SyncService(
       new GitStateProvider(join(homeB, "git"), remote),
       executor,
-    ).sync({ execution: { state: emptyState(), enabledAgentIds: [], homeDir: homeB } });
+    ).sync({
+      execution: { state: emptyState(), enabledAgentIds: [], homeDir: homeB },
+    });
 
     expect(synced).toMatchObject({ kind: "synced" });
     for (const lock of [adopted, added]) {
-      expect(await hashSkillDirectory(join(homeB, "skills", lock.skill))).toBe(lock.contentHash);
-      expect(await readFile(join(homeB, "skills", lock.skill, "SKILL.md"), "utf8")).toBe(
-        await readFile(join(source, lock.path, "SKILL.md"), "utf8"),
+      expect(await hashSkillDirectory(join(homeB, "skills", lock.skill))).toBe(
+        lock.contentHash,
       );
+      expect(
+        await readFile(join(homeB, "skills", lock.skill, "SKILL.md"), "utf8"),
+      ).toBe(await readFile(join(source, lock.path, "SKILL.md"), "utf8"));
     }
   });
 
@@ -144,8 +173,13 @@ describe("Git Sync two-home safety", () => {
     const lock = await lockFor(source, skillId("sk_drift"), "adopted");
     const home = join(root, "home");
     const store = new CanonicalSkillStore(join(home, "skills"));
-    await mkdir(join(home, ".codex", "skills", lock.skill), { recursive: true });
-    await writeFile(join(home, ".codex", "skills", lock.skill, "SKILL.md"), "unmanaged bytes\n");
+    await mkdir(join(home, ".codex", "skills", lock.skill), {
+      recursive: true,
+    });
+    await writeFile(
+      join(home, ".codex", "skills", lock.skill, "SKILL.md"),
+      "unmanaged bytes\n",
+    );
     const executor = new LocalReconcileExecutor(
       new LocalOperationalStateStore(join(home, "state", "state.json")),
       store,
@@ -163,45 +197,94 @@ describe("Git Sync two-home safety", () => {
       targetOutcomes: [expect.objectContaining({ status: "LOCAL_CONFLICT" })],
     });
     expect(installed.state.lastAppliedRevision).toBeNull();
-    expect(await readFile(join(home, ".codex", "skills", lock.skill, "SKILL.md"), "utf8")).toBe("unmanaged bytes\n");
+    expect(
+      await readFile(
+        join(home, ".codex", "skills", lock.skill, "SKILL.md"),
+        "utf8",
+      ),
+    ).toBe("unmanaged bytes\n");
 
-    await store.replaceFromDirectory(lock.id, lock.skill, join(source, lock.path), lock.contentHash, {
-      skillId: lock.id,
-      contentHash: lock.contentHash,
-    });
-    await writeFile(join(home, "skills", lock.skill, "SKILL.md"), "drifted bytes\n");
+    await store.replaceFromDirectory(
+      lock.id,
+      lock.skill,
+      join(source, lock.path),
+      lock.contentHash,
+      {
+        skillId: lock.id,
+        contentHash: lock.contentHash,
+      },
+    );
+    await writeFile(
+      join(home, "skills", lock.skill, "SKILL.md"),
+      "drifted bytes\n",
+    );
     const driftedState: LocalOperationalState = {
       schemaVersion: 1,
       lastAppliedRevision: revisionId("one"),
       skills: {
-        [lock.id]: { name: lock.skill, canonicalPath: store.pathFor(lock.skill), contentHash: lock.contentHash, targets: {} },
+        [lock.id]: {
+          name: lock.skill,
+          canonicalPath: store.pathFor(lock.skill),
+          contentHash: lock.contentHash,
+          targets: {},
+        },
       },
     };
-    expect(planReconcile(desired([lock]), {
-      skills: { [lock.id]: { contentHash: await hashSkillDirectory(store.pathFor(lock.skill)), managed: true } },
-    }).classifications).toContainEqual({ skillId: lock.id, classification: "DRIFTED" });
+    expect(
+      planReconcile(desired([lock]), {
+        skills: {
+          [lock.id]: {
+            contentHash: await hashSkillDirectory(store.pathFor(lock.skill)),
+            managed: true,
+          },
+        },
+      }).classifications,
+    ).toContainEqual({ skillId: lock.id, classification: "DRIFTED" });
 
     const restored = await new RestoreService(
-      { pull: async () => ({ kind: "success", value: { revisionId: revisionId("one"), state: desired([lock]) } }) },
+      {
+        pull: async () => ({
+          kind: "success",
+          value: { revisionId: revisionId("one"), state: desired([lock]) },
+        }),
+      },
       executor,
-    ).restore({ all: true, execution: { state: driftedState, enabledAgentIds: [], homeDir: home } });
+    ).restore({
+      all: true,
+      execution: { state: driftedState, enabledAgentIds: [], homeDir: home },
+    });
     expect(restored).toMatchObject({ kind: "restored" });
-    expect(await hashSkillDirectory(store.pathFor(lock.skill))).toBe(lock.contentHash);
+    expect(await hashSkillDirectory(store.pathFor(lock.skill))).toBe(
+      lock.contentHash,
+    );
   });
 
   test("preserves REMOVE, UNMANAGE, and re-add dispositions for offline homes", async () => {
     const { source } = await fixture();
     const lock = await lockFor(source, skillId("sk_offline"), "adopted");
-    const actual = { skills: { [lock.id]: { contentHash: lock.contentHash, managed: true } } };
-    const absent: DesiredState = { manifest: { version: 1, skills: [] }, lockfile: { version: 1, skills: [] } };
+    const actual = {
+      skills: { [lock.id]: { contentHash: lock.contentHash, managed: true } },
+    };
+    const absent: DesiredState = {
+      manifest: { version: 1, skills: [] },
+      lockfile: { version: 1, skills: [] },
+    };
 
-    expect(planReconcile(absent, actual, [{ type: "REMOVE", skillId: lock.id, metadata: {} }]).operations).toEqual([
-      { kind: "REMOVE", skillId: lock.id },
-    ]);
-    expect(planReconcile(absent, actual, [{ type: "UNMANAGE", skillId: lock.id, metadata: {} }]).operations).toEqual([
-      { kind: "UNMANAGE", skillId: lock.id },
-    ]);
-    expect(planReconcile(desired([lock]), actual, [{ type: "UNMANAGE", skillId: lock.id, metadata: {} }]).operations).toEqual([]);
+    expect(
+      planReconcile(absent, actual, [
+        { type: "REMOVE", skillId: lock.id, metadata: {} },
+      ]).operations,
+    ).toEqual([{ kind: "REMOVE", skillId: lock.id }]);
+    expect(
+      planReconcile(absent, actual, [
+        { type: "UNMANAGE", skillId: lock.id, metadata: {} },
+      ]).operations,
+    ).toEqual([{ kind: "UNMANAGE", skillId: lock.id }]);
+    expect(
+      planReconcile(desired([lock]), actual, [
+        { type: "UNMANAGE", skillId: lock.id, metadata: {} },
+      ]).operations,
+    ).toEqual([]);
   });
 
   test("reports private Git authentication without persisting credentials or state", async () => {
@@ -209,11 +292,28 @@ describe("Git Sync two-home safety", () => {
     roots.push(root);
     const runner: GitCommandRunner = async ({ args }) =>
       args[0] === "--version"
-        ? { exitCode: 0, stderr: "", stdout: new TextEncoder().encode("git version") }
-        : { exitCode: 128, stderr: "Permission denied (publickey).", stdout: new Uint8Array() };
+        ? {
+            exitCode: 0,
+            stderr: "",
+            stdout: new TextEncoder().encode("git version"),
+          }
+        : {
+            exitCode: 128,
+            stderr: "Permission denied (publickey).",
+            stdout: new Uint8Array(),
+          };
     const storage = join(root, "cache");
-    const result = await new GitStateProvider(storage, "git@private.example:owner/skills.git", runner).pull();
-    expect(result).toEqual(expect.objectContaining({ kind: "failure", error: expect.objectContaining({ code: "AUTH_REQUIRED" }) }));
+    const result = await new GitStateProvider(
+      storage,
+      "git@private.example:owner/skills.git",
+      runner,
+    ).pull();
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "failure",
+        error: expect.objectContaining({ code: "AUTH_REQUIRED" }),
+      }),
+    );
     await expect(readFile(storage, "utf8")).rejects.toThrow();
   });
 });

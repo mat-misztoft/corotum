@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { access, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -133,7 +141,13 @@ async function skillRepo(
 ): Promise<{ repository: string; contentHash: string }> {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await writeSkill(join(repository, "skills", name), body);
   await git(["-C", repository, "add", "."]);
@@ -235,16 +249,21 @@ describe("real corotum agents CLI", () => {
         "main",
       ]);
       expect(added.code).toBe(0);
-      expect(await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8")).toBe(
-        "# Notes\n",
-      );
+      expect(
+        await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Notes\n");
       await expect(lstat(targetSkill(home, "notes"))).rejects.toThrow();
 
       const configBefore = JSON.parse(
         await readFile(paths(home).configFile, "utf8"),
       ) as { agents: Record<string, { enabled: boolean }> };
       expect(configBefore.agents).toEqual({});
-      const revisionBefore = await git(["--git-dir", remote, "rev-parse", "HEAD"]);
+      const revisionBefore = await git([
+        "--git-dir",
+        remote,
+        "rev-parse",
+        "HEAD",
+      ]);
 
       await mkdir(join(home, ".codex"), { recursive: true });
       const scanned = await run(home, [
@@ -296,9 +315,9 @@ describe("real corotum agents CLI", () => {
         enabled: false,
       });
       await expect(lstat(targetSkill(home, "notes"))).rejects.toThrow();
-      expect(await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8")).toBe(
-        "# Notes\n",
-      );
+      expect(
+        await readFile(join(namedSkill(home, "notes"), "SKILL.md"), "utf8"),
+      ).toBe("# Notes\n");
       expect(
         (await scanNormalizedContent(namedSkill(home, "notes"))).contentHash,
       ).toBe(notes.contentHash);

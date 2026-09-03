@@ -2,8 +2,8 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { drizzle } from "drizzle-orm/d1";
-import * as schema from "./db/schema";
 import { persistAccountDisplayLabel } from "./account-label";
+import * as schema from "./db/schema";
 import type { EmailEnvironment, EmailService } from "./email";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
@@ -141,7 +141,10 @@ export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
       account: {
         create: {
           after: async (account) => {
-            if (account.providerId !== "github" && account.providerId !== "google")
+            if (
+              account.providerId !== "github" &&
+              account.providerId !== "google"
+            )
               return;
             await persistAccountDisplayLabel(
               env.DB as unknown as WorkspaceDatabase,

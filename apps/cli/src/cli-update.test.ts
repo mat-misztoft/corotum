@@ -446,8 +446,7 @@ describe("cli-update", () => {
       }
       expect(await readFile(harness.executablePath)).toEqual(harness.original);
     } finally {
-      if (previousBase === undefined)
-        delete process.env.COROTUM_RELEASE_BASE;
+      if (previousBase === undefined) delete process.env.COROTUM_RELEASE_BASE;
       else process.env.COROTUM_RELEASE_BASE = previousBase;
       if (previousExe === undefined) delete process.env.COROTUM_EXECUTABLE;
       else process.env.COROTUM_EXECUTABLE = previousExe;

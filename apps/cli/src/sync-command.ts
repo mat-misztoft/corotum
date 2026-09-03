@@ -12,10 +12,7 @@ import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canoni
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { CLI_VERSION, type CliIo, isNonInteractive } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
-import {
-  CloudAuthError,
-  resolveCloudOrigin,
-} from "./cloud-auth";
+import { CloudAuthError, resolveCloudOrigin } from "./cloud-auth";
 import {
   CloudSyncReportService,
   deviceSyncAggregateFrom,
@@ -71,79 +68,84 @@ async function inspectCommand(
   io: CliIo,
 ): Promise<void> {
   await withGitCliErrors(async () => {
-  const runtime = await createRuntime(program, io, false);
-  const result = await busy(
-    program,
-    io,
-    kind === "STATUS" ? "Inspecting skills…" : "Computing diff…",
-    kind === "STATUS" ? "Inspected skills" : "Computed diff",
-    () => runtime.service.inspect(),
-  );
-  const payload: Record<string, unknown> = {
-    ...v2SyncStatusPayload(result),
-    command: kind,
-    mode: runtime.mode,
-  };
-  if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
-    throw new Error(result.reason);
-  }
-  write(io, program, payload, humanInspectResult(kind, result, payload.status));
+    const runtime = await createRuntime(program, io, false);
+    const result = await busy(
+      program,
+      io,
+      kind === "STATUS" ? "Inspecting skills…" : "Computing diff…",
+      kind === "STATUS" ? "Inspected skills" : "Computed diff",
+      () => runtime.service.inspect(),
+    );
+    const payload: Record<string, unknown> = {
+      ...v2SyncStatusPayload(result),
+      command: kind,
+      mode: runtime.mode,
+    };
+    if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
+      throw new Error(result.reason);
+    }
+    write(
+      io,
+      program,
+      payload,
+      humanInspectResult(kind, result, payload.status),
+    );
   });
 }
 
 async function syncCommand(program: Command, io: CliIo): Promise<void> {
   await withGitCliErrors(async () => {
-  const homeDir = processHomeDir();
-  const paths = resolvePlatformPaths({
-    homeDir,
-    platform: process.platform as "darwin" | "linux" | "win32",
-    env: process.env,
-  });
-  const release = await new MutationLock(
-    join(paths.stateDir, "process.lock"),
-  ).acquire();
-  try {
-    const configStore = new ConfigStore(paths);
-    let config = await configStore.load();
-    const agents = await scanAgents(
-      config.agents,
+    const homeDir = processHomeDir();
+    const paths = resolvePlatformPaths({
       homeDir,
-      isNonInteractive(program.opts(), io.stdinIsTTY),
-    );
-    const newlyEnabled = agents.filter(
-      (agent) =>
-        agent.status === "ENABLED" && !config.agents[agent.id]?.enabled,
-    );
-    if (newlyEnabled.length > 0) {
-      await configStore.set("agents", {
-        ...config.agents,
-        ...Object.fromEntries(
-          newlyEnabled.map((agent) => [agent.id, { enabled: true }]),
-        ),
-      });
-      config = await configStore.load();
+      platform: process.platform as "darwin" | "linux" | "win32",
+      env: process.env,
+    });
+    const release = await new MutationLock(
+      join(paths.stateDir, "process.lock"),
+    ).acquire();
+    try {
+      const configStore = new ConfigStore(paths);
+      let config = await configStore.load();
+      const agents = await scanAgents(
+        config.agents,
+        homeDir,
+        isNonInteractive(program.opts(), io.stdinIsTTY),
+      );
+      const newlyEnabled = agents.filter(
+        (agent) =>
+          agent.status === "ENABLED" && !config.agents[agent.id]?.enabled,
+      );
+      if (newlyEnabled.length > 0) {
+        await configStore.set("agents", {
+          ...config.agents,
+          ...Object.fromEntries(
+            newlyEnabled.map((agent) => [agent.id, { enabled: true }]),
+          ),
+        });
+        config = await configStore.load();
+      }
+      const runtime = await createRuntime(program, io, true, config);
+      const result = await busy(
+        program,
+        io,
+        "Syncing skills…",
+        "Finished sync",
+        () => runtime.service.sync(),
+      );
+      const payload: Record<string, unknown> = {
+        ...v2SyncStatusPayload(result),
+        command: "SYNC",
+        mode: runtime.mode,
+        agents,
+      };
+      if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
+        throw new Error(result.reason);
+      }
+      write(io, program, payload, humanSyncResult(result, payload.status));
+    } finally {
+      await release();
     }
-    const runtime = await createRuntime(program, io, true, config);
-    const result = await busy(
-      program,
-      io,
-      "Syncing skills…",
-      "Finished sync",
-      () => runtime.service.sync(),
-    );
-    const payload: Record<string, unknown> = {
-      ...v2SyncStatusPayload(result),
-      command: "SYNC",
-      mode: runtime.mode,
-      agents,
-    };
-    if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
-      throw new Error(result.reason);
-    }
-    write(io, program, payload, humanSyncResult(result, payload.status));
-  } finally {
-    await release();
-  }
   });
 }
 
@@ -194,7 +196,8 @@ async function createRuntime(
       artifactReader:
         provider.mode === "cloud"
           ? async (locator) => {
-              const snapshot = await provider.port.pullReadOnly?.() ??
+              const snapshot =
+                (await provider.port.pullReadOnly?.()) ??
                 (await provider.port.pull());
               const lock = snapshot.state.lockfile.skills.find(
                 (skill) =>
@@ -364,7 +367,9 @@ function busy<T>(
 }
 
 function skillNames(
-  result: Extract<V2InspectResult, { kind: "ready" }> | Extract<V2SyncResult, { kind: "synced" | "partial" }>,
+  result:
+    | Extract<V2InspectResult, { kind: "ready" }>
+    | Extract<V2SyncResult, { kind: "synced" | "partial" }>,
 ): Map<string, string> {
   return new Map(
     result.snapshot.desired.state.manifest.skills.map((skill) => [
@@ -375,7 +380,9 @@ function skillNames(
 }
 
 function blockerLines(
-  result: Extract<V2InspectResult, { kind: "ready" }> | Extract<V2SyncResult, { kind: "synced" | "partial" }>,
+  result:
+    | Extract<V2InspectResult, { kind: "ready" }>
+    | Extract<V2SyncResult, { kind: "synced" | "partial" }>,
 ): string[] {
   const names = skillNames(result);
   const grouped = new Map<string, string[]>();
@@ -418,7 +425,10 @@ function humanInspectResult(
           : operation.skillId;
       return `${operation.kind} ${names.get(skillId) ?? skillId}`;
     });
-    return [`${ops.length} operations planned.`, ...ops, ...blockers].join("\n") + "\n";
+    return (
+      [`${ops.length} operations planned.`, ...ops, ...blockers].join("\n") +
+      "\n"
+    );
   }
   const lines = [
     `${String(status)} at revision ${result.snapshot.desired.revisionId}.`,
@@ -434,10 +444,7 @@ function humanInspectResult(
   return `${lines.join("\n")}\n`;
 }
 
-function humanSyncResult(
-  result: V2SyncResult,
-  status: unknown,
-): string {
+function humanSyncResult(result: V2SyncResult, status: unknown): string {
   if (result.kind === "synced") {
     return `Synced at revision ${result.snapshot.desired.revisionId}.\n`;
   }
@@ -477,9 +484,7 @@ function write(
 
 function processHomeDir(): string {
   return (
-    process.env.HOME?.trim() ||
-    process.env.USERPROFILE?.trim() ||
-    homedir()
+    process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || homedir()
   );
 }
 

@@ -150,7 +150,13 @@ async function skillRepo(
 ): Promise<{ repository: string; revision: string; contentHash: string }> {
   const repository = join(root, `${name}.git`);
   await git(["init", "--initial-branch=main", repository]);
-  await git(["-C", repository, "config", "user.email", "tests@corotum.invalid"]);
+  await git([
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "tests@corotum.invalid",
+  ]);
   await git(["-C", repository, "config", "user.name", "Corotum tests"]);
   await mkdir(join(repository, "skills", name), { recursive: true });
   await writeFile(join(repository, "skills", name, "SKILL.md"), body);
@@ -159,9 +165,8 @@ async function skillRepo(
   return {
     repository,
     revision: await git(["-C", repository, "rev-parse", "HEAD"]),
-    contentHash: (
-      await scanNormalizedContent(join(repository, "skills", name))
-    ).contentHash,
+    contentHash: (await scanNormalizedContent(join(repository, "skills", name)))
+      .contentHash,
   };
 }
 
@@ -282,12 +287,14 @@ describe("real corotum Cloud status/diff/sync CLI", () => {
             syncStatus: "SYNCED",
           }),
         ]);
-        expect(cloud.requests.some((item) => item.startsWith("GET ") && item.endsWith("/state"))).toBe(
-          true,
-        );
-        expect(cloud.requests.some((item) => item.includes("/cli/pairings"))).toBe(
-          false,
-        );
+        expect(
+          cloud.requests.some(
+            (item) => item.startsWith("GET ") && item.endsWith("/state"),
+          ),
+        ).toBe(true);
+        expect(
+          cloud.requests.some((item) => item.includes("/cli/pairings")),
+        ).toBe(false);
       } finally {
         cloud.stop();
       }
@@ -320,7 +327,9 @@ describe("real corotum Cloud status/diff/sync CLI", () => {
         "sync",
       ]);
       expect(sync.code).toBe(ExitCode.AUTH_REQUIRED);
-      expect(String(sync.json?.error ?? sync.stderr)).toContain("corotum login");
+      expect(String(sync.json?.error ?? sync.stderr)).toContain(
+        "corotum login",
+      );
     },
     timeout,
   );
@@ -357,7 +366,10 @@ describe("real corotum Cloud status/diff/sync CLI", () => {
       const home = join(root, "home");
       await seedCloudHome(home);
       const notes = await skillRepo(root, "notes", "# Locked\n");
-      await writeFile(join(notes.repository, "skills", "notes", "SKILL.md"), "# HEAD\n");
+      await writeFile(
+        join(notes.repository, "skills", "notes", "SKILL.md"),
+        "# HEAD\n",
+      );
       await git(["-C", notes.repository, "add", "."]);
       await git(["-C", notes.repository, "commit", "-m", "head"]);
       const head = await git(["-C", notes.repository, "rev-parse", "HEAD"]);
@@ -426,7 +438,10 @@ describe("real corotum Cloud status/diff/sync CLI", () => {
           appliedRevision: "rev_locked",
         });
         expect(
-          await readFile(join(home, ".agents", "skills", "notes", "SKILL.md"), "utf8"),
+          await readFile(
+            join(home, ".agents", "skills", "notes", "SKILL.md"),
+            "utf8",
+          ),
         ).toBe("# Locked\n");
         expect(cloud.reports[0]).toMatchObject({
           appliedRevisionId: "rev_locked",

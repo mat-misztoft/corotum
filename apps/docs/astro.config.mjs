@@ -1,6 +1,6 @@
-import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
+import { defineConfig } from "astro/config";
 
 export default defineConfig({
   site: "https://docs.corotum.com",
@@ -8,7 +8,8 @@ export default defineConfig({
     sitemap(),
     starlight({
       title: "Corotum Docs",
-      description: "Documentation for Corotum skill management, Git Sync, and Corotum Cloud.",
+      description:
+        "Documentation for Corotum skill management, Git Sync, and Corotum Cloud.",
       favicon: "/favicon.svg",
       social: [
         {
@@ -31,14 +32,49 @@ export default defineConfig({
         },
       ],
       sidebar: [
-        { label: "Getting Started", items: [{ label: "Overview", link: "/" }, { label: "Install", slug: "getting-started/install" }] },
+        {
+          label: "Getting Started",
+          items: [
+            { label: "Overview", link: "/" },
+            { label: "Install", slug: "getting-started/install" },
+          ],
+        },
         { label: "CLI", items: [{ label: "Commands", slug: "cli/commands" }] },
-        { label: "Concepts", items: [{ label: "Skills", slug: "concepts/skills" }, { label: "Git Sync", slug: "concepts/git-sync" }] },
-        { label: "Cloud", items: [{ label: "Hosted Corotum Cloud", slug: "cloud/hosted" }, { label: "Self-hosting", slug: "cloud/self-hosting" }] },
-        { label: "WebMCP", items: [{ label: "Dashboard and WebMCP", slug: "webmcp/dashboard-and-webmcp" }] },
-        { label: "Guides", items: [{ label: "Migration", slug: "guides/migration" }] },
-        { label: "Reference", items: [{ label: "Product reference", slug: "reference/product" }] },
-        { label: "Troubleshooting", items: [{ label: "Troubleshooting", slug: "troubleshooting" }] },
+        {
+          label: "Concepts",
+          items: [
+            { label: "Skills", slug: "concepts/skills" },
+            { label: "Git Sync", slug: "concepts/git-sync" },
+          ],
+        },
+        {
+          label: "Cloud",
+          items: [
+            { label: "Hosted Corotum Cloud", slug: "cloud/hosted" },
+            { label: "Self-hosting", slug: "cloud/self-hosting" },
+          ],
+        },
+        {
+          label: "WebMCP",
+          items: [
+            {
+              label: "Dashboard and WebMCP",
+              slug: "webmcp/dashboard-and-webmcp",
+            },
+          ],
+        },
+        {
+          label: "Guides",
+          items: [{ label: "Migration", slug: "guides/migration" }],
+        },
+        {
+          label: "Reference",
+          items: [{ label: "Product reference", slug: "reference/product" }],
+        },
+        {
+          label: "Troubleshooting",
+          items: [{ label: "Troubleshooting", slug: "troubleshooting" }],
+        },
       ],
     }),
   ],

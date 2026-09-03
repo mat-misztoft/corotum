@@ -19,13 +19,10 @@ import { createCliV2GitStateProvider } from "./artifact-consent";
 import { formatCorotumBanner } from "./banner";
 import { CLI_VERSION, type CliIo } from "./cli";
 import { CloudAuthError, resolveCloudOrigin } from "./cloud-auth";
-import { CloudSyncReportService } from "./cloud-sync-report";
 import { cloudAuthContext } from "./cloud-auth-command";
+import { CloudSyncReportService } from "./cloud-sync-report";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
-import {
-  coalesceInitCandidates,
-  divergentCandidates,
-} from "./init";
+import { coalesceInitCandidates, divergentCandidates } from "./init";
 import {
   adoptArtifactChoices,
   classifyInitCandidates,
@@ -47,6 +44,7 @@ import {
 import { discoverInitProvenance } from "./init-provenance";
 import {
   InitRecoveryStore,
+  type InitTransactionResult,
   InitTransactionService,
   type InitV2Provider,
 } from "./init-transaction";
@@ -71,8 +69,14 @@ export function registerInitCommand(program: Command, io: CliIo): void {
       "initialize Git Sync or Corotum Cloud and safely adopt selected local skills",
     )
     .option("--skill <name...>", "only consider these discovered skill names")
-    .option("--replace <name...>", "non-interactive source-backed replace for these skills")
-    .option("--keep <name...>", "non-interactive keep-local artifact adoption for these skills")
+    .option(
+      "--replace <name...>",
+      "non-interactive source-backed replace for these skills",
+    )
+    .option(
+      "--keep <name...>",
+      "non-interactive keep-local artifact adoption for these skills",
+    )
     .option(
       "--adopt-artifact <name...>",
       "non-interactive artifact adoption for unknown-provenance skills",
@@ -102,7 +106,10 @@ export function registerInitCommand(program: Command, io: CliIo): void {
         try {
           const configStore = new ConfigStore(paths);
           const config = await configStore.load();
-          const opts = program.opts<{ json?: boolean; nonInteractive?: boolean }>();
+          const opts = program.opts<{
+            json?: boolean;
+            nonInteractive?: boolean;
+          }>();
           const nonInteractive =
             opts.nonInteractive === true || io.stdinIsTTY !== true;
           if (config.mode) {
@@ -160,92 +167,104 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             cloud = true;
             enabledAgentIds = (marker.enabledAgentIds ?? []) as AgentId[];
           } else {
-          const selection = await resolveInitProvider({
-            provider,
-            repository,
-            nonInteractive,
-            chooseProvider: () =>
-              selectOption("How do you want to sync?", [
-                { value: "git", label: "Git Sync" },
-                { value: "cloud", label: "Corotum Cloud" },
-              ]),
-            askRepository: () => textOption("Git repository URL"),
-          });
-          cloud = selection.kind === "cloud";
-          gitRepository = selection.kind === "git" ? selection.repository : undefined;
-          if (cloud) {
-            cloudConnection = await connectCloud(
-              program,
-              io,
-              paths,
-              configStore,
-              options.origin,
+            const selection = await resolveInitProvider({
+              provider,
+              repository,
               nonInteractive,
-              progress,
-            );
-          }
-
-          const detected = await detectAgents(homeDir, localAgentFileSystem);
-          enabledAgentIds = detected
-            .map((agent) => agent.id)
-            .filter((id) => config.agents[id]?.enabled === true) as AgentId[];
-          if (
-            enabledAgentIds.length === 0 &&
-            detected.length > 0 &&
-            !nonInteractive
-          ) {
-            const names = detected.map((agent) => agent.id).join(", ");
-            if (await confirmOption(`Enable detected agents (${names})?`, true)) {
-              enabledAgentIds = detected.map((agent) => agent.id);
+              chooseProvider: () =>
+                selectOption("How do you want to sync?", [
+                  { value: "git", label: "Git Sync" },
+                  { value: "cloud", label: "Corotum Cloud" },
+                ]),
+              askRepository: () => textOption("Git repository URL"),
+            });
+            cloud = selection.kind === "cloud";
+            gitRepository =
+              selection.kind === "git" ? selection.repository : undefined;
+            if (cloud) {
+              cloudConnection = await connectCloud(
+                program,
+                io,
+                paths,
+                configStore,
+                options.origin,
+                nonInteractive,
+                progress,
+              );
             }
-          }
 
-          const materializer = new GitSkillMaterializer();
-          const discovered = await discoverInitProvenance(homeDir);
-          let filtered = options.skill?.length
-            ? discovered.filter((candidate) => options.skill?.includes(candidate.name))
-            : discovered;
-          if (!opts.json && !nonInteractive && !options.skill?.length && filtered.length > 0) {
-            const selected = new Set(
-              await selectManyGate(
-                "Local skills found",
-                filtered.map((candidate) => candidate.name),
-                {
-                  detail:
-                    "These folders are in ~/.agents/skills. Checking fetches each recorded Git source and compares it with your files, then asks what to adopt. That uses the network and can take a minute. Skip leaves everything on disk, unmanaged.",
-                  all: "Check all against upstream",
-                  allHint: "fetch Git remotes",
-                  none: "Skip all",
-                  noneHint: "don't manage any of them",
-                  choose: "Choose which to check…",
-                  chooseHint: "pick a subset first",
-                },
-                "all",
-              ),
-            );
-            filtered = filtered.filter((candidate) => selected.has(candidate.name));
-          }
-          const classified =
-            opts.json || nonInteractive
-              ? await classifyInitCandidates(filtered, { materializer })
-              : await withProgress(filtered.length, (advance) =>
-                  classifyInitCandidates(filtered, {
-                    materializer,
-                    onProgress: advance,
-                  }),
-                );
-          outcomes = await decideInitAdoptions({
-            candidates: filtered,
-            classified,
-            nonInteractive,
-            choices: [
-              ...namedChoices(options.replace, "replace"),
-              ...namedChoices(options.keep, "keep"),
-              ...adoptArtifactChoices(options.adoptArtifact ?? []),
-            ],
-            prompt: nonInteractive ? undefined : adoptionPrompt(io),
-            materializer,
-          });
+            const detected = await detectAgents(homeDir, localAgentFileSystem);
+            enabledAgentIds = detected
+              .map((agent) => agent.id)
+              .filter((id) => config.agents[id]?.enabled === true) as AgentId[];
+            if (
+              enabledAgentIds.length === 0 &&
+              detected.length > 0 &&
+              !nonInteractive
+            ) {
+              const names = detected.map((agent) => agent.id).join(", ");
+              if (
+                await confirmOption(`Enable detected agents (${names})?`, true)
+              ) {
+                enabledAgentIds = detected.map((agent) => agent.id);
+              }
+            }
+
+            const materializer = new GitSkillMaterializer();
+            const discovered = await discoverInitProvenance(homeDir);
+            let filtered = options.skill?.length
+              ? discovered.filter((candidate) =>
+                  options.skill?.includes(candidate.name),
+                )
+              : discovered;
+            if (
+              !opts.json &&
+              !nonInteractive &&
+              !options.skill?.length &&
+              filtered.length > 0
+            ) {
+              const selected = new Set(
+                await selectManyGate(
+                  "Local skills found",
+                  filtered.map((candidate) => candidate.name),
+                  {
+                    detail:
+                      "These folders are in ~/.agents/skills. Checking fetches each recorded Git source and compares it with your files, then asks what to adopt. That uses the network and can take a minute. Skip leaves everything on disk, unmanaged.",
+                    all: "Check all against upstream",
+                    allHint: "fetch Git remotes",
+                    none: "Skip all",
+                    noneHint: "don't manage any of them",
+                    choose: "Choose which to check…",
+                    chooseHint: "pick a subset first",
+                  },
+                  "all",
+                ),
+              );
+              filtered = filtered.filter((candidate) =>
+                selected.has(candidate.name),
+              );
+            }
+            const classified =
+              opts.json || nonInteractive
+                ? await classifyInitCandidates(filtered, { materializer })
+                : await withProgress(filtered.length, (advance) =>
+                    classifyInitCandidates(filtered, {
+                      materializer,
+                      onProgress: advance,
+                    }),
+                  );
+            outcomes = await decideInitAdoptions({
+              candidates: filtered,
+              classified,
+              nonInteractive,
+              choices: [
+                ...namedChoices(options.replace, "replace"),
+                ...namedChoices(options.keep, "keep"),
+                ...adoptArtifactChoices(options.adoptArtifact ?? []),
+              ],
+              prompt: nonInteractive ? undefined : adoptionPrompt(io),
+              materializer,
+            });
           }
 
           const stateStore = new LocalOperationalStateStore(
@@ -289,7 +308,9 @@ export function registerInitCommand(program: Command, io: CliIo): void {
                     workspaceId: cloudConnection.workspaceId,
                   },
                   stateStore,
-                  canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
+                  canonicalStore: new CanonicalSkillStore(
+                    storage.skillsStoragePath,
+                  ),
                   enabledAgentIds,
                   homeDir,
                   downloadArtifact: (lock) =>
@@ -309,14 +330,16 @@ export function registerInitCommand(program: Command, io: CliIo): void {
                   persistConfig,
                   backend: { kind: "git" },
                   stateStore,
-                  canonicalStore: new CanonicalSkillStore(storage.skillsStoragePath),
+                  canonicalStore: new CanonicalSkillStore(
+                    storage.skillsStoragePath,
+                  ),
                   enabledAgentIds,
                   homeDir,
                   gitRepository,
                   gitStoragePath: storage.gitStoragePath,
                   onProgress: (message) => progress.update(message),
                 }).run({ outcomes });
-          let result;
+          let result: InitTransactionResult;
           try {
             const resumingCloud =
               cloud &&
@@ -342,7 +365,8 @@ export function registerInitCommand(program: Command, io: CliIo): void {
                       : "Pushed desired state to Git",
                   );
           } catch (error) {
-            if (isHostedSubscriptionRequired(error)) throw hostedSubscriptionInitError();
+            if (isHostedSubscriptionRequired(error))
+              throw hostedSubscriptionInitError();
             throwGitInitError(error);
           }
 
@@ -355,7 +379,9 @@ export function registerInitCommand(program: Command, io: CliIo): void {
             }
             throwGitInitError(new Error(result.reason));
           }
-          const unmanaged = result.outcomes.filter((outcome) => outcome.kind === "unmanaged");
+          const unmanaged = result.outcomes.filter(
+            (outcome) => outcome.kind === "unmanaged",
+          );
           if (result.kind === "partial") {
             io.writeError(`${result.reason}\n`);
           }
@@ -400,9 +426,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
 
 function processHomeDir(): string {
   return (
-    process.env.HOME?.trim() ||
-    process.env.USERPROFILE?.trim() ||
-    homedir()
+    process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || homedir()
   );
 }
 
@@ -461,11 +485,7 @@ async function connectCloud(
   workspaceId: string;
   downloadArtifact: V2SaaSProvider["downloadArtifact"];
 }> {
-  const { origin, service } = await cloudAuthContext(
-    program,
-    io,
-    originOption,
-  );
+  const { origin, service } = await cloudAuthContext(program, io, originOption);
   const connected = await new CloudInitService({
     config,
     credentials: new CredentialsStore(paths),

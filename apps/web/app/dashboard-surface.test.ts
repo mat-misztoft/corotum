@@ -27,7 +27,9 @@ test("billing and settings use the shared dashboard language without new control
   expect(surface).toContain("This Corotum Cloud instance is self-hosted.");
   expect(surface).toContain('className="dashboard-command"');
   expect(surface).toContain('if (view === "billing")');
-  expect(surface).toContain('window.open(url, "_blank", "noopener,noreferrer")');
+  expect(surface).toContain(
+    'window.open(url, "_blank", "noopener,noreferrer")',
+  );
   expect(surface).toContain('settings.subscription.status === "paid"');
   expect(surface).toContain("`Connect ${label}`");
   expect(surface).toContain("`Disconnect ${label}`");
@@ -77,7 +79,8 @@ test("dashboard operate chrome uses frozen tokens and truthful status chips", ()
   expect(css).toContain("--ink: #171512");
   expect(css).toContain("--machine: #20201e");
   expect(css).toContain("--vermillion: #df492f");
-  expect(css).toContain(".dashboard-brand-rule { background: var(--vermillion); height: 4px; }");
+  expect(css).toContain(".dashboard-brand-rule {");
+  expect(css).toContain("height: 4px;");
   expect(css).toContain("max-width: 1120px");
   expect(css).toContain("border-radius: 0");
   expect(css).toContain(

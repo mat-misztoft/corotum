@@ -140,7 +140,8 @@ export class LocalReconcileExecutor {
             // UNMANAGE converts exposures to ordinary copies. The named
             // canonical directory is preserved as ordinary local content too.
             // Removing it here would turn an offline UNMANAGE into REMOVE.
-            if (!skills[skillId]) throw new Error("Managed skill state is missing.");
+            if (!skills[skillId])
+              throw new Error("Managed skill state is missing.");
             delete skills[skillId];
             operations.push({
               kind: operation.kind,
@@ -298,8 +299,10 @@ function firstTargetError(
     (outcome) =>
       outcome.status === "ERROR" || outcome.status === "LOCAL_CONFLICT",
   );
-  return failed?.error ??
+  return (
+    failed?.error ??
     (failed?.status === "LOCAL_CONFLICT"
       ? `Unmanaged target collision at ${failed.path}.`
-      : undefined);
+      : undefined)
+  );
 }

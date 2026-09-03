@@ -3,7 +3,7 @@ import {
   type V2SaaSProvider,
 } from "../../../packages/saas-provider/src/index";
 import { CloudAuthError } from "./cloud-auth";
-import type { CredentialsStore, CorotumConfig } from "./config";
+import type { CorotumConfig, CredentialsStore } from "./config";
 
 export class CloudInitError extends Error {
   constructor(message: string) {
@@ -29,10 +29,7 @@ export function isHostedSubscriptionRequired(error: unknown): boolean {
 
 /** Maps Cloud transport failures to typed CLI errors without Git wording. */
 export function classifyCloudInspectError(error: unknown): Error {
-  if (
-    error instanceof V2CloudProviderError &&
-    error.code === "AUTH_REQUIRED"
-  ) {
+  if (error instanceof V2CloudProviderError && error.code === "AUTH_REQUIRED") {
     return new CloudAuthError(
       "Cloud device authentication failed. Run corotum login.",
       "AUTH_REQUIRED",
@@ -41,8 +38,7 @@ export function classifyCloudInspectError(error: unknown): Error {
   if (isHostedSubscriptionRequired(error)) return hostedSubscriptionInitError();
   const message = error instanceof Error ? error.message : String(error);
   if (
-    (error instanceof V2CloudProviderError &&
-      error.code === "NETWORK_ERROR") ||
+    (error instanceof V2CloudProviderError && error.code === "NETWORK_ERROR") ||
     /cloud (origin )?is unreachable/i.test(message)
   ) {
     return new CloudAuthError(
@@ -98,8 +94,13 @@ export class CloudInitService {
       await provider.pull();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Cloud desired state could not be loaded completely.";
-      if (isHostedSubscriptionRequired(error) || isHostedSubscriptionRequired(message)) {
+        error instanceof Error
+          ? error.message
+          : "Cloud desired state could not be loaded completely.";
+      if (
+        isHostedSubscriptionRequired(error) ||
+        isHostedSubscriptionRequired(message)
+      ) {
         throw hostedSubscriptionInitError();
       }
       throw new CloudInitError(message);

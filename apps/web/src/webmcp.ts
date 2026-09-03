@@ -1,7 +1,7 @@
 import {
-  dashboardMutationResult,
   type DashboardMutation,
   type DashboardView,
+  dashboardMutationResult,
   mutateDashboard,
   readDashboard,
 } from "./dashboard";
@@ -52,17 +52,27 @@ type SkillUpdate = Readonly<{
 }>;
 
 function isWebMcpReadOnlyTool(value: unknown): value is WebMcpReadOnlyTool {
-  return typeof value === "string" && (WEBMCP_READ_ONLY_TOOLS as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (WEBMCP_READ_ONLY_TOOLS as readonly string[]).includes(value)
+  );
 }
 
 function isWebMcpMutationTool(value: unknown): value is WebMcpMutationTool {
-  return typeof value === "string" && (WEBMCP_MUTATION_TOOLS as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (WEBMCP_MUTATION_TOOLS as readonly string[]).includes(value)
+  );
 }
 
-function updateStatus(rows: readonly Pick<UpdateRow, "status">[]): DeviceUpdateStatus {
-  if (rows.some((row) => row.status === "AUTH_REQUIRED")) return "AUTH_REQUIRED";
+function updateStatus(
+  rows: readonly Pick<UpdateRow, "status">[],
+): DeviceUpdateStatus {
+  if (rows.some((row) => row.status === "AUTH_REQUIRED"))
+    return "AUTH_REQUIRED";
   if (rows.some((row) => row.status === "CHECK_FAILED")) return "CHECK_FAILED";
-  if (rows.some((row) => row.status === "UPDATE_AVAILABLE")) return "UPDATE_AVAILABLE";
+  if (rows.some((row) => row.status === "UPDATE_AVAILABLE"))
+    return "UPDATE_AVAILABLE";
   if (rows.some((row) => row.status === "UP_TO_DATE")) return "UP_TO_DATE";
   return "UNKNOWN";
 }
@@ -86,14 +96,18 @@ async function readKnownSkillUpdates(
     )
     .bind(dashboard.workspace.id, userId)
     .all<UpdateRow>();
-  const known = (rows.results ?? []).filter((row) => UPDATE_STATUSES.has(row.status as DeviceUpdateStatus));
+  const known = (rows.results ?? []).filter((row) =>
+    UPDATE_STATUSES.has(row.status as DeviceUpdateStatus),
+  );
   return dashboard.skills.map((skill) => {
     const skillId = skill.id;
-    const reports = known.filter((row) => row.skillId === skillId).map((row) => ({
-      deviceId: row.deviceId,
-      status: row.status as DeviceUpdateStatus,
-      checkedAt: row.checkedAt,
-    }));
+    const reports = known
+      .filter((row) => row.skillId === skillId)
+      .map((row) => ({
+        deviceId: row.deviceId,
+        status: row.status as DeviceUpdateStatus,
+        checkedAt: row.checkedAt,
+      }));
     return { skillId, status: updateStatus(reports), reports };
   });
 }
@@ -106,24 +120,68 @@ export async function executeWebMcpReadOnlyTool(
   if (!isWebMcpReadOnlyTool(input.tool)) throw new InvalidWebMcpToolError();
   const dashboard = await readDashboard(db, input.userId);
   switch (input.tool) {
-    case "list_skills": return { workspace: dashboard.workspace, revision: dashboard.revision, skills: dashboard.skills };
-    case "list_devices": return { workspace: dashboard.workspace, revision: dashboard.revision, devices: dashboard.devices };
-    case "get_sync_status": return {
-      workspace: dashboard.workspace,
-      revision: dashboard.revision,
-      devices: dashboard.devices.map(({ id, appliedRevisionSequence, syncStatus, lastSyncAt, lastErrorCode, lastErrorMessage, targets }) => ({ id, appliedRevisionSequence, syncStatus, lastSyncAt, lastErrorCode, lastErrorMessage, targets })),
-    };
-    case "check_skill_updates": return { workspace: dashboard.workspace, revision: dashboard.revision, skills: await readKnownSkillUpdates(db, input.userId, dashboard) };
+    case "list_skills":
+      return {
+        workspace: dashboard.workspace,
+        revision: dashboard.revision,
+        skills: dashboard.skills,
+      };
+    case "list_devices":
+      return {
+        workspace: dashboard.workspace,
+        revision: dashboard.revision,
+        devices: dashboard.devices,
+      };
+    case "get_sync_status":
+      return {
+        workspace: dashboard.workspace,
+        revision: dashboard.revision,
+        devices: dashboard.devices.map(
+          ({
+            id,
+            appliedRevisionSequence,
+            syncStatus,
+            lastSyncAt,
+            lastErrorCode,
+            lastErrorMessage,
+            targets,
+          }) => ({
+            id,
+            appliedRevisionSequence,
+            syncStatus,
+            lastSyncAt,
+            lastErrorCode,
+            lastErrorMessage,
+            targets,
+          }),
+        ),
+      };
+    case "check_skill_updates":
+      return {
+        workspace: dashboard.workspace,
+        revision: dashboard.revision,
+        skills: await readKnownSkillUpdates(db, input.userId, dashboard),
+      };
   }
 }
 
 /** Maps WebMCP tool arguments to the dashboard mutation service without adding a second mutation path. */
-function webMcpMutation(tool: WebMcpMutationTool, input: unknown): DashboardMutation {
-  if (!input || typeof input !== "object") throw new InvalidWebMcpMutationInputError();
+function webMcpMutation(
+  tool: WebMcpMutationTool,
+  input: unknown,
+): DashboardMutation {
+  if (!input || typeof input !== "object")
+    throw new InvalidWebMcpMutationInputError();
   const value = input as Record<string, unknown>;
-  const string = (key: string) => typeof value[key] === "string" ? value[key] : null;
+  const string = (key: string) =>
+    typeof value[key] === "string" ? value[key] : null;
   const targets = value.targets;
-  if (targets !== undefined && targets !== "all" && (!Array.isArray(targets) || targets.some((target) => typeof target !== "string"))) {
+  if (
+    targets !== undefined &&
+    targets !== "all" &&
+    (!Array.isArray(targets) ||
+      targets.some((target) => typeof target !== "string"))
+  ) {
     throw new InvalidWebMcpMutationInputError();
   }
   switch (tool) {
@@ -132,8 +190,21 @@ function webMcpMutation(tool: WebMcpMutationTool, input: unknown): DashboardMuta
       const skill = string("skill");
       const ref = value.ref === undefined ? undefined : string("ref");
       const path = value.path === undefined ? undefined : string("path");
-      if (!source || !skill || (value.ref !== undefined && !ref) || (value.path !== undefined && !path)) throw new InvalidWebMcpMutationInputError();
-      return { type: "ADD", source, skill, ref: ref ?? undefined, path: path ?? undefined, targets: targets as "all" | string[] | undefined };
+      if (
+        !source ||
+        !skill ||
+        (value.ref !== undefined && !ref) ||
+        (value.path !== undefined && !path)
+      )
+        throw new InvalidWebMcpMutationInputError();
+      return {
+        type: "ADD",
+        source,
+        skill,
+        ref: ref ?? undefined,
+        path: path ?? undefined,
+        targets: targets as "all" | string[] | undefined,
+      };
     }
     case "remove_skill": {
       const skillId = string("skillId");

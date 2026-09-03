@@ -98,7 +98,8 @@ export function projectedDeviceSyncStatus(
   appliedRevisionSequence: number,
   currentRevisionSequence: number,
 ): string {
-  if (stored === "SYNCED" && appliedRevisionSequence < currentRevisionSequence) return "BEHIND";
+  if (stored === "SYNCED" && appliedRevisionSequence < currentRevisionSequence)
+    return "BEHIND";
   return stored;
 }
 

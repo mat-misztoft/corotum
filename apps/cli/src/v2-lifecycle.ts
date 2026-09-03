@@ -7,8 +7,11 @@ import {
   type V2DesiredState,
   validateV2DesiredState,
 } from "../../../packages/core/src/index";
-import type { LocalOperationalState, LocalOperationalStateStore } from "./local-state";
-import { V2LocalApplyError, type V2LocalApplier } from "./v2-local-applier";
+import type {
+  LocalOperationalState,
+  LocalOperationalStateStore,
+} from "./local-state";
+import { type V2LocalApplier, V2LocalApplyError } from "./v2-local-applier";
 import type { V2MutationProvider } from "./v2-mutations";
 
 export type V2LifecycleOperation = "REMOVE" | "UNMANAGE" | "RESTORE";
@@ -25,7 +28,12 @@ export type V2LifecycleRecoveryMarker = Readonly<{
 }>;
 
 export type V2LifecycleResult =
-  | Readonly<{ kind: "success"; skillId: SkillId; revision: string; operation: V2LifecycleOperation }>
+  | Readonly<{
+      kind: "success";
+      skillId: SkillId;
+      revision: string;
+      operation: V2LifecycleOperation;
+    }>
   | Readonly<{
       kind: "persisted-not-applied";
       skillId: SkillId;
@@ -42,8 +50,11 @@ export class LifecycleRecoveryStore {
 
   async load(): Promise<V2LifecycleRecoveryMarker | null> {
     try {
-      const parsed = JSON.parse(await readFile(this.file, "utf8")) as V2LifecycleRecoveryMarker;
-      if (parsed.schemaVersion !== 1 || !parsed.phase || !parsed.operation) return null;
+      const parsed = JSON.parse(
+        await readFile(this.file, "utf8"),
+      ) as V2LifecycleRecoveryMarker;
+      if (parsed.schemaVersion !== 1 || !parsed.phase || !parsed.operation)
+        return null;
       return parsed;
     } catch {
       return null;
@@ -52,7 +63,9 @@ export class LifecycleRecoveryStore {
 
   async save(marker: V2LifecycleRecoveryMarker): Promise<void> {
     await mkdir(dirname(this.file), { recursive: true, mode: 0o700 });
-    await writeFile(this.file, `${JSON.stringify(marker, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(this.file, `${JSON.stringify(marker, null, 2)}\n`, {
+      mode: 0o600,
+    });
   }
 
   async clear(): Promise<void> {
@@ -91,10 +104,21 @@ export class V2LifecycleService {
     try {
       const current = await this.provider.pull();
       const skill = select(current.state, nameOrId);
-      if (!skill) return { kind: "refused", reason: "Managed skill was not found or is ambiguous." };
+      if (!skill)
+        return {
+          kind: "refused",
+          reason: "Managed skill was not found or is ambiguous.",
+        };
       const marker = await this.recovery.load();
-      if (marker && (marker.skillId !== skill.id || marker.operation !== "RESTORE")) {
-        return { kind: "refused", reason: "A different interrupted lifecycle operation must finish first." };
+      if (
+        marker &&
+        (marker.skillId !== skill.id || marker.operation !== "RESTORE")
+      ) {
+        return {
+          kind: "refused",
+          reason:
+            "A different interrupted lifecycle operation must finish first.",
+        };
       }
       return await this.applyLocal({
         operation: "RESTORE",
@@ -109,25 +133,46 @@ export class V2LifecycleService {
     }
   }
 
-  private async mutate(operation: "REMOVE" | "UNMANAGE", nameOrId: string): Promise<V2LifecycleResult> {
+  private async mutate(
+    operation: "REMOVE" | "UNMANAGE",
+    nameOrId: string,
+  ): Promise<V2LifecycleResult> {
     try {
       const current = await this.provider.pull();
       const skill = select(current.state, nameOrId);
       const marker = await this.recovery.load();
       if (marker && marker.operation !== operation) {
-        return { kind: "refused", reason: "A different interrupted lifecycle operation must finish first." };
+        return {
+          kind: "refused",
+          reason:
+            "A different interrupted lifecycle operation must finish first.",
+        };
       }
-      if (!skill && !marker) return { kind: "refused", reason: "Managed skill was not found or is ambiguous." };
+      if (!skill && !marker)
+        return {
+          kind: "refused",
+          reason: "Managed skill was not found or is ambiguous.",
+        };
       const id = skill?.id ?? marker!.skillId;
       const name = skill?.name ?? marker!.name;
       let revision = marker?.revision ?? current.revisionId;
       let persistedState = current.state;
-      if (marker?.phase !== "desired-persisted" && marker?.phase !== "locally-applied") {
+      if (
+        marker?.phase !== "desired-persisted" &&
+        marker?.phase !== "locally-applied"
+      ) {
         try {
           await this.applier.assertDestructiveSafe?.(id);
         } catch (error) {
-          if (error instanceof V2LocalApplyError && error.code === "LOCAL_CONFLICT") {
-            return { kind: "local-conflict", skillId: id, reason: error.message };
+          if (
+            error instanceof V2LocalApplyError &&
+            error.code === "LOCAL_CONFLICT"
+          ) {
+            return {
+              kind: "local-conflict",
+              skillId: id,
+              reason: error.message,
+            };
           }
           if (error instanceof V2LocalApplyError && error.code === "DRIFTED") {
             return { kind: "drifted", skillId: id, reason: error.message };
@@ -168,34 +213,54 @@ export class V2LifecycleService {
     }
   }
 
-  private async applyLocal(input: Readonly<{
-    operation: V2LifecycleOperation;
-    skillId: SkillId;
-    name: string;
-    revision: string;
-    state: V2DesiredState;
-    skipApply: boolean;
-  }>): Promise<V2LifecycleResult> {
+  private async applyLocal(
+    input: Readonly<{
+      operation: V2LifecycleOperation;
+      skillId: SkillId;
+      name: string;
+      revision: string;
+      state: V2DesiredState;
+      skipApply: boolean;
+    }>,
+  ): Promise<V2LifecycleResult> {
     let next: LocalOperationalState;
     try {
       if (input.skipApply) {
         const saved = await this.loadState();
-        next = input.operation === "RESTORE" ? saved : withoutLocalSkill(saved, input.skillId);
+        next =
+          input.operation === "RESTORE"
+            ? saved
+            : withoutLocalSkill(saved, input.skillId);
       } else if (input.operation === "REMOVE") {
         next = await this.applier.applyRemove(input.skillId);
       } else if (input.operation === "UNMANAGE") {
         next = await this.applier.applyUnmanage(input.skillId);
       } else {
-        next = await this.applier.applyRestore({ state: input.state, skillId: input.skillId });
+        next = await this.applier.applyRestore({
+          state: input.state,
+          skillId: input.skillId,
+        });
       }
     } catch (error) {
-      if (error instanceof V2LocalApplyError && error.code === "LOCAL_CONFLICT") {
-        return { kind: "local-conflict", skillId: input.skillId, reason: error.message };
+      if (
+        error instanceof V2LocalApplyError &&
+        error.code === "LOCAL_CONFLICT"
+      ) {
+        return {
+          kind: "local-conflict",
+          skillId: input.skillId,
+          reason: error.message,
+        };
       }
       if (error instanceof V2LocalApplyError && error.code === "DRIFTED") {
-        return { kind: "drifted", skillId: input.skillId, reason: error.message };
+        return {
+          kind: "drifted",
+          skillId: input.skillId,
+          reason: error.message,
+        };
       }
-      const reason = error instanceof Error ? error.message : "Local application failed.";
+      const reason =
+        error instanceof Error ? error.message : "Local application failed.";
       if (input.operation === "RESTORE") return { kind: "refused", reason };
       return {
         kind: "persisted-not-applied",
@@ -229,7 +294,10 @@ export class V2LifecycleService {
         skillId: input.skillId,
         revision: input.revision,
         operation: input.operation,
-        reason: error instanceof Error ? error.message : "Operational state could not be saved.",
+        reason:
+          error instanceof Error
+            ? error.message
+            : "Operational state could not be saved.",
       };
     }
 
@@ -243,27 +311,40 @@ export class V2LifecycleService {
   }
 
   private async loadState(): Promise<LocalOperationalState> {
-    return (await this.stateStore.load()) ?? {
-      schemaVersion: 2,
-      lastAppliedRevision: null,
-      skills: {},
-    };
+    return (
+      (await this.stateStore.load()) ?? {
+        schemaVersion: 2,
+        lastAppliedRevision: null,
+        skills: {},
+      }
+    );
   }
 }
 
 function select(state: V2DesiredState, nameOrId: string) {
-  const matches = state.manifest.skills.filter((skill) => skill.id === nameOrId || skill.name === nameOrId);
+  const matches = state.manifest.skills.filter(
+    (skill) => skill.id === nameOrId || skill.name === nameOrId,
+  );
   return matches.length === 1 ? matches[0] : undefined;
 }
 
 function withoutSkill(state: V2DesiredState, id: SkillId): V2DesiredState {
   return {
-    manifest: { version: 2, skills: state.manifest.skills.filter((skill) => skill.id !== id) },
-    lockfile: { version: 2, skills: state.lockfile.skills.filter((skill) => skill.id !== id) },
+    manifest: {
+      version: 2,
+      skills: state.manifest.skills.filter((skill) => skill.id !== id),
+    },
+    lockfile: {
+      version: 2,
+      skills: state.lockfile.skills.filter((skill) => skill.id !== id),
+    },
   };
 }
 
-function withoutLocalSkill(state: LocalOperationalState, id: SkillId): LocalOperationalState {
+function withoutLocalSkill(
+  state: LocalOperationalState,
+  id: SkillId,
+): LocalOperationalState {
   if (!state.skills[id]) return state;
   const skills = { ...state.skills };
   delete skills[id];
@@ -275,7 +356,13 @@ function withTombstone(
   skill: Readonly<{ id: SkillId; name: string }>,
   disposition: "REMOVE" | "UNMANAGE",
 ): DispositionLedger {
-  const next = Math.max(0, ...Object.values(ledger.activeDispositions).map((entry) => entry.effectiveSequence)) + 1;
+  const next =
+    Math.max(
+      0,
+      ...Object.values(ledger.activeDispositions).map(
+        (entry) => entry.effectiveSequence,
+      ),
+    ) + 1;
   return {
     version: 2,
     activeDispositions: {
@@ -287,10 +374,17 @@ function withTombstone(
         effectiveSequence: next,
       },
     },
-    audit: [...(ledger.audit ?? []), { type: disposition, skillId: skill.id, metadata: {} }],
+    audit: [
+      ...(ledger.audit ?? []),
+      { type: disposition, skillId: skill.id, metadata: {} },
+    ],
   };
 }
 
 function refused(error: unknown): V2LifecycleResult {
-  return { kind: "refused", reason: error instanceof Error ? error.message : "Desired state mutation failed." };
+  return {
+    kind: "refused",
+    reason:
+      error instanceof Error ? error.message : "Desired state mutation failed.",
+  };
 }

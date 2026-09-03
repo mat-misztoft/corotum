@@ -170,7 +170,10 @@ function startPairingServer(options?: {
           { status: options?.billingStatus ?? 402 },
         );
       }
-      if (request.method === "POST" && url.pathname === "/api/v1/cli/pairings") {
+      if (
+        request.method === "POST" &&
+        url.pathname === "/api/v1/cli/pairings"
+      ) {
         return Response.json(
           {
             id: pairingId,
@@ -246,7 +249,9 @@ describe("real corotum login CLI", () => {
           `Open ${cloud.origin}/activate?code=${userCode} and approve this device.`,
         );
         expect(fixture.errors.join("")).toContain(`Code: ${userCode}`);
-        expect(fixture.output.join("")).toContain(`Logged in to ${cloud.origin}`);
+        expect(fixture.output.join("")).toContain(
+          `Logged in to ${cloud.origin}`,
+        );
         expect(printed).not.toContain(deviceToken);
         expect(printed).not.toContain(deviceCode);
         expect(cloud.requests.some((item) => item.includes("billing"))).toBe(
@@ -339,7 +344,9 @@ describe("real corotum login CLI", () => {
         ),
       );
       expect(unreachable).toBe(ExitCode.NETWORK_ERROR);
-      expect(unreachableIo.output.join("")).toContain('"outcome":"NETWORK_ERROR"');
+      expect(unreachableIo.output.join("")).toContain(
+        '"outcome":"NETWORK_ERROR"',
+      );
 
       const cloud = startPairingServer({ expire: true });
       const fixture = fixtureIo(true);
@@ -413,9 +420,9 @@ describe("real corotum logout CLI", () => {
           deviceId,
         });
         expect(JSON.stringify(result)).not.toContain(deviceToken);
-        expect(await readFile(paths(home).credentialsFile, "utf8")).not.toContain(
-          deviceToken,
-        );
+        expect(
+          await readFile(paths(home).credentialsFile, "utf8"),
+        ).not.toContain(deviceToken);
         expect(cloud.requests).toContain("POST /api/v1/cli/logout");
       } finally {
         cloud.stop();
@@ -443,9 +450,9 @@ describe("real corotum logout CLI", () => {
           outcome: "NETWORK_ERROR",
         });
         expect(JSON.stringify(result)).not.toContain(deviceToken);
-        expect(await readFile(paths(home).credentialsFile, "utf8")).not.toContain(
-          deviceToken,
-        );
+        expect(
+          await readFile(paths(home).credentialsFile, "utf8"),
+        ).not.toContain(deviceToken);
       } finally {
         cloud.stop();
       }

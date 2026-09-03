@@ -80,7 +80,11 @@ export async function selectManyGate(
     `${message} (${names.length})`,
     [
       { value: "none", label: copy.none, hint: copy.noneHint },
-      { value: "all", label: `${copy.all} (${names.length})`, hint: copy.allHint },
+      {
+        value: "all",
+        label: `${copy.all} (${names.length})`,
+        hint: copy.allHint,
+      },
       { value: "choose", label: copy.choose, hint: copy.chooseHint },
     ],
     initial,

@@ -5,8 +5,8 @@ import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import {
   LifecycleRecoveryStore,
-  V2LifecycleService,
   type V2LifecycleResult,
+  V2LifecycleService,
 } from "./v2-lifecycle";
 import { withV2MutationRuntime } from "./v2-mutation-session";
 
@@ -64,7 +64,8 @@ export function writeLifecycleResult(
     throw new Error(result.reason);
   }
   const payload = {
-    outcome: result.kind === "persisted-not-applied" ? "PARTIAL_SUCCESS" : "SUCCESS",
+    outcome:
+      result.kind === "persisted-not-applied" ? "PARTIAL_SUCCESS" : "SUCCESS",
     status:
       result.kind === "persisted-not-applied"
         ? "PERSISTED_NOT_APPLIED"
@@ -72,11 +73,15 @@ export function writeLifecycleResult(
     skill,
     skillId: result.skillId,
     revision: result.revision,
-    ...(result.kind === "persisted-not-applied" ? { error: result.reason } : {}),
+    ...(result.kind === "persisted-not-applied"
+      ? { error: result.reason }
+      : {}),
   };
   if (json) {
     io.writeOutput(`${JSON.stringify(jsonEnvelope(payload))}\n`);
     return;
   }
-  io.writeOutput(`${payload.status} ${skill} at revision ${result.revision}.\n`);
+  io.writeOutput(
+    `${payload.status} ${skill} at revision ${result.revision}.\n`,
+  );
 }

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -14,7 +21,10 @@ const timeout = 60_000;
 afterEach(async () => {
   await Promise.all(
     roots.splice(0).map(async (root) => {
-      await Bun.spawn(["chmod", "-R", "u+rwx", root], { stderr: "pipe", stdout: "pipe" }).exited;
+      await Bun.spawn(["chmod", "-R", "u+rwx", root], {
+        stderr: "pipe",
+        stdout: "pipe",
+      }).exited;
       await rm(root, { force: true, recursive: true });
     }),
   );
@@ -59,7 +69,10 @@ function paths(home: string) {
   return resolvePlatformPaths(platformEnv(home));
 }
 
-function cliEnv(home: string, extra: Record<string, string> = {}): Record<string, string> {
+function cliEnv(
+  home: string,
+  extra: Record<string, string> = {},
+): Record<string, string> {
   const overlay = platformEnv(home).env;
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -155,7 +168,9 @@ describe("real corotum init CLI", () => {
       const missing = await run(home, ["--json", "--non-interactive", "init"]);
       expect(missing.code).toBe(ExitCode.INVALID_CONFIG);
       expect(missing.json?.outcome).toBe("INVALID_CONFIG");
-      expect(String(missing.json?.error ?? missing.stderr)).toContain("repository");
+      expect(String(missing.json?.error ?? missing.stderr)).toContain(
+        "repository",
+      );
       expect(String(missing.json?.error ?? missing.stderr)).toContain("cloud");
     },
     timeout,
@@ -176,7 +191,9 @@ describe("real corotum init CLI", () => {
       ]);
       expect(initialized.code).toBe(0);
       expect(initialized.stdout).toContain("Initialized Git Sync");
-      const config = JSON.parse(await readFile(paths(home).configFile, "utf8")) as {
+      const config = JSON.parse(
+        await readFile(paths(home).configFile, "utf8"),
+      ) as {
         mode: string;
         gitRepository: string;
         agents: Record<string, { enabled: boolean }>;
@@ -197,8 +214,13 @@ describe("real corotum init CLI", () => {
       const skill = join(home, ".agents", "skills", "notes");
       await mkdir(skill, { recursive: true });
       await writeFile(join(skill, "SKILL.md"), "# Notes\n");
-      await mkdir(join(home, ".codex", "skills", "ignored"), { recursive: true });
-      await writeFile(join(home, ".codex", "skills", "ignored", "SKILL.md"), "# Agent only\n");
+      await mkdir(join(home, ".codex", "skills", "ignored"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(home, ".codex", "skills", "ignored", "SKILL.md"),
+        "# Agent only\n",
+      );
 
       const initialized = await run(home, [
         "--json",
@@ -210,9 +232,12 @@ describe("real corotum init CLI", () => {
       expect(initialized.stderr).toContain("notes:");
       expect(initialized.stderr).not.toContain("ignored");
       expect(await readFile(join(skill, "SKILL.md"), "utf8")).toBe("# Notes\n");
-      expect(await readFile(join(home, ".codex", "skills", "ignored", "SKILL.md"), "utf8")).toBe(
-        "# Agent only\n",
-      );
+      expect(
+        await readFile(
+          join(home, ".codex", "skills", "ignored", "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("# Agent only\n");
     },
     timeout,
   );
@@ -236,7 +261,9 @@ describe("real corotum init CLI", () => {
       ]);
       expect(result.code).toBe(ExitCode.CONFLICT);
       expect(result.json?.outcome).toBe("CONFLICT");
-      expect(String(result.json?.error ?? result.stderr)).toContain("already configured");
+      expect(String(result.json?.error ?? result.stderr)).toContain(
+        "already configured",
+      );
     },
     timeout,
   );
@@ -255,7 +282,9 @@ describe("real corotum init CLI", () => {
       );
       expect(missing.code).toBe(ExitCode.GENERAL_ERROR);
       expect(missing.json?.outcome).toBe("GENERAL_ERROR");
-      expect(String(missing.json?.error ?? missing.stderr)).toContain("Git is not installed");
+      expect(String(missing.json?.error ?? missing.stderr)).toContain(
+        "Git is not installed",
+      );
 
       const notRepo = join(root, "not-a-repo");
       await mkdir(notRepo, { recursive: true });
@@ -268,7 +297,9 @@ describe("real corotum init CLI", () => {
       ]);
       expect(invalid.code).toBe(ExitCode.INVALID_CONFIG);
       expect(invalid.json?.outcome).toBe("INVALID_CONFIG");
-      expect(String(invalid.json?.error ?? invalid.stderr)).toMatch(/invalid|not a Git repository/i);
+      expect(String(invalid.json?.error ?? invalid.stderr)).toMatch(
+        /invalid|not a Git repository/i,
+      );
 
       const unavailableBin = join(root, "unavailable-bin");
       await writeFakeGit(
@@ -277,23 +308,42 @@ describe("real corotum init CLI", () => {
       );
       const unavailable = await run(
         join(root, "unavailable-home"),
-        ["--json", "--non-interactive", "init", "repository", "https://127.0.0.1:1/repo.git"],
+        [
+          "--json",
+          "--non-interactive",
+          "init",
+          "repository",
+          "https://127.0.0.1:1/repo.git",
+        ],
         { PATH: unavailableBin },
       );
       expect(unavailable.code).toBe(ExitCode.NETWORK_ERROR);
       expect(unavailable.json?.outcome).toBe("NETWORK_ERROR");
-      expect(String(unavailable.json?.error ?? unavailable.stderr)).toContain("unavailable");
+      expect(String(unavailable.json?.error ?? unavailable.stderr)).toContain(
+        "unavailable",
+      );
 
       const authBin = join(root, "auth-bin");
-      await writeFakeGit(authBin, "fatal: Authentication failed for 'https://example.test/repo.git'");
+      await writeFakeGit(
+        authBin,
+        "fatal: Authentication failed for 'https://example.test/repo.git'",
+      );
       const auth = await run(
         join(root, "auth-home"),
-        ["--json", "--non-interactive", "init", "repository", "https://example.test/repo.git"],
+        [
+          "--json",
+          "--non-interactive",
+          "init",
+          "repository",
+          "https://example.test/repo.git",
+        ],
         { PATH: authBin },
       );
       expect(auth.code).toBe(ExitCode.AUTH_REQUIRED);
       expect(auth.json?.outcome).toBe("AUTH_REQUIRED");
-      expect(String(auth.json?.error ?? auth.stderr)).toContain("authentication");
+      expect(String(auth.json?.error ?? auth.stderr)).toContain(
+        "authentication",
+      );
     },
     timeout,
   );

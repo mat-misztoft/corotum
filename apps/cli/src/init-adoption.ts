@@ -34,7 +34,11 @@ export type InitUnmanagedOutcome =
   | "SCAN_FAILED"
   | "INVALID_CHOICE";
 
-export type InitAdoptionAction = "replace" | "keep" | "adopt-artifact" | "do-not-manage";
+export type InitAdoptionAction =
+  | "replace"
+  | "keep"
+  | "adopt-artifact"
+  | "do-not-manage";
 
 export type InitAdoptionChoice = Readonly<{
   name: string;
@@ -81,7 +85,10 @@ export type InitSkillOutcome =
       path: string;
       classification: "unchanged" | "modified";
       source: SourceLock;
-      materialization: Readonly<{ kind: "source"; contentHash: SourceLock["contentHash"] }>;
+      materialization: Readonly<{
+        kind: "source";
+        contentHash: SourceLock["contentHash"];
+      }>;
       notice: typeof SOURCE_REFRESH_NOTICE;
     }>
   | Readonly<{
@@ -114,7 +121,9 @@ export type DecideInitAdoptionsInput = Readonly<{
 }>;
 
 /** Maps CLI `--adopt-artifact` values to exact non-interactive choices. */
-export function adoptArtifactChoices(names: readonly string[]): readonly InitAdoptionChoice[] {
+export function adoptArtifactChoices(
+  names: readonly string[],
+): readonly InitAdoptionChoice[] {
   return names.map((name) => ({ name, action: "adopt-artifact" as const }));
 }
 
@@ -124,7 +133,8 @@ export async function classifyInitCandidates(
     onProgress?: () => void;
   } = {},
 ): Promise<readonly ClassifiedInitCandidate[]> {
-  const materializer = deps.materializer ?? new GitSkillMaterializer(deps.runGit);
+  const materializer =
+    deps.materializer ?? new GitSkillMaterializer(deps.runGit);
   const classified: ClassifiedInitCandidate[] = [];
   const groups = new Map<string, number[]>();
   for (const [index, candidate] of candidates.entries()) {
@@ -133,7 +143,11 @@ export async function classifyInitCandidates(
       !candidate.provenance.sourceUrl ||
       !candidate.provenance.skillPath
     ) {
-      classified[index] = await classifyOne(candidate, materializer, deps.runGit);
+      classified[index] = await classifyOne(
+        candidate,
+        materializer,
+        deps.runGit,
+      );
       deps.onProgress?.();
       continue;
     }
@@ -166,14 +180,26 @@ export async function decideInitAdoptions(
     input.classified ?? (await classifyInitCandidates(input.candidates, input));
   const choices = indexChoices(input.choices ?? []);
   const duplicateNames = duplicateNormalizedNames(input.candidates);
-  const uniqueDuplicates = uniqueDuplicateSelections(input.candidates, duplicateNames, choices);
+  const uniqueDuplicates = uniqueDuplicateSelections(
+    input.candidates,
+    duplicateNames,
+    choices,
+  );
 
   if (!input.nonInteractive && input.prompt) {
     for (const name of duplicateNames) {
-      if (input.candidates.some((candidate) => candidate.normalizedName === name && uniqueDuplicates.has(candidate.name))) {
+      if (
+        input.candidates.some(
+          (candidate) =>
+            candidate.normalizedName === name &&
+            uniqueDuplicates.has(candidate.name),
+        )
+      ) {
         continue;
       }
-      const group = input.candidates.filter((candidate) => candidate.normalizedName === name);
+      const group = input.candidates.filter(
+        (candidate) => candidate.normalizedName === name,
+      );
       const picked = await input.prompt.chooseDuplicate(name, group);
       if (picked !== "do-not-manage") uniqueDuplicates.add(picked);
     }
@@ -199,7 +225,12 @@ export async function decideInitAdoptions(
       duplicate: duplicateNames.has(entry.candidate.normalizedName),
       selectedDuplicate: uniqueDuplicates.has(entry.candidate.name),
     });
-    if (outcome.kind === "source-backed" && !input.nonInteractive && input.prompt && !noticed) {
+    if (
+      outcome.kind === "source-backed" &&
+      !input.nonInteractive &&
+      input.prompt &&
+      !noticed
+    ) {
       input.prompt.notice(SOURCE_REFRESH_NOTICE);
       noticed = true;
     }
@@ -208,17 +239,21 @@ export async function decideInitAdoptions(
   return outcomes;
 }
 
-async function classifySourceGroup(input: Readonly<{
-  source: string;
-  indices: readonly number[];
-  candidates: readonly DiscoveredInitCandidate[];
-  classified: ClassifiedInitCandidate[];
-  materializer: GitSkillMaterializer;
-  runGit?: GitCommandRunner;
-  onProgress?: () => void;
-}>): Promise<void> {
+async function classifySourceGroup(
+  input: Readonly<{
+    source: string;
+    indices: readonly number[];
+    candidates: readonly DiscoveredInitCandidate[];
+    classified: ClassifiedInitCandidate[];
+    materializer: GitSkillMaterializer;
+    runGit?: GitCommandRunner;
+    onProgress?: () => void;
+  }>,
+): Promise<void> {
   const members = input.indices.map((index) => input.candidates[index]!);
-  const locals = await Promise.all(members.map((candidate) => scanLocal(candidate.path)));
+  const locals = await Promise.all(
+    members.map((candidate) => scanLocal(candidate.path)),
+  );
   try {
     const ref = await resolveGitDefaultRef(input.source, input.runGit);
     const resolved = await input.materializer.resolveNormalizedGroup(
@@ -239,7 +274,10 @@ async function classifySourceGroup(input: Readonly<{
         const source = toSourceLock(item, ref);
         input.classified[index] = {
           candidate,
-          classification: local.hash && local.hash === source.contentHash ? "unchanged" : "modified",
+          classification:
+            local.hash && local.hash === source.contentHash
+              ? "unchanged"
+              : "modified",
           source,
           resolved: source,
           localContentHash: local.hash,
@@ -283,8 +321,17 @@ async function classifyOne(
   runGit?: GitCommandRunner,
 ): Promise<ClassifiedInitCandidate> {
   const local = await scanLocal(candidate.path);
-  if (candidate.provenance.status !== "source-known" || !candidate.provenance.sourceUrl || !candidate.provenance.skillPath) {
-    return { candidate, classification: "unknown", localContentHash: local.hash, scanError: local.error };
+  if (
+    candidate.provenance.status !== "source-known" ||
+    !candidate.provenance.sourceUrl ||
+    !candidate.provenance.skillPath
+  ) {
+    return {
+      candidate,
+      classification: "unknown",
+      localContentHash: local.hash,
+      scanError: local.error,
+    };
   }
 
   const known: RetainedInitSource = {
@@ -293,7 +340,10 @@ async function classifyOne(
   };
 
   try {
-    const ref = await resolveGitDefaultRef(candidate.provenance.sourceUrl, runGit);
+    const ref = await resolveGitDefaultRef(
+      candidate.provenance.sourceUrl,
+      runGit,
+    );
     const resolved = await materializer.resolveNormalized({
       id: classifyId,
       source: candidate.provenance.sourceUrl,
@@ -304,7 +354,10 @@ async function classifyOne(
     const source = toSourceLock(resolved, ref);
     return {
       candidate,
-      classification: local.hash && local.hash === source.contentHash ? "unchanged" : "modified",
+      classification:
+        local.hash && local.hash === source.contentHash
+          ? "unchanged"
+          : "modified",
       source,
       resolved: source,
       localContentHash: local.hash,
@@ -321,26 +374,34 @@ async function classifyOne(
   }
 }
 
-async function batchPromptedActions(input: Readonly<{
-  classified: readonly ClassifiedInitCandidate[];
-  choices: Map<string, InitAdoptionChoice["action"] | "invalid">;
-  duplicateNames: Set<string>;
-  uniqueDuplicates: Set<string>;
-  nonInteractive: boolean;
-  prompt?: InitAdoptionPrompt;
-}>): Promise<Map<string, InitAdoptionAction>> {
+async function batchPromptedActions(
+  input: Readonly<{
+    classified: readonly ClassifiedInitCandidate[];
+    choices: Map<string, InitAdoptionChoice["action"] | "invalid">;
+    duplicateNames: Set<string>;
+    uniqueDuplicates: Set<string>;
+    nonInteractive: boolean;
+    prompt?: InitAdoptionPrompt;
+  }>,
+): Promise<Map<string, InitAdoptionAction>> {
   const prompted = new Map<string, InitAdoptionAction>();
   if (input.nonInteractive || !input.prompt) return prompted;
   const eligible = (entry: ClassifiedInitCandidate) =>
     !input.choices.get(entry.candidate.name) &&
-    !(input.duplicateNames.has(entry.candidate.normalizedName) &&
-      !input.uniqueDuplicates.has(entry.candidate.name));
+    !(
+      input.duplicateNames.has(entry.candidate.normalizedName) &&
+      !input.uniqueDuplicates.has(entry.candidate.name)
+    );
 
   const unknowns = input.classified.filter(
     (entry) => entry.classification === "unknown" && eligible(entry),
   );
   if (unknowns.length > 0) {
-    const adopted = new Set(await input.prompt.chooseUnknown(unknowns.map((entry) => entry.candidate.name)));
+    const adopted = new Set(
+      await input.prompt.chooseUnknown(
+        unknowns.map((entry) => entry.candidate.name),
+      ),
+    );
     for (const entry of unknowns) {
       prompted.set(
         entry.candidate.name,
@@ -364,7 +425,10 @@ async function batchPromptedActions(input: Readonly<{
       ),
     );
     for (const entry of group) {
-      prompted.set(entry.candidate.name, kept.has(entry.candidate.name) ? "keep" : "do-not-manage");
+      prompted.set(
+        entry.candidate.name,
+        kept.has(entry.candidate.name) ? "keep" : "do-not-manage",
+      );
     }
   }
 
@@ -397,10 +461,18 @@ async function decideOne(
   }>,
 ): Promise<InitSkillOutcome> {
   if (input.choice === "invalid") {
-    return unmanaged(entry, "INVALID_CHOICE", "Each skill accepts at most one exact choice.");
+    return unmanaged(
+      entry,
+      "INVALID_CHOICE",
+      "Each skill accepts at most one exact choice.",
+    );
   }
   if (input.duplicate && !input.selectedDuplicate) {
-    return unmanaged(entry, "DUPLICATE_NAME", "Duplicate normalized names require one explicit candidate.");
+    return unmanaged(
+      entry,
+      "DUPLICATE_NAME",
+      "Duplicate normalized names require one explicit candidate.",
+    );
   }
 
   const action = await resolveAction(entry, input);
@@ -411,7 +483,11 @@ async function decideOne(
     return unmanaged(entry, unselectedCode(entry), unselectedReason(entry));
   }
   if (action === "do-not-manage") {
-    return unmanaged(entry, "DO_NOT_MANAGE", "Local content was left unmanaged.");
+    return unmanaged(
+      entry,
+      "DO_NOT_MANAGE",
+      "Local content was left unmanaged.",
+    );
   }
   if (action === "replace") return sourceBacked(entry);
   return artifactBacked(entry, action);
@@ -428,7 +504,8 @@ async function resolveAction(
     selectedDuplicate: boolean;
   }>,
 ): Promise<InitAdoptionAction | "unselected" | "invalid"> {
-  if (input.choice && input.choice !== "invalid") return validateChoice(entry, input.choice);
+  if (input.choice && input.choice !== "invalid")
+    return validateChoice(entry, input.choice);
   if (input.prompted) return input.prompted;
   if (input.nonInteractive || !input.prompt) return "unselected";
   if (entry.classification === "unchanged") return "replace";
@@ -439,19 +516,38 @@ function validateChoice(
   entry: ClassifiedInitCandidate,
   action: InitAdoptionChoice["action"],
 ): InitAdoptionAction | "invalid" {
-  if (action === "replace" && entry.resolved && (entry.classification === "unchanged" || entry.classification === "modified")) {
+  if (
+    action === "replace" &&
+    entry.resolved &&
+    (entry.classification === "unchanged" ||
+      entry.classification === "modified")
+  ) {
     return "replace";
   }
-  if (action === "keep" && (entry.classification === "modified" || entry.classification === "unavailable" || entry.classification === "auth-required")) {
+  if (
+    action === "keep" &&
+    (entry.classification === "modified" ||
+      entry.classification === "unavailable" ||
+      entry.classification === "auth-required")
+  ) {
     return "keep";
   }
-  if (action === "adopt-artifact" && entry.classification === "unknown") return "adopt-artifact";
+  if (action === "adopt-artifact" && entry.classification === "unknown")
+    return "adopt-artifact";
   return "invalid";
 }
 
 function sourceBacked(entry: ClassifiedInitCandidate): InitSkillOutcome {
-  if (!entry.resolved || (entry.classification !== "unchanged" && entry.classification !== "modified")) {
-    return unmanaged(entry, "INVALID_CHOICE", "A source-backed decision requires a resolved immutable revision.");
+  if (
+    !entry.resolved ||
+    (entry.classification !== "unchanged" &&
+      entry.classification !== "modified")
+  ) {
+    return unmanaged(
+      entry,
+      "INVALID_CHOICE",
+      "A source-backed decision requires a resolved immutable revision.",
+    );
   }
   return {
     kind: "source-backed",
@@ -459,7 +555,10 @@ function sourceBacked(entry: ClassifiedInitCandidate): InitSkillOutcome {
     path: entry.candidate.path,
     classification: entry.classification,
     source: entry.resolved,
-    materialization: { kind: "source", contentHash: entry.resolved.contentHash },
+    materialization: {
+      kind: "source",
+      contentHash: entry.resolved.contentHash,
+    },
     notice: SOURCE_REFRESH_NOTICE,
   };
 }
@@ -472,17 +571,26 @@ function artifactBacked(
     return unmanaged(
       entry,
       "SCAN_FAILED",
-      entry.scanError ?? "Artifact adoption requires a successful denylist/ignore scan.",
+      entry.scanError ??
+        "Artifact adoption requires a successful denylist/ignore scan.",
     );
   }
   return {
     kind: "artifact-backed",
     name: entry.candidate.name,
     path: entry.candidate.path,
-    classification: entry.classification === "unknown" ? "unknown" : entry.classification === "unchanged" ? "modified" : entry.classification,
-    outcome: entry.classification === "unavailable"
-      ? "SOURCE_UNAVAILABLE"
-      : entry.classification === "auth-required" ? "AUTH_REQUIRED" : undefined,
+    classification:
+      entry.classification === "unknown"
+        ? "unknown"
+        : entry.classification === "unchanged"
+          ? "modified"
+          : entry.classification,
+    outcome:
+      entry.classification === "unavailable"
+        ? "SOURCE_UNAVAILABLE"
+        : entry.classification === "auth-required"
+          ? "AUTH_REQUIRED"
+          : undefined,
     source: action === "adopt-artifact" ? undefined : entry.source,
     localContentHash: entry.localContentHash,
   };
@@ -528,14 +636,29 @@ function invalidChoiceReason(entry: ClassifiedInitCandidate): string {
 }
 
 function toSourceLock(
-  resolved: { repository: string; path: string; revision: string; contentHash: string },
+  resolved: {
+    repository: string;
+    path: string;
+    revision: string;
+    contentHash: string;
+  },
   ref: string,
 ): SourceLock {
-  if (ref === "HEAD" || resolved.revision === "HEAD" || !immutableRevision.test(resolved.revision)) {
-    throw new GitSourceError("SOURCE_UNAVAILABLE", "Init must lock an immutable revision, not HEAD.");
+  if (
+    ref === "HEAD" ||
+    resolved.revision === "HEAD" ||
+    !immutableRevision.test(resolved.revision)
+  ) {
+    throw new GitSourceError(
+      "SOURCE_UNAVAILABLE",
+      "Init must lock an immutable revision, not HEAD.",
+    );
   }
   if (!sha256.test(resolved.contentHash)) {
-    throw new GitSourceError("SOURCE_UNAVAILABLE", "Resolved source content hash is invalid.");
+    throw new GitSourceError(
+      "SOURCE_UNAVAILABLE",
+      "Resolved source content hash is invalid.",
+    );
   }
   return {
     repository: resolved.repository,
@@ -546,24 +669,36 @@ function toSourceLock(
   };
 }
 
-async function scanLocal(path: string): Promise<Readonly<{ hash?: `sha256:${string}`; error?: string }>> {
+async function scanLocal(
+  path: string,
+): Promise<Readonly<{ hash?: `sha256:${string}`; error?: string }>> {
   try {
     return { hash: (await scanNormalizedContent(path)).contentHash };
   } catch (error) {
     return {
-      error: error instanceof ContentScanError
-        ? error.message
-        : "Artifact adoption requires a successful denylist/ignore scan.",
+      error:
+        error instanceof ContentScanError
+          ? error.message
+          : "Artifact adoption requires a successful denylist/ignore scan.",
     };
   }
 }
 
-function duplicateNormalizedNames(candidates: readonly DiscoveredInitCandidate[]): Set<string> {
+function duplicateNormalizedNames(
+  candidates: readonly DiscoveredInitCandidate[],
+): Set<string> {
   const counts = new Map<string, number>();
   for (const candidate of candidates) {
-    counts.set(candidate.normalizedName, (counts.get(candidate.normalizedName) ?? 0) + 1);
+    counts.set(
+      candidate.normalizedName,
+      (counts.get(candidate.normalizedName) ?? 0) + 1,
+    );
   }
-  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+  return new Set(
+    [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([name]) => name),
+  );
 }
 
 function uniqueDuplicateSelections(
@@ -573,8 +708,11 @@ function uniqueDuplicateSelections(
 ): Set<string> {
   const allowed = new Set<string>();
   for (const name of duplicateNames) {
-    const selected = candidates.filter((candidate) =>
-      candidate.normalizedName === name && choices.get(candidate.name) && choices.get(candidate.name) !== "invalid"
+    const selected = candidates.filter(
+      (candidate) =>
+        candidate.normalizedName === name &&
+        choices.get(candidate.name) &&
+        choices.get(candidate.name) !== "invalid",
     );
     if (selected.length === 1) allowed.add(selected[0].name);
   }
@@ -586,7 +724,10 @@ function indexChoices(
 ): Map<string, InitAdoptionChoice["action"] | "invalid"> {
   const indexed = new Map<string, InitAdoptionChoice["action"] | "invalid">();
   for (const choice of choices) {
-    indexed.set(choice.name, indexed.has(choice.name) ? "invalid" : choice.action);
+    indexed.set(
+      choice.name,
+      indexed.has(choice.name) ? "invalid" : choice.action,
+    );
   }
   return indexed;
 }

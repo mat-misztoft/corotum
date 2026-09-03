@@ -140,9 +140,9 @@ describe("final release layout", () => {
     const text = formatChecksums("0.1.0", [
       ["a".repeat(64), "binaries/corotum-linux-x64.tar.gz"],
     ]);
-    expect(
-      parseChecksums(text).get("binaries/corotum-linux-x64.tar.gz"),
-    ).toBe("a".repeat(64));
+    expect(parseChecksums(text).get("binaries/corotum-linux-x64.tar.gz")).toBe(
+      "a".repeat(64),
+    );
     const uploaded: string[] = [];
     const keys = listUploadKeys("0.1.0");
     await uploadReleaseObjects(

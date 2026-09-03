@@ -3,8 +3,8 @@ import {
   GitSourceError,
   runSystemGit,
 } from "../../../packages/skills-adapter/src/git-source";
-import { CloudAuthError } from "./cloud-auth";
 import type { CliOutcome } from "./cli-contracts";
+import { CloudAuthError } from "./cloud-auth";
 import { CloudInitError } from "./init-cloud";
 
 export type InitErrorCode =
@@ -126,7 +126,10 @@ export function classifyGitInitError(error: unknown): Error {
   }
   if (error instanceof GitSourceError) {
     if (error.code === "AUTH_REQUIRED") return authGitError();
-    if (error.code === "INVALID_SOURCE" || error.code === "CREDENTIALS_IN_URL") {
+    if (
+      error.code === "INVALID_SOURCE" ||
+      error.code === "CREDENTIALS_IN_URL"
+    ) {
       return invalidGitRepositoryError();
     }
     if (error.code === "SOURCE_UNAVAILABLE") {
@@ -274,9 +277,7 @@ function isMissingGit(error: unknown): boolean {
     const code = (error as { code?: unknown }).code;
     if (code === "ENOENT" || code === "ENOTFOUND") return true;
   }
-  return /git: command not found|spawn git|enoent/i.test(
-    errorMessage(error),
-  );
+  return /git: command not found|spawn git|enoent/i.test(errorMessage(error));
 }
 
 function errorMessage(error: unknown): string {

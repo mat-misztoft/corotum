@@ -29,15 +29,11 @@ function valueOr(
 }
 
 /** Resolves all local Corotum paths in one platform-aware place. */
-export function resolvePlatformPaths(
-  env: PlatformEnvironment,
-): CorotumPaths {
+export function resolvePlatformPaths(env: PlatformEnvironment): CorotumPaths {
   const { homeDir, platform } = env;
 
   if (!homeDir) {
-    throw new Error(
-      "A home directory is required to resolve Corotum paths.",
-    );
+    throw new Error("A home directory is required to resolve Corotum paths.");
   }
 
   if (platform === "darwin") {
@@ -47,12 +43,7 @@ export function resolvePlatformPaths(
       "Application Support",
       "Corotum",
     );
-    const dataDir = join(
-      homeDir,
-      "Library",
-      "Application Support",
-      "Corotum",
-    );
+    const dataDir = join(homeDir, "Library", "Application Support", "Corotum");
     const stateDir = join(
       homeDir,
       "Library",
@@ -60,7 +51,13 @@ export function resolvePlatformPaths(
       "Corotum",
       "state",
     );
-    return paths(configDir, dataDir, stateDir, join(stateDir, "runtime"), homeDir);
+    return paths(
+      configDir,
+      dataDir,
+      stateDir,
+      join(stateDir, "runtime"),
+      homeDir,
+    );
   }
 
   if (platform === "win32") {
@@ -110,17 +107,30 @@ export function resolveLegacyPlatformPaths(
 ): CorotumPaths {
   const { homeDir, platform } = env;
   if (!homeDir) {
-    throw new Error(
-      "A home directory is required to resolve Corotum paths.",
-    );
+    throw new Error("A home directory is required to resolve Corotum paths.");
   }
   if (platform === "darwin") {
     const root = join(homeDir, "Library", "Application Support", "ToolMirror");
-    return paths(root, root, join(root, "state"), join(root, "state", "runtime"), homeDir, join(root, "skills"));
+    return paths(
+      root,
+      root,
+      join(root, "state"),
+      join(root, "state", "runtime"),
+      homeDir,
+      join(root, "skills"),
+    );
   }
   if (platform === "win32") {
-    const appData = valueOr(env, "APPDATA", join(homeDir, "AppData", "Roaming"));
-    const localAppData = valueOr(env, "LOCALAPPDATA", join(homeDir, "AppData", "Local"));
+    const appData = valueOr(
+      env,
+      "APPDATA",
+      join(homeDir, "AppData", "Roaming"),
+    );
+    const localAppData = valueOr(
+      env,
+      "LOCALAPPDATA",
+      join(homeDir, "AppData", "Local"),
+    );
     return paths(
       join(appData, "ToolMirror"),
       join(localAppData, "ToolMirror"),
@@ -130,9 +140,18 @@ export function resolveLegacyPlatformPaths(
       join(localAppData, "ToolMirror", "skills"),
     );
   }
-  const configDir = join(valueOr(env, "XDG_CONFIG_HOME", join(homeDir, ".config")), "toolmirror");
-  const dataDir = join(valueOr(env, "XDG_DATA_HOME", join(homeDir, ".local", "share")), "toolmirror");
-  const stateDir = join(valueOr(env, "XDG_STATE_HOME", join(homeDir, ".local", "state")), "toolmirror");
+  const configDir = join(
+    valueOr(env, "XDG_CONFIG_HOME", join(homeDir, ".config")),
+    "toolmirror",
+  );
+  const dataDir = join(
+    valueOr(env, "XDG_DATA_HOME", join(homeDir, ".local", "share")),
+    "toolmirror",
+  );
+  const stateDir = join(
+    valueOr(env, "XDG_STATE_HOME", join(homeDir, ".local", "state")),
+    "toolmirror",
+  );
   return paths(
     configDir,
     dataDir,

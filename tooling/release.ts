@@ -137,7 +137,9 @@ export function parseSourceMarker(text: string): string {
     !text.includes("final=true") ||
     !text.includes(`channel=${RELEASE_CHANNEL}`)
   ) {
-    throw new Error("SOURCE marker must declare unsigned final release artifacts");
+    throw new Error(
+      "SOURCE marker must declare unsigned final release artifacts",
+    );
   }
   return match[1];
 }
@@ -264,7 +266,8 @@ export function verifyReleaseLayout(
   } else if (channel !== RELEASE_CHANNEL) {
     errors.push(`latest.json must use the ${RELEASE_CHANNEL} channel`);
   }
-  if (latest.unsigned !== true) errors.push("release binaries must be unsigned");
+  if (latest.unsigned !== true)
+    errors.push("release binaries must be unsigned");
   if (latest.final !== true) {
     errors.push("final artifacts must be marked final");
   }

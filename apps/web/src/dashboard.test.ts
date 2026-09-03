@@ -3,20 +3,25 @@ import { expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { skillId, validateV2DesiredState, type V2DesiredState } from "../../../packages/core/src/index";
-import { HostedEntitlementRequiredError } from "./billing";
 import {
-  handleDashboardGet,
-  handleDashboardMutation,
-} from "./dashboard-http";
-import { projectDashboardSkills, projectedDeviceSyncStatus, readDashboard } from "./dashboard";
-import { acceptDeviceSyncReport } from "./sync-report";
+  skillId,
+  type V2DesiredState,
+  validateV2DesiredState,
+} from "../../../packages/core/src/index";
 import {
   ArtifactTransferError,
   cloudArtifactLocator,
   getWorkspaceArtifact,
 } from "./artifacts";
+import { HostedEntitlementRequiredError } from "./billing";
+import {
+  projectDashboardSkills,
+  projectedDeviceSyncStatus,
+  readDashboard,
+} from "./dashboard";
+import { handleDashboardGet, handleDashboardMutation } from "./dashboard-http";
 import { mutateDesiredState } from "./revisions";
+import { acceptDeviceSyncReport } from "./sync-report";
 import { executeWebMcpMutationTool, executeWebMcpReadOnlyTool } from "./webmcp";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
@@ -32,7 +37,9 @@ async function afterLaunch<T>(run: () => Promise<T>) {
   }
 }
 
-const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
+const migrationsDirectory = fileURLToPath(
+  new URL("../migrations/", import.meta.url),
+);
 const migrationFiles = readdirSync(migrationsDirectory)
   .filter((file) => file.endsWith(".sql"))
   .sort();
@@ -119,10 +126,34 @@ function fourStateDesired(workspaceId: string): V2DesiredState {
     manifest: {
       version: 2,
       skills: [
-        { id: sourceId, name: "source", targets: "all", source: sourceMeta, resolutionStatus: "RESOLVED" },
-        { id: provenId, name: "proven", targets: "all", source: sourceMeta, resolutionStatus: "RESOLVED" },
-        { id: orphanId, name: "orphan", targets: "all", source: null, resolutionStatus: "RESOLVED" },
-        { id: pendingId, name: "pending", targets: "all", source: sourceMeta, resolutionStatus: "PENDING_RESOLUTION" },
+        {
+          id: sourceId,
+          name: "source",
+          targets: "all",
+          source: sourceMeta,
+          resolutionStatus: "RESOLVED",
+        },
+        {
+          id: provenId,
+          name: "proven",
+          targets: "all",
+          source: sourceMeta,
+          resolutionStatus: "RESOLVED",
+        },
+        {
+          id: orphanId,
+          name: "orphan",
+          targets: "all",
+          source: null,
+          resolutionStatus: "RESOLVED",
+        },
+        {
+          id: pendingId,
+          name: "pending",
+          targets: "all",
+          source: sourceMeta,
+          resolutionStatus: "PENDING_RESOLUTION",
+        },
       ],
     },
     lockfile: {
@@ -134,8 +165,16 @@ function fourStateDesired(workspaceId: string): V2DesiredState {
           source: { ...sourceMeta, revision, contentHash },
           materialization: { kind: "source", contentHash },
         },
-        { id: provenId, name: "proven", materialization: { kind: "artifact", artifact: art } },
-        { id: orphanId, name: "orphan", materialization: { kind: "artifact", artifact: orphan } },
+        {
+          id: provenId,
+          name: "proven",
+          materialization: { kind: "artifact", artifact: art },
+        },
+        {
+          id: orphanId,
+          name: "orphan",
+          materialization: { kind: "artifact", artifact: orphan },
+        },
       ],
     },
   };
@@ -169,10 +208,42 @@ function assertSanitized(body: unknown, workspaceId: string) {
 test("projectDashboardSkills maps the four v2 materialization states without lock internals", () => {
   const state = fourStateDesired("ws_example");
   expect(projectDashboardSkills(state)).toEqual([
-    { id: sourceId, skill: "source", ref: "main", targets: "all", resolutionStatus: "RESOLVED", locked: true, materialization: "source-backed" },
-    { id: provenId, skill: "proven", ref: "main", targets: "all", resolutionStatus: "RESOLVED", locked: true, materialization: "artifact-backed-with-provenance" },
-    { id: orphanId, skill: "orphan", ref: "", targets: "all", resolutionStatus: "RESOLVED", locked: true, materialization: "artifact-backed-without-source" },
-    { id: pendingId, skill: "pending", ref: "main", targets: "all", resolutionStatus: "PENDING_RESOLUTION", locked: false, materialization: "pending-resolution" },
+    {
+      id: sourceId,
+      skill: "source",
+      ref: "main",
+      targets: "all",
+      resolutionStatus: "RESOLVED",
+      locked: true,
+      materialization: "source-backed",
+    },
+    {
+      id: provenId,
+      skill: "proven",
+      ref: "main",
+      targets: "all",
+      resolutionStatus: "RESOLVED",
+      locked: true,
+      materialization: "artifact-backed-with-provenance",
+    },
+    {
+      id: orphanId,
+      skill: "orphan",
+      ref: "",
+      targets: "all",
+      resolutionStatus: "RESOLVED",
+      locked: true,
+      materialization: "artifact-backed-without-source",
+    },
+    {
+      id: pendingId,
+      skill: "pending",
+      ref: "main",
+      targets: "all",
+      resolutionStatus: "PENDING_RESOLUTION",
+      locked: false,
+      materialization: "pending-resolution",
+    },
   ]);
 });
 
@@ -201,30 +272,55 @@ test("authorized dashboard and WebMCP responses expose only semantic materializa
         (device_id, workspace_id, is_active, applied_revision_sequence, sync_status, last_sync_at, last_error_code, last_error_message)
        VALUES (?, ?, 1, 0, 'BEHIND', ?, 'TARGET_ERROR', ?)`,
     )
-    .run("dev_1", workspace.id, Date.now(), "Failed to write /Users/ada/.agents/skills/source");
+    .run(
+      "dev_1",
+      workspace.id,
+      Date.now(),
+      "Failed to write /Users/ada/.agents/skills/source",
+    );
   sqlite
     .query(
       `INSERT INTO device_skill_targets
         (device_id, workspace_id, skill_id, agent_id, status, error_code, error_message, content_hash, updated_at)
        VALUES (?, ?, ?, 'pi', 'DRIFTED', NULL, ?, ?, ?)`,
     )
-    .run("dev_1", workspace.id, sourceId, "ignored .corotumignore result", contentHash, Date.now());
+    .run(
+      "dev_1",
+      workspace.id,
+      sourceId,
+      "ignored .corotumignore result",
+      contentHash,
+      Date.now(),
+    );
 
   const view = await readDashboard(db as never, "user_1");
-  expect(view.skills).toEqual(projectDashboardSkills(validateV2DesiredState(state)));
+  expect(view.skills).toEqual(
+    projectDashboardSkills(validateV2DesiredState(state)),
+  );
   expect(view.devices[0]).toMatchObject({
     id: "dev_1",
     syncStatus: "BEHIND",
     appliedRevisionSequence: 0,
     lastErrorMessage: "A local target failed.",
-    targets: [{ skillId: sourceId, agentId: "pi", status: "DRIFTED", errorMessage: "A local target failed." }],
+    targets: [
+      {
+        skillId: sourceId,
+        agentId: "pi",
+        status: "DRIFTED",
+        errorMessage: "A local target failed.",
+      },
+    ],
   });
   assertSanitized(view, workspace.id);
 
   const response = await handleDashboardGet(db as never, "user_1");
   expect(response.status).toBe(200);
   const body = await response.json();
-  expect(body.skills.map((skill: { materialization: string }) => skill.materialization)).toEqual([
+  expect(
+    body.skills.map(
+      (skill: { materialization: string }) => skill.materialization,
+    ),
+  ).toEqual([
     "artifact-backed-without-source",
     "pending-resolution",
     "artifact-backed-with-provenance",
@@ -237,20 +333,30 @@ test("authorized dashboard and WebMCP responses expose only semantic materializa
     hosted: false,
     tool: "list_skills",
   });
-  expect(listed).toMatchObject({ skills: view.skills, revision: view.revision });
+  expect(listed).toMatchObject({
+    skills: view.skills,
+    revision: view.revision,
+  });
   assertSanitized(listed, workspace.id);
 
   await expect(
     getWorkspaceArtifact(
       {
         async put() {},
-        async get() { return null; },
-        async list() { return { keys: [], truncated: false }; },
+        async get() {
+          return null;
+        },
+        async list() {
+          return { keys: [], truncated: false };
+        },
         async delete() {},
       },
       {
         workspaceId: workspace.id,
-        transfer: { skillId: provenId, artifact: artifact(workspace.id, provenId) },
+        transfer: {
+          skillId: provenId,
+          artifact: artifact(workspace.id, provenId),
+        },
       },
     ),
   ).rejects.toBeInstanceOf(ArtifactTransferError);
@@ -283,15 +389,27 @@ test("a workspace cannot read another workspace's materialization or device stat
     state: {
       manifest: {
         version: 2,
-        skills: [{ id: foreignId, name: "foreign", targets: "all", resolutionStatus: "RESOLVED" }],
+        skills: [
+          {
+            id: foreignId,
+            name: "foreign",
+            targets: "all",
+            resolutionStatus: "RESOLVED",
+          },
+        ],
       },
       lockfile: {
         version: 2,
-        skills: [{
-          id: foreignId,
-          name: "foreign",
-          materialization: { kind: "artifact", artifact: artifact(second.id, foreignId) },
-        }],
+        skills: [
+          {
+            id: foreignId,
+            name: "foreign",
+            materialization: {
+              kind: "artifact",
+              artifact: artifact(second.id, foreignId),
+            },
+          },
+        ],
       },
     },
     transition: { type: "ADD", skillId: foreignId, metadata: {} },
@@ -311,16 +429,23 @@ test("a workspace cannot read another workspace's materialization or device stat
   const grace = await readDashboard(db as never, "user_2");
   expect(ada.workspace.id).toBe(first.id);
   expect(grace.workspace.id).toBe(second.id);
-  expect(ada.skills.map((skill) => skill.id)).toEqual([orphanId, pendingId, provenId, sourceId]);
-  expect(grace.skills).toEqual([{
-    id: foreignId,
-    skill: "foreign",
-    ref: "",
-    targets: "all",
-    resolutionStatus: "RESOLVED",
-    locked: true,
-    materialization: "artifact-backed-without-source",
-  }]);
+  expect(ada.skills.map((skill) => skill.id)).toEqual([
+    orphanId,
+    pendingId,
+    provenId,
+    sourceId,
+  ]);
+  expect(grace.skills).toEqual([
+    {
+      id: foreignId,
+      skill: "foreign",
+      ref: "",
+      targets: "all",
+      resolutionStatus: "RESOLVED",
+      locked: true,
+      materialization: "artifact-backed-without-source",
+    },
+  ]);
   expect(ada.devices).toEqual([]);
   expect(grace.devices.map((device) => device.id)).toEqual(["dev_2"]);
   assertSanitized(ada, first.id);
@@ -335,11 +460,19 @@ test("pending resolution, hosted entitlement and truthful target status keep exi
   const created = await handleDashboardMutation(
     new Request("https://corotum.com/api/v1/dashboard", {
       method: "POST",
-      headers: { origin: "https://corotum.com", "content-type": "application/json" },
+      headers: {
+        origin: "https://corotum.com",
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
         baseRevisionId: null,
         idempotencyKey: "pending-add",
-        mutation: { type: "ADD", source: repository, skill: "review", ref: "main" },
+        mutation: {
+          type: "ADD",
+          source: repository,
+          skill: "review",
+          ref: "main",
+        },
       }),
     }),
     db as never,
@@ -347,60 +480,86 @@ test("pending resolution, hosted entitlement and truthful target status keep exi
     false,
   );
   expect(created.status).toBe(200);
-  const mutation = await created.json() as { pendingResolution: string[] };
+  const mutation = (await created.json()) as { pendingResolution: string[] };
   expect(mutation.pendingResolution).toHaveLength(1);
 
   const view = await readDashboard(db as never, "user_1");
-  expect(view.skills).toEqual([{
-    id: mutation.pendingResolution[0],
-    skill: "review",
-    ref: "main",
-    targets: "all",
-    resolutionStatus: "PENDING_RESOLUTION",
-    locked: false,
-    materialization: "pending-resolution",
-  }]);
+  expect(view.skills).toEqual([
+    {
+      id: mutation.pendingResolution[0],
+      skill: "review",
+      ref: "main",
+      targets: "all",
+      resolutionStatus: "PENDING_RESOLUTION",
+      locked: false,
+      materialization: "pending-resolution",
+    },
+  ]);
 
-  await expect(executeWebMcpReadOnlyTool(db as never, {
-    userId: "user_1",
-    hosted: true,
-    tool: "list_skills",
-  })).resolves.toBeDefined();
-
-  await expect(afterLaunch(() => handleDashboardMutation(
-    new Request("https://corotum.com/api/v1/dashboard", {
-      method: "POST",
-      headers: { origin: "https://corotum.com", "content-type": "application/json" },
-      body: JSON.stringify({
-        baseRevisionId: view.revision.id,
-        idempotencyKey: "hosted-denied",
-        mutation: { type: "UPDATE", skillId: mutation.pendingResolution[0] },
-      }),
+  await expect(
+    executeWebMcpReadOnlyTool(db as never, {
+      userId: "user_1",
+      hosted: true,
+      tool: "list_skills",
     }),
-    db as never,
-    "user_1",
-    true,
-  ).then((response) => response.status))).resolves.toBe(402);
+  ).resolves.toBeDefined();
+
+  await expect(
+    afterLaunch(() =>
+      handleDashboardMutation(
+        new Request("https://corotum.com/api/v1/dashboard", {
+          method: "POST",
+          headers: {
+            origin: "https://corotum.com",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            baseRevisionId: view.revision.id,
+            idempotencyKey: "hosted-denied",
+            mutation: {
+              type: "UPDATE",
+              skillId: mutation.pendingResolution[0],
+            },
+          }),
+        }),
+        db as never,
+        "user_1",
+        true,
+      ).then((response) => response.status),
+    ),
+  ).resolves.toBe(402);
 
   const gatedDashboard = await afterLaunch(() =>
     handleDashboardGet(db as never, "user_1", true),
   );
-  expect((await gatedDashboard.json() as { cloudAllowed: boolean }).cloudAllowed).toBe(false);
+  expect(
+    ((await gatedDashboard.json()) as { cloudAllowed: boolean }).cloudAllowed,
+  ).toBe(false);
 
-  await expect(afterLaunch(() => handleDashboardMutation(
-    new Request("https://corotum.com/api/v1/dashboard", {
-      method: "POST",
-      headers: { origin: "https://corotum.com", "content-type": "application/json" },
-      body: JSON.stringify({
-        baseRevisionId: view.revision.id,
-        idempotencyKey: "hosted-remove",
-        mutation: { type: "REMOVE", skillId: mutation.pendingResolution[0] },
-      }),
-    }),
-    db as never,
-    "user_1",
-    true,
-  ).then((response) => response.status))).resolves.toBe(200);
+  await expect(
+    afterLaunch(() =>
+      handleDashboardMutation(
+        new Request("https://corotum.com/api/v1/dashboard", {
+          method: "POST",
+          headers: {
+            origin: "https://corotum.com",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            baseRevisionId: view.revision.id,
+            idempotencyKey: "hosted-remove",
+            mutation: {
+              type: "REMOVE",
+              skillId: mutation.pendingResolution[0],
+            },
+          }),
+        }),
+        db as never,
+        "user_1",
+        true,
+      ).then((response) => response.status),
+    ),
+  ).resolves.toBe(200);
 });
 
 test("projected device status never claims SYNCED ahead of the applied revision", () => {
@@ -416,11 +575,20 @@ test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHI
   const created = await handleDashboardMutation(
     new Request("https://corotum.com/api/v1/dashboard", {
       method: "POST",
-      headers: { origin: "https://corotum.com", "content-type": "application/json" },
+      headers: {
+        origin: "https://corotum.com",
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
         baseRevisionId: null,
         idempotencyKey: "truth-add",
-        mutation: { type: "ADD", source: repository, skill: "review", ref: "main", path: "skills/review" },
+        mutation: {
+          type: "ADD",
+          source: repository,
+          skill: "review",
+          ref: "main",
+          path: "skills/review",
+        },
       }),
     }),
     db as never,
@@ -428,17 +596,25 @@ test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHI
     false,
   );
   expect(created.status).toBe(200);
-  const added = await created.json() as { revisionId: string; revisionSequence: number; pendingResolution: string[] };
+  const added = (await created.json()) as {
+    revisionId: string;
+    revisionSequence: number;
+    pendingResolution: string[];
+  };
   expect(added.revisionSequence).toBe(1);
   expect(added.pendingResolution).toHaveLength(1);
   const skillIdValue = added.pendingResolution[0]!;
 
   const workspace = await ensureDefaultWorkspace(db, "user_1");
   sqlite
-    .query("INSERT INTO devices (id, user_id, name, platform, architecture, cli_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .query(
+      "INSERT INTO devices (id, user_id, name, platform, architecture, cli_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
     .run("dev_truth", "user_1", "Mac", "darwin", "arm64", "0.1.0", Date.now());
   sqlite
-    .query("INSERT INTO device_workspaces (device_id, workspace_id, is_active, applied_revision_sequence, sync_status) VALUES (?, ?, 1, 0, 'SYNCED')")
+    .query(
+      "INSERT INTO device_workspaces (device_id, workspace_id, is_active, applied_revision_sequence, sync_status) VALUES (?, ?, 1, 0, 'SYNCED')",
+    )
     .run("dev_truth", workspace.id);
 
   const behind = await readDashboard(db as never, "user_1");
@@ -489,13 +665,19 @@ test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHI
   expect(updated.pendingResolution).toEqual([skillIdValue]);
 
   const stillBehind = await readDashboard(db as never, "user_1");
-  expect(stillBehind.skills[0]).toMatchObject({ ref: "v2", resolutionStatus: "PENDING_RESOLUTION" });
+  expect(stillBehind.skills[0]).toMatchObject({
+    ref: "v2",
+    resolutionStatus: "PENDING_RESOLUTION",
+  });
   expect(stillBehind.devices[0]?.syncStatus).toBe("BEHIND");
 
   const removed = await handleDashboardMutation(
     new Request("https://corotum.com/api/v1/dashboard", {
       method: "POST",
-      headers: { origin: "https://corotum.com", "content-type": "application/json" },
+      headers: {
+        origin: "https://corotum.com",
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
         baseRevisionId: updated.revisionId,
         idempotencyKey: "truth-remove",
@@ -507,7 +689,10 @@ test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHI
     false,
   );
   expect(removed.status).toBe(200);
-  const removedBody = await removed.json() as { revisionId: string; revisionSequence: number };
+  const removedBody = (await removed.json()) as {
+    revisionId: string;
+    revisionSequence: number;
+  };
   expect(removedBody.revisionSequence).toBe(4);
 
   const reported = await acceptDeviceSyncReport(db as never, {
@@ -520,29 +705,45 @@ test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHI
   });
   expect(reported.syncStatus).toBe("SYNCED");
   expect(reported.appliedRevisionSequence).toBe(4);
-  expect((await readDashboard(db as never, "user_1")).devices[0]?.syncStatus).toBe("SYNCED");
+  expect(
+    (await readDashboard(db as never, "user_1")).devices[0]?.syncStatus,
+  ).toBe("SYNCED");
 
-  const hostedDenied = await afterLaunch(() => handleDashboardMutation(
-    new Request("https://corotum.com/api/v1/dashboard", {
-      method: "POST",
-      headers: { origin: "https://corotum.com", "content-type": "application/json" },
-      body: JSON.stringify({
-        baseRevisionId: removedBody.revisionId,
-        idempotencyKey: "hosted-add-denied",
-        mutation: { type: "ADD", source: repository, skill: "other", ref: "main" },
+  const hostedDenied = await afterLaunch(() =>
+    handleDashboardMutation(
+      new Request("https://corotum.com/api/v1/dashboard", {
+        method: "POST",
+        headers: {
+          origin: "https://corotum.com",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          baseRevisionId: removedBody.revisionId,
+          idempotencyKey: "hosted-add-denied",
+          mutation: {
+            type: "ADD",
+            source: repository,
+            skill: "other",
+            ref: "main",
+          },
+        }),
       }),
-    }),
-    db as never,
-    "user_1",
-    true,
-  ));
+      db as never,
+      "user_1",
+      true,
+    ),
+  );
   expect(hostedDenied.status).toBe(402);
-  await expect(afterLaunch(() => executeWebMcpMutationTool(db as never, {
-    userId: "user_1",
-    hosted: true,
-    tool: "add_skill",
-    baseRevisionId: removedBody.revisionId,
-    idempotencyKey: "hosted-webmcp-denied",
-    arguments: { source: repository, skill: "other" },
-  }))).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
+  await expect(
+    afterLaunch(() =>
+      executeWebMcpMutationTool(db as never, {
+        userId: "user_1",
+        hosted: true,
+        tool: "add_skill",
+        baseRevisionId: removedBody.revisionId,
+        idempotencyKey: "hosted-webmcp-denied",
+        arguments: { source: repository, skill: "other" },
+      }),
+    ),
+  ).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
 });

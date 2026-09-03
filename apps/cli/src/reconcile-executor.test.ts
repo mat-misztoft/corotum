@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -141,18 +149,38 @@ describe("LocalReconcileExecutor", () => {
     await mkdir(join(root, "pi"));
     await symlink(canonicalPath, targetPath);
     const state: LocalOperationalState = {
-      schemaVersion: 2, lastAppliedRevision: "0" as never,
-      skills: { [lock.id]: { name: lock.skill, canonicalPath, contentHash: lock.contentHash, targets: {
-        [`pi\0${targetPath}`]: { agentId: "pi", mode: "symlink", path: targetPath, expectedHash: lock.contentHash },
-      } } },
+      schemaVersion: 2,
+      lastAppliedRevision: "0" as never,
+      skills: {
+        [lock.id]: {
+          name: lock.skill,
+          canonicalPath,
+          contentHash: lock.contentHash,
+          targets: {
+            [`pi\0${targetPath}`]: {
+              agentId: "pi",
+              mode: "symlink",
+              path: targetPath,
+              expectedHash: lock.contentHash,
+            },
+          },
+        },
+      },
     };
     const executor = new LocalReconcileExecutor(
       new LocalOperationalStateStore(join(root, "state.json")),
       new CanonicalSkillStore(join(root, "canonical")),
     );
     const result = await executor.execute({
-      plan: { classifications: [], operations: [{ kind: "UNMANAGE", skillId: lock.id }] },
-      desired, revision: "1" as never, state, enabledAgentIds: [], homeDir: root,
+      plan: {
+        classifications: [],
+        operations: [{ kind: "UNMANAGE", skillId: lock.id }],
+      },
+      desired,
+      revision: "1" as never,
+      state,
+      enabledAgentIds: [],
+      homeDir: root,
     });
     expect(result.operations[0]?.status).toBe("SUCCESS");
     expect(result.state.skills[lock.id]).toBeUndefined();
@@ -168,28 +196,56 @@ describe("LocalReconcileExecutor", () => {
     await mkdir(removedPath, { recursive: true });
     await writeFile(join(removedPath, "SKILL.md"), "exact locked bytes\n");
     const state: LocalOperationalState = {
-      schemaVersion: 2, lastAppliedRevision: "0" as never,
-      skills: { [removedId]: { name: "removed", canonicalPath: removedPath, contentHash: lock.contentHash, targets: {} } },
+      schemaVersion: 2,
+      lastAppliedRevision: "0" as never,
+      skills: {
+        [removedId]: {
+          name: "removed",
+          canonicalPath: removedPath,
+          contentHash: lock.contentHash,
+          targets: {},
+        },
+      },
     };
     const executor = new LocalReconcileExecutor(
       new LocalOperationalStateStore(join(root, "state.json")),
       new CanonicalSkillStore(join(root, "canonical")),
-      { materialize: async (_lock: LockedSkill, destination: string) => {
-        await mkdir(destination);
-        await writeFile(join(destination, "SKILL.md"), await readFile(join(source, "SKILL.md")));
-      } } as never,
-      { remove: async () => ({ ownership: [], outcomes: [] }), expose: async () => ({ ownership: [], outcomes: [] }) } as never,
+      {
+        materialize: async (_lock: LockedSkill, destination: string) => {
+          await mkdir(destination);
+          await writeFile(
+            join(destination, "SKILL.md"),
+            await readFile(join(source, "SKILL.md")),
+          );
+        },
+      } as never,
+      {
+        remove: async () => ({ ownership: [], outcomes: [] }),
+        expose: async () => ({ ownership: [], outcomes: [] }),
+      } as never,
     );
     const result = await executor.execute({
-      plan: { classifications: [], operations: [
-        { kind: "REMOVE", skillId: removedId },
-        { kind: "INSTALL", skill: lock },
-      ] },
-      desired, revision: "1" as never, state, enabledAgentIds: [], homeDir: root,
+      plan: {
+        classifications: [],
+        operations: [
+          { kind: "REMOVE", skillId: removedId },
+          { kind: "INSTALL", skill: lock },
+        ],
+      },
+      desired,
+      revision: "1" as never,
+      state,
+      enabledAgentIds: [],
+      homeDir: root,
     });
-    expect(result.operations.map(({ status }) => status)).toEqual(["SUCCESS", "SUCCESS"]);
+    expect(result.operations.map(({ status }) => status)).toEqual([
+      "SUCCESS",
+      "SUCCESS",
+    ]);
     expect(await Bun.file(removedPath).exists()).toBeFalse();
-    expect(await hashSkillDirectory(join(root, "canonical", lock.skill))).toBe(lock.contentHash);
+    expect(await hashSkillDirectory(join(root, "canonical", lock.skill))).toBe(
+      lock.contentHash,
+    );
   });
 
   test("does not advance the applied revision while a local collision is unresolved", async () => {
@@ -200,7 +256,10 @@ describe("LocalReconcileExecutor", () => {
       {
         materialize: async (_lock: LockedSkill, destination: string) => {
           await mkdir(destination);
-          await writeFile(join(destination, "SKILL.md"), await readFile(join(source, "SKILL.md")));
+          await writeFile(
+            join(destination, "SKILL.md"),
+            await readFile(join(source, "SKILL.md")),
+          );
         },
       } as never,
       { expose: async () => ({ ownership: [], outcomes: [] }) } as never,
@@ -208,10 +267,19 @@ describe("LocalReconcileExecutor", () => {
 
     const result = await executor.execute({
       plan: {
-        classifications: [{ skillId: "sk_collision" as SkillId, classification: "LOCAL_CONFLICT" }],
+        classifications: [
+          {
+            skillId: "sk_collision" as SkillId,
+            classification: "LOCAL_CONFLICT",
+          },
+        ],
         operations: [{ kind: "INSTALL", skill: lock }],
       },
-      desired, revision: "1" as never, state, enabledAgentIds: [], homeDir: root,
+      desired,
+      revision: "1" as never,
+      state,
+      enabledAgentIds: [],
+      homeDir: root,
     });
 
     expect(result.operations[0]?.status).toBe("SUCCESS");
@@ -226,23 +294,31 @@ describe("LocalReconcileExecutor", () => {
       {
         materialize: async (_lock: LockedSkill, destination: string) => {
           await mkdir(destination);
-          await writeFile(join(destination, "SKILL.md"), "exact locked bytes\n");
+          await writeFile(
+            join(destination, "SKILL.md"),
+            "exact locked bytes\n",
+          );
         },
       } as never,
       {
         expose: async () => ({
           ownership: [],
-          outcomes: [{
-            agentId: "pi",
-            path: join(root, "pi", lock.skill),
-            status: "LOCAL_CONFLICT" as const,
-          }],
+          outcomes: [
+            {
+              agentId: "pi",
+              path: join(root, "pi", lock.skill),
+              status: "LOCAL_CONFLICT" as const,
+            },
+          ],
         }),
       } as never,
     );
 
     const result = await executor.execute({
-      plan: { classifications: [], operations: [{ kind: "INSTALL", skill: lock }] },
+      plan: {
+        classifications: [],
+        operations: [{ kind: "INSTALL", skill: lock }],
+      },
       desired,
       revision: "1" as never,
       state,

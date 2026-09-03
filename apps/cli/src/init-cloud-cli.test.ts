@@ -171,7 +171,10 @@ function startCloudServer(options?: { stateStatus?: number }): {
     async fetch(request) {
       const url = new URL(request.url);
       requests.push(`${request.method} ${url.pathname}`);
-      if (request.method === "POST" && url.pathname === "/api/v1/cli/pairings") {
+      if (
+        request.method === "POST" &&
+        url.pathname === "/api/v1/cli/pairings"
+      ) {
         return Response.json(
           {
             id: pairingId,
@@ -276,7 +279,9 @@ describe("real corotum init cloud CLI", () => {
         expect(result.code).toBe(0);
         expect(result.stdout).toContain("Initialized Corotum Cloud");
         expect(JSON.stringify(result)).not.toContain(deviceToken);
-        const config = JSON.parse(await readFile(paths(home).configFile, "utf8")) as {
+        const config = JSON.parse(
+          await readFile(paths(home).configFile, "utf8"),
+        ) as {
           mode: string;
           workspaceId: string;
           agents: Record<string, { enabled: boolean }>;
@@ -284,7 +289,9 @@ describe("real corotum init cloud CLI", () => {
         expect(config.mode).toBe("cloud");
         expect(config.workspaceId).toBe(workspaceId);
         expect(config.agents).toEqual({});
-        expect(cloud.requests.some((item) => item.endsWith("/state"))).toBe(true);
+        expect(cloud.requests.some((item) => item.endsWith("/state"))).toBe(
+          true,
+        );
       } finally {
         cloud.stop();
       }
@@ -301,7 +308,9 @@ describe("real corotum init cloud CLI", () => {
       const skill = join(home, ".agents", "skills", "notes");
       await mkdir(skill, { recursive: true });
       await writeFile(join(skill, "SKILL.md"), "# Notes\n");
-      await mkdir(join(home, ".codex", "skills", "ignored"), { recursive: true });
+      await mkdir(join(home, ".codex", "skills", "ignored"), {
+        recursive: true,
+      });
       await writeFile(
         join(home, ".codex", "skills", "ignored", "SKILL.md"),
         "# Agent only\n",
@@ -318,11 +327,18 @@ describe("real corotum init cloud CLI", () => {
         expect(result.code).toBe(0);
         expect(result.stderr).toContain("notes:");
         expect(result.stderr).not.toContain("ignored");
-        expect(await readFile(join(skill, "SKILL.md"), "utf8")).toBe("# Notes\n");
+        expect(await readFile(join(skill, "SKILL.md"), "utf8")).toBe(
+          "# Notes\n",
+        );
         expect(
-          await readFile(join(home, ".codex", "skills", "ignored", "SKILL.md"), "utf8"),
+          await readFile(
+            join(home, ".codex", "skills", "ignored", "SKILL.md"),
+            "utf8",
+          ),
         ).toBe("# Agent only\n");
-        const config = JSON.parse(await readFile(paths(home).configFile, "utf8")) as {
+        const config = JSON.parse(
+          await readFile(paths(home).configFile, "utf8"),
+        ) as {
           mode: string;
           agents: Record<string, { enabled: boolean }>;
         };
@@ -352,7 +368,9 @@ describe("real corotum init cloud CLI", () => {
       ]);
       expect(git.code).toBe(ExitCode.CONFLICT);
       expect(git.json?.outcome).toBe("CONFLICT");
-      expect(String(git.json?.error ?? git.stderr)).toContain("already configured");
+      expect(String(git.json?.error ?? git.stderr)).toContain(
+        "already configured",
+      );
 
       const cloudHome = await temp("already-cloud");
       await writeJson(paths(cloudHome).configFile, {
@@ -369,7 +387,9 @@ describe("real corotum init cloud CLI", () => {
       ]);
       expect(cloud.code).toBe(ExitCode.CONFLICT);
       expect(cloud.json?.outcome).toBe("CONFLICT");
-      expect(String(cloud.json?.error ?? cloud.stderr)).toContain("already configured");
+      expect(String(cloud.json?.error ?? cloud.stderr)).toContain(
+        "already configured",
+      );
     },
     timeout,
   );
@@ -384,7 +404,11 @@ describe("real corotum init cloud CLI", () => {
         const code = await withIsolatedHome(
           home,
           { COROTUM_CLOUD_ORIGIN: cloud.origin },
-          () => runCli(["--json", "init", "cloud", "--origin", cloud.origin], fixture.io),
+          () =>
+            runCli(
+              ["--json", "init", "cloud", "--origin", cloud.origin],
+              fixture.io,
+            ),
         );
         expect(code).toBe(ExitCode.GENERAL_ERROR);
         expect(homedir()).not.toBe(home);
@@ -393,10 +417,12 @@ describe("real corotum init cloud CLI", () => {
         expect(printed).toContain("Pairing succeeded");
         expect(printed).not.toContain(deviceToken);
         expect(printed).not.toContain(deviceCode);
-        expect(cloud.requests.some((item) => item.includes("/cli/pairings"))).toBe(
-          true,
-        );
-        const config = JSON.parse(await readFile(paths(home).configFile, "utf8")) as {
+        expect(
+          cloud.requests.some((item) => item.includes("/cli/pairings")),
+        ).toBe(true);
+        const config = JSON.parse(
+          await readFile(paths(home).configFile, "utf8"),
+        ) as {
           mode: string | null;
           workspaceId: string | null;
         };
@@ -447,10 +473,12 @@ describe("real corotum init cloud CLI", () => {
         );
         expect(code).toBe(ExitCode.SUCCESS);
         expect(fixture.output.join("")).toContain("Initialized Corotum Cloud");
-        expect(`${fixture.output.join("")}${fixture.errors.join("")}`).not.toContain(
-          deviceToken,
-        );
-        const config = JSON.parse(await readFile(paths(home).configFile, "utf8")) as {
+        expect(
+          `${fixture.output.join("")}${fixture.errors.join("")}`,
+        ).not.toContain(deviceToken);
+        const config = JSON.parse(
+          await readFile(paths(home).configFile, "utf8"),
+        ) as {
           mode: string;
           agents: Record<string, { enabled: boolean }>;
         };
