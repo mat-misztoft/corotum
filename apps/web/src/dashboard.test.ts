@@ -9,14 +9,15 @@ import {
   handleDashboardGet,
   handleDashboardMutation,
 } from "./dashboard-http";
-import { projectDashboardSkills, readDashboard } from "./dashboard";
+import { projectDashboardSkills, projectedDeviceSyncStatus, readDashboard } from "./dashboard";
+import { acceptDeviceSyncReport } from "./sync-report";
 import {
   ArtifactTransferError,
   cloudArtifactLocator,
   getWorkspaceArtifact,
 } from "./artifacts";
 import { mutateDesiredState } from "./revisions";
-import { executeWebMcpReadOnlyTool } from "./webmcp";
+import { executeWebMcpMutationTool, executeWebMcpReadOnlyTool } from "./webmcp";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
 const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
@@ -368,4 +369,148 @@ test("pending resolution, hosted entitlement and truthful target status keep exi
     "user_1",
     true,
   ).then((response) => response.status)).resolves.toBe(402);
+});
+
+test("projected device status never claims SYNCED ahead of the applied revision", () => {
+  expect(projectedDeviceSyncStatus("SYNCED", 1, 1)).toBe("SYNCED");
+  expect(projectedDeviceSyncStatus("SYNCED", 1, 2)).toBe("BEHIND");
+  expect(projectedDeviceSyncStatus("ERROR", 1, 2)).toBe("ERROR");
+  expect(projectedDeviceSyncStatus("NEVER_SYNCED", 0, 1)).toBe("NEVER_SYNCED");
+});
+
+test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHIND until they report", async () => {
+  const { sqlite, db } = await dashboardDb();
+  insertUser(sqlite, "user_1", "ada@example.com");
+  const created = await handleDashboardMutation(
+    new Request("https://corotum.com/api/v1/dashboard", {
+      method: "POST",
+      headers: { origin: "https://corotum.com", "content-type": "application/json" },
+      body: JSON.stringify({
+        baseRevisionId: null,
+        idempotencyKey: "truth-add",
+        mutation: { type: "ADD", source: repository, skill: "review", ref: "main", path: "skills/review" },
+      }),
+    }),
+    db as never,
+    "user_1",
+    false,
+  );
+  expect(created.status).toBe(200);
+  const added = await created.json() as { revisionId: string; revisionSequence: number; pendingResolution: string[] };
+  expect(added.revisionSequence).toBe(1);
+  expect(added.pendingResolution).toHaveLength(1);
+  const skillIdValue = added.pendingResolution[0]!;
+
+  const workspace = await ensureDefaultWorkspace(db, "user_1");
+  sqlite
+    .query("INSERT INTO devices (id, user_id, name, platform, architecture, cli_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run("dev_truth", "user_1", "Mac", "darwin", "arm64", "0.1.0", Date.now());
+  sqlite
+    .query("INSERT INTO device_workspaces (device_id, workspace_id, is_active, applied_revision_sequence, sync_status) VALUES (?, ?, 1, 0, 'SYNCED')")
+    .run("dev_truth", workspace.id);
+
+  const behind = await readDashboard(db as never, "user_1");
+  expect(behind.skills[0]).toMatchObject({
+    id: skillIdValue,
+    skill: "review",
+    ref: "main",
+    resolutionStatus: "PENDING_RESOLUTION",
+    locked: false,
+    materialization: "pending-resolution",
+  });
+  expect(behind.devices[0]).toMatchObject({
+    id: "dev_truth",
+    appliedRevisionSequence: 0,
+    syncStatus: "BEHIND",
+  });
+
+  const webStatus = await executeWebMcpReadOnlyTool(db as never, {
+    userId: "user_1",
+    hosted: false,
+    tool: "get_sync_status",
+  });
+  expect(webStatus).toMatchObject({
+    revision: { sequence: 1 },
+    devices: [{ id: "dev_truth", syncStatus: "BEHIND" }],
+  });
+
+  const refreshed = await executeWebMcpMutationTool(db as never, {
+    userId: "user_1",
+    hosted: false,
+    tool: "update_skill",
+    baseRevisionId: added.revisionId,
+    idempotencyKey: "truth-update",
+    arguments: { skillId: skillIdValue },
+  });
+  expect(refreshed.revisionSequence).toBe(2);
+  expect(refreshed.pendingResolution).toEqual([skillIdValue]);
+
+  const updated = await executeWebMcpMutationTool(db as never, {
+    userId: "user_1",
+    hosted: false,
+    tool: "set_skill_ref",
+    baseRevisionId: refreshed.revisionId,
+    idempotencyKey: "truth-set-ref",
+    arguments: { skillId: skillIdValue, ref: "v2" },
+  });
+  expect(updated.revisionSequence).toBe(3);
+  expect(updated.pendingResolution).toEqual([skillIdValue]);
+
+  const stillBehind = await readDashboard(db as never, "user_1");
+  expect(stillBehind.skills[0]).toMatchObject({ ref: "v2", resolutionStatus: "PENDING_RESOLUTION" });
+  expect(stillBehind.devices[0]?.syncStatus).toBe("BEHIND");
+
+  const removed = await handleDashboardMutation(
+    new Request("https://corotum.com/api/v1/dashboard", {
+      method: "POST",
+      headers: { origin: "https://corotum.com", "content-type": "application/json" },
+      body: JSON.stringify({
+        baseRevisionId: updated.revisionId,
+        idempotencyKey: "truth-remove",
+        mutation: { type: "REMOVE", skillId: skillIdValue },
+      }),
+    }),
+    db as never,
+    "user_1",
+    false,
+  );
+  expect(removed.status).toBe(200);
+  const removedBody = await removed.json() as { revisionId: string; revisionSequence: number };
+  expect(removedBody.revisionSequence).toBe(4);
+
+  const reported = await acceptDeviceSyncReport(db as never, {
+    deviceId: "dev_truth",
+    appliedRevisionId: removedBody.revisionId,
+    syncStatus: "SYNCED",
+    lastErrorCode: null,
+    lastErrorMessage: null,
+    targets: [],
+  });
+  expect(reported.syncStatus).toBe("SYNCED");
+  expect(reported.appliedRevisionSequence).toBe(4);
+  expect((await readDashboard(db as never, "user_1")).devices[0]?.syncStatus).toBe("SYNCED");
+
+  const hostedDenied = await handleDashboardMutation(
+    new Request("https://corotum.com/api/v1/dashboard", {
+      method: "POST",
+      headers: { origin: "https://corotum.com", "content-type": "application/json" },
+      body: JSON.stringify({
+        baseRevisionId: removedBody.revisionId,
+        idempotencyKey: "hosted-add-denied",
+        mutation: { type: "ADD", source: repository, skill: "other", ref: "main" },
+      }),
+    }),
+    db as never,
+    "user_1",
+    true,
+  );
+  expect(hostedDenied.status).toBe(402);
+  await expect(executeWebMcpMutationTool(db as never, {
+    userId: "user_1",
+    hosted: true,
+    tool: "add_skill",
+    baseRevisionId: removedBody.revisionId,
+    idempotencyKey: "hosted-webmcp-denied",
+    arguments: { source: repository, skill: "other" },
+  })).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
 });

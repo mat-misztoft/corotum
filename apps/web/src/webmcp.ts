@@ -133,8 +133,9 @@ function webMcpMutation(tool: WebMcpMutationTool, input: unknown): DashboardMuta
       const source = string("source");
       const skill = string("skill");
       const ref = value.ref === undefined ? undefined : string("ref");
-      if (!source || !skill || (value.ref !== undefined && !ref)) throw new InvalidWebMcpMutationInputError();
-      return { type: "ADD", source, skill, ref: ref ?? undefined, targets: targets as "all" | string[] | undefined };
+      const path = value.path === undefined ? undefined : string("path");
+      if (!source || !skill || (value.ref !== undefined && !ref) || (value.path !== undefined && !path)) throw new InvalidWebMcpMutationInputError();
+      return { type: "ADD", source, skill, ref: ref ?? undefined, path: path ?? undefined, targets: targets as "all" | string[] | undefined };
     }
     case "remove_skill": {
       const skillId = string("skillId");

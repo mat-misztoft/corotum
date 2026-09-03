@@ -92,6 +92,16 @@ function clipError(value: string | null) {
  * AUTH_REQUIRED / ERROR fixtures collapse to PARTIALLY_SYNCED. AUTH_REQUIRED
  * is target-level only; a device of only AUTH_REQUIRED/ERROR is ERROR.
  */
+/** A device is never SYNCED for a Cloud revision it has not reported as applied. */
+export function projectedDeviceSyncStatus(
+  stored: string,
+  appliedRevisionSequence: number,
+  currentRevisionSequence: number,
+): string {
+  if (stored === "SYNCED" && appliedRevisionSequence < currentRevisionSequence) return "BEHIND";
+  return stored;
+}
+
 export function aggregateDeviceSyncStatus(
   targets: readonly { status: DeviceTargetStatus }[],
   revisions?: Readonly<{ applied: number; current: number }>,
@@ -263,11 +273,13 @@ export async function readDeviceTargetStatus(
               device_workspaces.sync_status AS syncStatus,
               device_workspaces.last_error_code AS lastErrorCode,
               device_workspaces.last_error_message AS lastErrorMessage,
-              device_workspaces.last_sync_at AS lastSyncAt
+              device_workspaces.last_sync_at AS lastSyncAt,
+              workspaces.current_revision_sequence AS currentRevisionSequence
        FROM devices
        JOIN device_workspaces
          ON device_workspaces.device_id = devices.id
         AND device_workspaces.is_active = 1
+       JOIN workspaces ON workspaces.id = device_workspaces.workspace_id
        WHERE devices.id = ? AND devices.user_id = ?`,
     )
     .bind(deviceId, userId)
@@ -279,11 +291,18 @@ export async function readDeviceTargetStatus(
       lastErrorCode: string | null;
       lastErrorMessage: string | null;
       lastSyncAt: number | null;
+      currentRevisionSequence: number;
     }>();
   if (!membership) throw new DeviceNotFoundError();
 
+  const { currentRevisionSequence, ...device } = membership;
   return {
-    ...membership,
+    ...device,
+    syncStatus: projectedDeviceSyncStatus(
+      device.syncStatus,
+      device.appliedRevisionSequence,
+      currentRevisionSequence,
+    ),
     targets: await listDeviceSkillTargets(
       db,
       membership.deviceId,

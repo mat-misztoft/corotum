@@ -352,6 +352,82 @@ test("the first device resolution locks a pending skill once and a competing res
   ).toEqual({ repository: source, revision: "abc123" });
 });
 
+test("the first device resolution locks a v2 pending skill once and a competing resolver conflicts", async () => {
+  const { sqlite, db } = await stateDb();
+  const firstDevice = await pairedDevice(db, sqlite);
+  const secondDevice = await pairedDevice(db, sqlite);
+  const revision = "a".repeat(40);
+  const contentHash = `sha256:${"b".repeat(64)}`;
+  const pending = {
+    manifest: {
+      version: 2 as const,
+      skills: [
+        {
+          id: skill,
+          name: "review",
+          targets: "all" as const,
+          source: { repository: source, path: "skills/review", ref: "main" },
+          resolutionStatus: "PENDING_RESOLUTION" as const,
+        },
+      ],
+    },
+    lockfile: { version: 2 as const, skills: [] },
+  };
+  const created = await handlePutWorkspaceState(
+    stateRequest(firstDevice.workspaceId, firstDevice.issued.token, {
+      method: "PUT",
+      body: JSON.stringify({
+        state: pending,
+        baseRevision: null,
+        idempotencyKey: "v2-pending-1",
+        transition,
+      }),
+    }),
+    db,
+    firstDevice.workspaceId,
+  );
+  expect(created.status).toBe(200);
+  const baseRevision = ((await created.json()) as { revisionId: string }).revisionId;
+  const resolution = {
+    skillId: skill,
+    baseRevision,
+    idempotencyKey: "v2-resolve-1",
+    repository: source,
+    revision,
+    path: "skills/review",
+    contentHash,
+  };
+  const winner = await handlePostPendingResolution(
+    stateRequest(firstDevice.workspaceId, firstDevice.issued.token, {
+      method: "POST",
+      body: JSON.stringify(resolution),
+    }),
+    db,
+    firstDevice.workspaceId,
+  );
+  expect(winner.status).toBe(200);
+  const locked = (await winner.json()) as {
+    state: {
+      manifest: { skills: { resolutionStatus: string }[] };
+      lockfile: { skills: { source?: { revision: string } }[] };
+    };
+  };
+  expect(locked.state.manifest.skills[0]?.resolutionStatus).toBe("RESOLVED");
+  expect(locked.state.lockfile.skills[0]?.source?.revision).toBe(revision);
+  const loser = await handlePostPendingResolution(
+    stateRequest(secondDevice.workspaceId, secondDevice.issued.token, {
+      method: "POST",
+      body: JSON.stringify({ ...resolution, idempotencyKey: "v2-resolve-2" }),
+    }),
+    db,
+    secondDevice.workspaceId,
+  );
+  expect(loser.status).toBe(409);
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM workspace_revisions").get(),
+  ).toEqual({ count: 2 });
+});
+
 test("device-token SaaSProvider pull/push talks to /api/v1 without login or reporting", async () => {
   const { sqlite, db } = await stateDb();
   const { issued, workspaceId } = await pairedDevice(db, sqlite);

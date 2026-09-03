@@ -1,3 +1,4 @@
+import { DomainValidationError } from "../../../packages/core/src/index";
 import { HostedEntitlementRequiredError } from "./billing";
 import {
   dashboardMutationResult,
@@ -12,6 +13,7 @@ export function dashboardMutationErrorResponse(error: unknown) {
   if (error instanceof HostedEntitlementRequiredError) return jsonError(error.message, 402);
   if (error instanceof RevisionConflictError || (error instanceof Error && error.message === "BASE_REVISION_CONFLICT")) return jsonError("The workspace changed before this mutation could be applied.", 409);
   if (error instanceof InvalidIdempotencyKeyError) return jsonError(error.message, 400);
+  if (error instanceof DomainValidationError) return jsonError(error.message, 400);
   if (error instanceof Error && ["INVALID_SKILL", "INVALID_REF", "SKILL_NOT_FOUND", "Repository must not include credentials"].includes(error.message)) return jsonError(error.message, 400);
   throw error;
 }

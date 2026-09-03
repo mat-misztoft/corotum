@@ -191,10 +191,65 @@ export async function handlePostPendingResolution(
       workspaceId,
     );
     if (current.id !== payload.baseRevision) throw new RevisionConflictError();
-    // Never coerce v2 source or artifact locks through the legacy shape.
-    if (isV2CloudState(current.state)) throw new DomainValidationError(
-      "VALIDATION_ERROR", "v2 pending resolution is not supported by this endpoint.",
-    );
+    if (isV2CloudState(current.state)) {
+      const pending = current.state.manifest.skills.find(
+        (skill) => skill.id === payload.skillId,
+      );
+      if (!pending || pending.resolutionStatus !== "PENDING_RESOLUTION") {
+        throw new DomainValidationError(
+          "VALIDATION_ERROR",
+          "Skill is not pending resolution.",
+        );
+      }
+      const source = {
+        repository: payload.repository,
+        path: payload.path,
+        ref: pending.source?.ref ?? "HEAD",
+      };
+      const revision = await mutateDesiredState(db as never, {
+        workspaceId,
+        userId: authenticated.device.userId,
+        baseRevisionId: payload.baseRevision,
+        idempotencyKey: payload.idempotencyKey,
+        actor: { type: "device", id: authenticated.device.deviceId },
+        state: validateV2DesiredState({
+          manifest: {
+            version: 2,
+            skills: current.state.manifest.skills.map((skill) =>
+              skill.id === pending.id
+                ? { ...skill, source, resolutionStatus: "RESOLVED" as const }
+                : skill,
+            ),
+          },
+          lockfile: {
+            version: 2,
+            skills: [
+              ...current.state.lockfile.skills,
+              {
+                id: pending.id,
+                name: pending.name,
+                source: {
+                  ...source,
+                  revision: payload.revision,
+                  contentHash: payload.contentHash,
+                },
+                materialization: {
+                  kind: "source",
+                  contentHash: payload.contentHash,
+                },
+              },
+            ],
+          },
+        } as never),
+        transition: {
+          type: "UPDATE",
+          skillId: pending.id,
+          metadata: { resolution: "resolved" },
+        },
+        dispositionLedger: current.dispositionLedger,
+      });
+      return Response.json(envelope(revision));
+    }
     const pending = current.state.manifest.skills.find(
       (skill) => skill.id === payload.skillId,
     );
