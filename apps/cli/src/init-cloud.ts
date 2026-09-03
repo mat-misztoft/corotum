@@ -1,11 +1,26 @@
 import type { CredentialsStore, CorotumConfig } from "./config";
-import { V2SaaSProvider, V2CloudProviderError } from "../../../packages/saas-provider/src/index";
+import type { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
 
 export class CloudInitError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CloudInitError";
   }
+}
+
+const HOSTED_SUBSCRIPTION_MESSAGE =
+  "Hosted Cloud subscription required. Pairing succeeded; start a subscription before initializing Cloud Sync.";
+
+export function hostedSubscriptionInitError(): CloudInitError {
+  return new CloudInitError(HOSTED_SUBSCRIPTION_MESSAGE);
+}
+
+export function isHostedSubscriptionRequired(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message === "Hosted Cloud subscription required" ||
+    /subscription required/i.test(message)
+  );
 }
 
 export type CloudInitAuth = Readonly<{
@@ -54,13 +69,8 @@ export class CloudInitService {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Cloud desired state could not be loaded completely.";
-      if (
-        message === "Hosted Cloud subscription required" ||
-        (error instanceof V2CloudProviderError && message.includes("subscription required"))
-      ) {
-        throw new CloudInitError(
-          "Hosted Cloud subscription required. Pairing succeeded; start a subscription before initializing Cloud Sync.",
-        );
+      if (isHostedSubscriptionRequired(error) || isHostedSubscriptionRequired(message)) {
+        throw hostedSubscriptionInitError();
       }
       throw new CloudInitError(message);
     }

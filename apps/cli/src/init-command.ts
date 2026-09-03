@@ -18,7 +18,7 @@ import {
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { formatCorotumBanner } from "./banner";
 import { CLI_VERSION, type CliIo } from "./cli";
-import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
+import { CloudAuthError, DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
 import { cloudAuthContext } from "./cloud-auth-command";
 import { ConfigStore, CredentialsStore, effectiveStoragePaths } from "./config";
 import {
@@ -32,7 +32,11 @@ import {
   type InitAdoptionChoice,
   type InitAdoptionPrompt,
 } from "./init-adoption";
-import { CloudInitService } from "./init-cloud";
+import {
+  CloudInitService,
+  hostedSubscriptionInitError,
+  isHostedSubscriptionRequired,
+} from "./init-cloud";
 import {
   assertGitAvailable,
   InitError,
@@ -85,7 +89,7 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           origin?: string;
         },
       ) => {
-        const homeDir = homedir();
+        const homeDir = processHomeDir();
         const paths = resolvePlatformPaths({
           homeDir,
           platform: process.platform as "darwin" | "linux" | "win32",
@@ -235,7 +239,14 @@ export function registerInitCommand(program: Command, io: CliIo): void {
           };
 
           const cloudConnection = cloud
-            ? await connectCloud(program, io, paths, configStore, options.origin)
+            ? await connectCloud(
+                program,
+                io,
+                paths,
+                configStore,
+                options.origin,
+                nonInteractive,
+              )
             : null;
           if (!cloud) await assertGitAvailable();
           const persistDesiredState = () =>
@@ -287,12 +298,16 @@ export function registerInitCommand(program: Command, io: CliIo): void {
                       : "Pushed desired state to Git",
                   );
           } catch (error) {
+            if (isHostedSubscriptionRequired(error)) throw hostedSubscriptionInitError();
             throwGitInitError(error);
           }
 
           if (result.kind === "refused") {
             if (/already initialized|already configured/i.test(result.reason)) {
               throw new InitError(result.reason, "ALREADY_INITIALIZED");
+            }
+            if (isHostedSubscriptionRequired(result.reason)) {
+              throw hostedSubscriptionInitError();
             }
             throwGitInitError(new Error(result.reason));
           }
@@ -316,6 +331,14 @@ export function registerInitCommand(program: Command, io: CliIo): void {
         }
       },
     );
+}
+
+function processHomeDir(): string {
+  return (
+    process.env.HOME?.trim() ||
+    process.env.USERPROFILE?.trim() ||
+    homedir()
+  );
 }
 
 async function gitOriginFromCache(gitDir: string): Promise<string | undefined> {
@@ -366,6 +389,7 @@ async function connectCloud(
   paths: ReturnType<typeof resolvePlatformPaths>,
   config: ConfigStore,
   originOption: string | undefined,
+  nonInteractive: boolean,
 ): Promise<{ provider: InitV2Provider; workspaceId: string }> {
   const { origin, service } = cloudAuthContext(
     program,
@@ -375,7 +399,17 @@ async function connectCloud(
   const connected = await new CloudInitService({
     config,
     credentials: new CredentialsStore(paths),
-    auth: service,
+    auth: {
+      login: async () => {
+        if (nonInteractive) {
+          throw new CloudAuthError(
+            "Cloud login requires an interactive terminal to display the pairing code. Re-run without --non-interactive.",
+            "GENERAL_ERROR",
+          );
+        }
+        return service.login();
+      },
+    },
     provider: ({ deviceToken, workspaceId }) =>
       new V2SaaSProvider({ origin, deviceToken, workspaceId }),
   }).connect();
