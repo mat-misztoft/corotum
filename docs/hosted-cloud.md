@@ -2,7 +2,7 @@
 
 This page is only for the hosted Corotum Cloud service at `https://corotum.com`. Self-hosted deployments must not follow the Creem steps here. See [self-hosting.md](./self-hosting.md) instead.
 
-Hosted Cloud Sync, dashboard Cloud mutations, and paid WebMCP Cloud operations require an active hosted Cloud entitlement. Login and device pairing are allowed without a subscription.
+Hosted Cloud Sync, CLI Cloud skill mutations, dashboard Cloud mutations, and paid WebMCP Cloud operations require an active hosted Cloud entitlement. Login and device pairing are allowed without a subscription. The dashboard is a full product surface. Self-hosted Cloud does not use this Creem gate.
 
 ## Price
 
@@ -77,7 +77,7 @@ AUTH_EMAIL_FROM=auth@corotum.com
 
 ## Cloud Sync behavior
 
-After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/skills` using the same provenance rules as Git init. Devices apply exact locked revisions with `corotum sync`. Source-backed skills are fetched with system Git on that device. Artifact-backed skills download from authenticated R2. Retention keeps the current artifact plus one previous artifact per skill. Sync never uses upstream `HEAD`. Details: [skills.md](./skills.md).
+After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/skills` using the same provenance rules as Git init. Zero agents is valid. The same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. Dashboard and WebMCP can mutate that state too. Devices apply exact locked revisions with `corotum sync`, then report the applied revision. The dashboard does not show `SYNCED` until that report exists. Source-backed skills are fetched with system Git on that device. Artifact-backed skills download from authenticated R2. Retention keeps the current artifact plus one previous artifact per skill. Sync never uses upstream `HEAD`. There is no daemon and no remote forced sync. Details: [skills.md](./skills.md).
 
 ## CLI against hosted Cloud
 
@@ -85,6 +85,8 @@ After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/s
 curl -fsSL https://corotum.com/install.sh | sh
 corotum login
 corotum init cloud
+corotum add owner/skills --skill review --ref main
+corotum sync
 ```
 
-Default origin is `https://corotum.com`. After checkout and a verified webhook, Cloud init can write desired state. Device pairing and authentication without a subscription do not grant Cloud Sync.
+Default origin is `https://corotum.com`. After checkout and a verified webhook, Cloud init and Cloud skill mutations can write desired state. Device pairing and authentication without a subscription do not grant Cloud Sync. Hosted `402` after pairing stays entitlement-gated and does not mutate local files.

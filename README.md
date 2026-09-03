@@ -2,7 +2,7 @@
 
 Keep your agent skills in sync.
 
-Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. Git Sync / Free is the current MVP: a Git-backed backend with no Corotum account. Hosted or self-hosted Corotum Cloud remains available.
+Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. Cloud Sync is the current workstream (hosted corotum.com or self-hosted Cloud). Git Sync / Free remains a fully documented Git-backed backend with no Corotum account. Neither mode is hidden or removed.
 
 v0.1 binaries are unsigned. Official installers are the only supported installation method. There is no daemon and no remote forced sync.
 
@@ -35,10 +35,11 @@ On a TTY, `corotum init` interactively chooses Git Sync versus Corotum Cloud, th
 
 ```bash
 corotum init repository git@github.com:example/corotum-state.git
+corotum login
 corotum init cloud
 ```
 
-Zero installed or enabled agents is valid. Global skills live in `~/.agents/skills` independently of agents. Optional `corotum agents` commands scan, enable, or disable local agent exposure later.
+Zero installed or enabled agents is valid. Global skills live in `~/.agents/skills` independently of agents. Optional `corotum agents` commands scan, enable, or disable local agent exposure later. In Cloud mode the same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. The dashboard and WebMCP can mutate that state too. After `corotum sync`, the device reports its applied revision; there is no daemon and no remote forced sync.
 
 ## Docs
 
@@ -46,6 +47,7 @@ Zero installed or enabled agents is valid. Global skills live in `~/.agents/skil
 - [CLI](./docs/cli.md)
 - [Skills and v2 contracts](./docs/skills.md)
 - [Git Sync](./docs/git-sync.md)
+- [Dashboard and WebMCP](./docs/dashboard-and-webmcp.md)
 - [Migration](./docs/migration.md)
 - [Self-hosted Cloud](./docs/self-hosting.md) — Creem is not required
 - [Hosted corotum.com](./docs/hosted-cloud.md)

@@ -148,6 +148,8 @@ export async function checkDocs(
     "no daemon",
     "remote forced sync",
     "official installer",
+    "Cloud Sync is the current workstream",
+    "full product surface",
   ]) {
     if (!corpus.toLowerCase().includes(phrase.toLowerCase())) {
       findings.push({
@@ -155,6 +157,36 @@ export async function checkDocs(
         message: `Documentation must state: ${phrase}.`,
       });
     }
+  }
+
+  const cliDocs = files.get("docs/cli.md") ?? "";
+  for (const missing of includesAll(cliDocs, [
+    "reports the applied revision",
+    "PENDING_RESOLUTION",
+    "add",
+    "adopt",
+    "remove",
+    "unmanage",
+    "restore",
+    "update",
+    "set-ref",
+  ])) {
+    findings.push({
+      file: "docs/cli.md",
+      message: `Missing Cloud Sync CLI coverage: ${missing}.`,
+    });
+  }
+
+  const dashboard = files.get("docs/dashboard-and-webmcp.md") ?? "";
+  for (const missing of includesAll(dashboard, [
+    "full product surface",
+    "reports the applied revision",
+    "PENDING_RESOLUTION",
+  ])) {
+    findings.push({
+      file: "docs/dashboard-and-webmcp.md",
+      message: `Missing Cloud dashboard coverage: ${missing}.`,
+    });
   }
 
   const selfHost = files.get("docs/self-hosting.md") ?? "";

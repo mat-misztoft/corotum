@@ -169,8 +169,8 @@ corotum init cloud --origin https://cloud.example.com
 
 `init cloud` opens the pairing browser flow when the device is not already logged in. Hosted entitlement is not required.
 
-4. Open `/dashboard` for skills, devices, target reports, and settings. Self-hosted billing UI states that Cloud functionality is free and has no billing portal.
-5. Mutate Cloud desired state with [WebMCP](./dashboard-and-webmcp.md) (or the same-origin dashboard mutation API). Git CLI mutation commands (`add`, `sync`, and the rest) require Git Sync mode.
+4. Open `/dashboard` for skills, devices, target reports, and settings. The dashboard is a full product surface. Self-hosted billing UI states that Cloud functionality is free and has no billing portal.
+5. Mutate Cloud desired state with the same CLI skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) or with [WebMCP](./dashboard-and-webmcp.md) / the same-origin dashboard mutation API. Then run `corotum sync` on each device; the device reports the applied revision. There is no daemon and no remote forced sync. Zero agents is valid.
 6. Revoke a device from `/dashboard/devices`. Revoke invalidates only that device token and keeps remote machine data.
 7. `corotum logout --origin https://cloud.example.com` revokes the local token.
 

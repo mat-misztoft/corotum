@@ -1,6 +1,8 @@
 # Dashboard and WebMCP
 
-Cloud UI and WebMCP call the same application services. They change desired state only. v0.1 has no `sync_device` or `sync_all_devices` tool and does not remotely force a device to sync. A device applies or reports revisions only when the CLI runs on that device.
+The Cloud dashboard is a full product surface: overview, skills, devices, billing, and settings. Cloud UI and WebMCP call the same application services as the CLI. They change desired state only. v0.1 has no `sync_device` or `sync_all_devices` tool and does not remotely force a device to sync. A device applies revisions only when `corotum sync` runs on that device, then reports the applied revision. The dashboard never shows `SYNCED` before that report. There is no revision-history route.
+
+CLI skill commands (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) also mutate Cloud desired state. Zero agents is valid.
 
 On hosted corotum.com, paid Cloud functionality requires hosted Cloud entitlement. Self-hosted deployments do not require a Creem subscription.
 
@@ -18,7 +20,9 @@ Sign in at the Cloud origin, then open:
 
 Revoking a device invalidates only that device's Cloud token. Remote machine rows are kept.
 
-Skills that dashboard or WebMCP add or retarget are `PENDING_RESOLUTION` until a device with repository access resolves the exact lock. The UI states that no remote sync is requested. Devices then install that locked SHA or artifact; they never follow upstream `HEAD` during `corotum sync`.
+Device status chips sit on machine panels. A machine is not `SYNCED` until it reports an applied revision. Pending, behind, partial, drift, error, `AUTH_REQUIRED`, and hosted `402` states are visible as status, not decoration.
+
+Skills that dashboard or WebMCP add or retarget are `PENDING_RESOLUTION` until a device with repository access resolves the exact lock (CLI resolve on a machine with Git also works). The UI states that no remote sync is requested. Devices then install that locked SHA or artifact; they never follow upstream `HEAD` during `corotum sync`.
 
 Cloud skill mutations from the browser use same-origin `POST /api/v1/dashboard` with `baseRevisionId`, `idempotencyKey`, and a mutation object (`ADD`, `REMOVE`, `UPDATE`, `SET_REF`). A stale `baseRevisionId` returns HTTP `409`.
 

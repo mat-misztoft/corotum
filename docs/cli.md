@@ -1,6 +1,6 @@
 # CLI
 
-The compiled `corotum` binary is the v0.1 client. Git Sync / Free is the current MVP and uses the CLI for desired-state mutations. Cloud desired-state mutations after init are performed from the [dashboard or WebMCP](./dashboard-and-webmcp.md). Local reconcile (`status`, `diff`, `sync`) works in both modes.
+The compiled `corotum` binary is the v0.1 client. Cloud Sync is the current workstream. Git Sync / Free remains documented. Desired-state mutations use the same CLI skill commands in both modes. The [dashboard and WebMCP](./dashboard-and-webmcp.md) can also mutate Cloud desired state. Local reconcile (`status`, `diff`, `sync`) works in both modes. After Cloud `sync`, the device reports the applied revision.
 
 Contracts for named storage, source versus artifact, denylist, typed errors, and non-interactive consent are in [skills.md](./skills.md).
 
@@ -36,17 +36,17 @@ corotum --allow-artifacts <command>
 | `corotum init cloud [--origin <url>] [--skill <name...>] [--replace <name...>] [--keep <name...>] [--adopt-artifact <name...>]` | Pair with Cloud if needed, then adopt selected local skills into Cloud |
 | `corotum login [--origin <url>]` | Pair this device in a browser |
 | `corotum logout [--origin <url>]` | Revoke this device token and delete local Cloud credentials |
-| `corotum add <source> [--skill <name>] [--ref <ref>]` | Add one Git-backed skill (Git Sync) |
-| `corotum adopt <name> --source <source> [--skill <name>] [--ref <ref>]` | Adopt one local unmanaged skill (Git Sync) |
-| `corotum remove <skill>` | Remove a managed skill from desired state and reconciled targets (Git Sync) |
-| `corotum unmanage <skill>` | Stop managing a skill and leave local copies in place (Git Sync) |
-| `corotum restore <skill>` | Restore one managed skill from its exact lock (Git Sync) |
-| `corotum update [skill]` | Update exact locks from upstream (Git Sync) |
+| `corotum add <source> [--skill <name>] [--ref <ref>]` | Add one Git-backed skill (Git Sync or Cloud) |
+| `corotum adopt <name> --source <source> [--skill <name>] [--ref <ref>]` | Adopt one local unmanaged skill (Git Sync or Cloud) |
+| `corotum remove <skill>` | Remove a managed skill from desired state and reconciled targets (Git Sync or Cloud) |
+| `corotum unmanage <skill>` | Stop managing a skill and leave local copies in place (Git Sync or Cloud) |
+| `corotum restore <skill>` | Restore one managed skill from its exact lock (Git Sync or Cloud) |
+| `corotum update [skill]` | Update exact locks from upstream (Git Sync or Cloud) |
 | `corotum update --check` | Report upstream status without changing state |
-| `corotum set-ref <skill> <ref>` | Change a managed skill ref and lock exact content (Git Sync) |
+| `corotum set-ref <skill> <ref>` | Change a managed skill ref and lock exact content (Git Sync or Cloud) |
 | `corotum status` | Show local reconciliation status (Git or Cloud) |
 | `corotum diff` | Show the exact-lock reconciliation plan (Git or Cloud) |
-| `corotum sync` | Reconcile local skills to the exact locked state (Git or Cloud) |
+| `corotum sync` | Reconcile local skills to the exact locked state (Git or Cloud). Cloud then reports the applied revision |
 | `corotum agents` | List optional local agents and whether they are detected or enabled |
 | `corotum agents scan` | Detect installed agents without enabling them |
 | `corotum agents enable <agent>` | Enable local exposure for one agent on this device |
@@ -109,7 +109,7 @@ Status / diff / sync envelopes add `command`, `status`, `revision`, `appliedRevi
 }
 ```
 
-`status` values include `READY`, `SYNCED`, `PARTIAL`, `DRIFTED`, `LOCAL_CONFLICT`, `PENDING_PUSH`, `RECOVERABLE`, and `ERROR`.
+`status` values include `READY`, `SYNCED`, `PARTIALLY_SYNCED`, `DRIFTED`, `LOCAL_CONFLICT`, `PENDING_PUSH`, `RECOVERABLE`, `AUTH_REQUIRED`, and `ERROR`. Cloud classifications may also include `PENDING_RESOLUTION`.
 
 ## Config and credentials
 
@@ -131,9 +131,33 @@ Default locations:
 
 Default Cloud origin is `https://corotum.com`. Override with `--origin` or `COROTUM_CLOUD_ORIGIN`. Origins must be `http` or `https` and must not include credentials.
 
+## Cloud Sync
+
+Cloud Sync is the current workstream. Git Sync remains available ([git-sync.md](./git-sync.md)).
+
+`corotum login` pairs this device in a browser. On a TTY it prints the verification URL and user code. It never prints the device token. `--non-interactive` and a missing TTY fail instead of waiting for a browser. Pairing does not require hosted entitlement. `corotum logout` revokes the server token when possible and always deletes local Cloud credentials.
+
+After `corotum init cloud` (or migrate to Cloud), these commands mutate Cloud desired state through the same v2 mutation path as Git, then apply locally:
+
+```text
+add
+adopt
+remove
+unmanage
+restore
+update
+set-ref
+```
+
+Missing login is a typed `corotum login` error. Hosted corotum.com Cloud mutations require an active entitlement (HTTP `402`). Self-hosted Cloud does not use Creem.
+
+`add`, `update`, and `set-ref` resolve Git on this device. The dashboard and WebMCP can also mutate Cloud desired state. Skills they add or retarget may stay `PENDING_RESOLUTION` until a device with repository access locks exact content. A later CLI resolve on a device with Git access can complete that lock. Sync never installs upstream `HEAD`.
+
+`status`, `diff`, and `sync` pull exact lockfile state. After a verified local sync, the device reports the applied revision. The dashboard does not show `SYNCED` until that report exists. Partial skill or target failure is `PARTIALLY_SYNCED` (or a per-target error), not a silent full success. There is no daemon and no remote forced sync.
+
 ## Optional agents
 
-Agents are optional. Zero detected or enabled agents is a valid Corotum state. Global skill management and Git Sync do not require an agent. Missing `~/.agents/skills` is valid. Existing global skills are discovered independently of agent detection.
+Agents are optional. Zero detected or enabled agents is a valid Corotum state. Global skill management, Git Sync, and Cloud Sync do not require an agent. Missing `~/.agents/skills` is valid. Existing global skills are discovered independently of agent detection.
 
 v0.1 detects a closed built-in list. Interactive init may offer to enable detected agents; declining is valid. Non-interactive init never enables agents automatically.
 
