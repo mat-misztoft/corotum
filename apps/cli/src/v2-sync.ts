@@ -138,6 +138,7 @@ export class V2SyncService {
         recovery: (await this.options.recovery?.load()) ?? null,
       };
     } catch (error) {
+      if (error instanceof Error && error.name === "CloudAuthError") throw error;
       return {
         kind: "refused",
         reason: error instanceof Error ? error.message : "Inspect failed.",
@@ -153,6 +154,7 @@ export class V2SyncService {
     try {
       desired = await this.provider.pull();
     } catch (error) {
+      if (error instanceof Error && error.name === "CloudAuthError") throw error;
       const reason =
         error instanceof Error ? error.message : "Desired state pull failed.";
       if (pendingPush || /waiting to be pushed/i.test(reason)) {
@@ -421,7 +423,7 @@ export function v2SyncStatusPayload(
     outcome = "AUTH_REQUIRED";
   } else if ("kind" in result && result.kind === "synced") status = "SYNCED";
   else if ("kind" in result && result.kind === "partial") {
-    status = conflict ? "LOCAL_CONFLICT" : drifted ? "DRIFTED" : "PARTIAL";
+    status = conflict ? "LOCAL_CONFLICT" : drifted ? "DRIFTED" : "PARTIALLY_SYNCED";
     outcome = conflict ? "CONFLICT" : "PARTIAL_SUCCESS";
   } else if (pendingPush) {
     status = "PENDING_PUSH";

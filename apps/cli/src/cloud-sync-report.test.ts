@@ -3,6 +3,7 @@ import {
   CloudSyncReportError,
   CloudSyncReportService,
   deviceSyncAggregateFrom,
+  deviceTargetReportsFrom,
   sanitizeSyncErrorMessage,
 } from "./cloud-sync-report";
 
@@ -91,6 +92,41 @@ test("partial target outcomes stay visible in the reported aggregate", () => {
   expect(sanitizeSyncErrorMessage("device-token-secret leaked")).toBe(
     "A local target failed.",
   );
+});
+
+test("failed skill operations become per-agent target reports", () => {
+  expect(
+    deviceTargetReportsFrom({
+      operations: [
+        { skillId: "sk_ok", status: "SUCCESS" },
+        {
+          skillId: "sk_fail",
+          status: "ERROR",
+          error: "Failed to write /Users/ada/.agents/skill",
+        },
+      ],
+      actual: {
+        skills: {
+          sk_fail: { targets: [{ agentId: "pi" }, { agentId: "codex" }] },
+        },
+      },
+    }),
+  ).toEqual([
+    {
+      skillId: "sk_fail",
+      agentId: "pi",
+      status: "ERROR",
+      errorCode: "TARGET_ERROR",
+      errorMessage: "A local target failed.",
+    },
+    {
+      skillId: "sk_fail",
+      agentId: "codex",
+      status: "ERROR",
+      errorCode: "TARGET_ERROR",
+      errorMessage: "A local target failed.",
+    },
+  ]);
 });
 
 test("sync reports send sanitized per-agent target outcomes", async () => {

@@ -44,6 +44,41 @@ export function sanitizeSyncErrorMessage(
   return trimmed.slice(0, 200);
 }
 
+export function deviceTargetReportsFrom(result: {
+  operations: readonly Readonly<{
+    skillId: string;
+    status: string;
+    error?: string;
+  }>[];
+  actual: {
+    skills: Readonly<
+      Record<string, { targets?: readonly { agentId: string }[] }>
+    >;
+  };
+}): DeviceTargetReport[] {
+  const reports: DeviceTargetReport[] = [];
+  for (const operation of result.operations) {
+    if (operation.status === "SUCCESS") continue;
+    const status: DeviceTargetReport["status"] =
+      operation.status === "AUTH_REQUIRED"
+        ? "AUTH_REQUIRED"
+        : operation.status === "DRIFTED"
+          ? "DRIFTED"
+          : "ERROR";
+    const agents = result.actual.skills[operation.skillId]?.targets ?? [];
+    for (const target of agents) {
+      reports.push({
+        skillId: operation.skillId,
+        agentId: target.agentId,
+        status,
+        errorCode: status === "ERROR" ? "TARGET_ERROR" : operation.status,
+        errorMessage: sanitizeSyncErrorMessage(operation.error),
+      });
+    }
+  }
+  return reports;
+}
+
 export function deviceSyncAggregateFrom(result: {
   kind: "synced" | "partial";
   execution: {

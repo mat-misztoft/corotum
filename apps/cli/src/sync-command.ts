@@ -7,16 +7,23 @@ import {
   detectAgents,
   localAgentFileSystem,
 } from "../../../packages/agent-targets/src/index";
-import { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
+import {
+  V2CloudProviderError,
+  V2SaaSProvider,
+} from "../../../packages/saas-provider/src/index";
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { createCliV2GitStateProvider } from "./artifact-consent";
-import type { CliIo } from "./cli";
-import { isNonInteractive } from "./cli";
+import { CLI_VERSION, type CliIo, isNonInteractive } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
-import { DEFAULT_CLOUD_ORIGIN } from "./cloud-auth";
+import {
+  CloudAuthError,
+  cloudOriginFrom,
+  DEFAULT_CLOUD_ORIGIN,
+} from "./cloud-auth";
 import {
   CloudSyncReportService,
   deviceSyncAggregateFrom,
+  deviceTargetReportsFrom,
 } from "./cloud-sync-report";
 import {
   ConfigStore,
@@ -38,6 +45,7 @@ import { V2LocalApplier } from "./v2-local-applier";
 import {
   type V2SyncEnvelope,
   type V2SyncProviderPort,
+  type V2SyncReportHook,
   V2SyncService,
   v2SyncStatusPayload,
 } from "./v2-sync";
@@ -75,6 +83,7 @@ async function inspectCommand(
   const payload: Record<string, unknown> = {
     ...v2SyncStatusPayload(result),
     command: kind,
+    mode: runtime.mode,
   };
   if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
     throw new Error(result.reason);
@@ -91,7 +100,7 @@ async function inspectCommand(
 
 async function syncCommand(program: Command, io: CliIo): Promise<void> {
   await withGitCliErrors(async () => {
-  const homeDir = homedir();
+  const homeDir = processHomeDir();
   const paths = resolvePlatformPaths({
     homeDir,
     platform: process.platform as "darwin" | "linux" | "win32",
@@ -132,6 +141,7 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
     const payload: Record<string, unknown> = {
       ...v2SyncStatusPayload(result),
       command: "SYNC",
+      mode: runtime.mode,
       agents,
     };
     if (result.kind === "refused" && payload.status !== "PENDING_PUSH") {
@@ -156,12 +166,13 @@ async function createRuntime(
   forSync: boolean,
   loaded?: CorotumConfig,
 ): Promise<Readonly<{ service: V2SyncService; mode: "git" | "cloud" }>> {
-  const homeDir = homedir();
+  const homeDir = processHomeDir();
   const paths = resolvePlatformPaths({
     homeDir,
     platform: process.platform as "darwin" | "linux" | "win32",
     env: process.env,
   });
+  const origin = cloudOrigin();
   const config = loaded ?? (await new ConfigStore(paths).load());
   if (config.mode !== "git" && config.mode !== "cloud") {
     throw notInitializedError("using status, diff, or sync");
@@ -177,7 +188,14 @@ async function createRuntime(
   const recovery = new LifecycleRecoveryStore(
     join(paths.stateDir, "lifecycle-transaction.json"),
   );
-  const provider = await createProvider(program, io, config, storage, paths);
+  const provider = await createProvider(
+    program,
+    io,
+    config,
+    storage,
+    paths,
+    origin,
+  );
   const applier = new V2LocalApplier(
     stateStore,
     new CanonicalSkillStore(storage.skillsStoragePath),
@@ -206,24 +224,22 @@ async function createRuntime(
   );
   const reporter =
     provider.mode === "cloud" && forSync && config.deviceId
-      ? async (input: {
-          state: { lastAppliedRevision: string | null };
-          snapshot: {
-            plan: { classifications: readonly { classification: string }[] };
-          };
-          kind: "synced" | "partial";
-          operations: readonly { status: string; error?: string }[];
-        }) => {
+      ? async (input: Parameters<V2SyncReportHook>[0]) => {
           const credentials = new CredentialsStore(paths);
           const aggregate = deviceSyncAggregateFrom({
             kind: input.kind,
             execution: { operations: input.operations },
             snapshot: input.snapshot,
           });
+          const targets = deviceTargetReportsFrom({
+            operations: input.operations,
+            actual: input.snapshot.actual,
+          });
           await new CloudSyncReportService({
-            origin: DEFAULT_CLOUD_ORIGIN,
+            origin,
             deviceId: config.deviceId as string,
             credentials,
+            cliVersion: CLI_VERSION,
           }).report({
             lastAppliedRevision: input.state.lastAppliedRevision,
             appliedRevisionId: input.state.lastAppliedRevision,
@@ -231,6 +247,7 @@ async function createRuntime(
               aggregate.status === "SYNCED" && !input.state.lastAppliedRevision
                 ? { status: "PARTIALLY_SYNCED" }
                 : aggregate,
+            ...(targets.length > 0 ? { targets } : {}),
           });
         }
       : undefined;
@@ -252,6 +269,7 @@ async function createProvider(
   config: CorotumConfig,
   storage: ReturnType<typeof effectiveStoragePaths>,
   paths: ReturnType<typeof resolvePlatformPaths>,
+  origin: string,
 ): Promise<
   Readonly<{
     mode: "git" | "cloud";
@@ -280,20 +298,37 @@ async function createProvider(
   }
   const credentials = await new CredentialsStore(paths).load();
   if (!credentials.cloudDeviceToken || !config.workspaceId) {
-    throw new Error("Run corotum login before using Cloud sync.");
+    throw new CloudAuthError(
+      "Run corotum login before using Cloud status, diff, or sync.",
+      "AUTH_REQUIRED",
+    );
   }
   const cloud = new V2SaaSProvider({
-    origin: DEFAULT_CLOUD_ORIGIN,
+    origin,
     deviceToken: credentials.cloudDeviceToken,
     workspaceId: config.workspaceId,
+    cliVersion: CLI_VERSION,
   });
   const asEnvelope = async (): Promise<V2SyncEnvelope> => {
-    const pulled = await cloud.pull();
-    return {
-      revisionId: pulled.revisionId ?? "",
-      state: pulled.state,
-      ledger: pulled.ledger,
-    };
+    try {
+      const pulled = await cloud.pull();
+      return {
+        revisionId: pulled.revisionId ?? "",
+        state: pulled.state,
+        ledger: pulled.ledger,
+      };
+    } catch (error) {
+      if (
+        error instanceof V2CloudProviderError &&
+        error.code === "AUTH_REQUIRED"
+      ) {
+        throw new CloudAuthError(
+          "Cloud device authentication failed. Run corotum login.",
+          "AUTH_REQUIRED",
+        );
+      }
+      throw error;
+    }
   };
   return {
     mode: "cloud",
@@ -359,6 +394,20 @@ function write(
   if (program.opts<{ json?: boolean }>().json)
     io.writeOutput(`${JSON.stringify(jsonEnvelope(payload))}\n`);
   else io.writeOutput(human);
+}
+
+function processHomeDir(): string {
+  return (
+    process.env.HOME?.trim() ||
+    process.env.USERPROFILE?.trim() ||
+    homedir()
+  );
+}
+
+function cloudOrigin(): string {
+  return cloudOriginFrom(
+    process.env.COROTUM_CLOUD_ORIGIN?.trim() || DEFAULT_CLOUD_ORIGIN,
+  );
 }
 
 export type DetectedAgentStatus = Readonly<{

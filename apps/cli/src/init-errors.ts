@@ -3,6 +3,7 @@ import {
   GitSourceError,
   runSystemGit,
 } from "../../../packages/skills-adapter/src/git-source";
+import { CloudAuthError } from "./cloud-auth";
 import type { CliOutcome } from "./cli-contracts";
 
 export type InitErrorCode =
@@ -113,7 +114,13 @@ export function throwGitInitError(error: unknown): never {
 }
 
 export function classifyGitInitError(error: unknown): Error {
-  if (error instanceof InitError || error instanceof GitCliError) return error;
+  if (
+    error instanceof InitError ||
+    error instanceof GitCliError ||
+    error instanceof CloudAuthError
+  ) {
+    return error;
+  }
   if (error instanceof GitSourceError) {
     if (error.code === "AUTH_REQUIRED") return authGitError();
     if (error.code === "INVALID_SOURCE" || error.code === "CREDENTIALS_IN_URL") {
