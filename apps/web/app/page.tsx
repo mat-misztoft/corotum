@@ -1,5 +1,6 @@
 import { BillingToggle } from "./billing-toggle";
 import { FlowStory } from "./landing-flow-story";
+import { LandingHeader } from "./landing-header";
 import { SiteFooter } from "./site-footer";
 
 const deviceTargets = [
@@ -49,19 +50,7 @@ function StatusLabel({ status }: { status: string }) {
 export default function Home() {
   return (
     <main className="landing">
-      <header className="landing-header">
-        <a className="wordmark" href="/" aria-label="Corotum home">
-          Corotum
-        </a>
-        <nav aria-label="Main navigation">
-          <a href="#how-it-works">How it works</a>
-          <a href="#git-cloud">Git / Cloud</a>
-          <a href="#pricing">Pricing</a>
-          <a href="#agents">Agents</a>
-          <a href="https://github.com/mat_misztoft/corotum">GitHub</a>
-          <a href="/sign-in">Sign in</a>
-        </nav>
-      </header>
+      <LandingHeader />
 
       <section className="hero" aria-labelledby="hero-heading">
         <div className="hero-copy">

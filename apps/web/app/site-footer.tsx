@@ -5,9 +5,8 @@ export function SiteFooter() {
       <p>Keep your agent skills in sync.</p>
       <nav aria-label="Footer">
         <a href="https://github.com/mat_misztoft/corotum">GitHub</a>
-        <a href="https://github.com/mat_misztoft/corotum/blob/main/LICENSE">
-          AGPLv3
-        </a>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
       </nav>
     </footer>
   );

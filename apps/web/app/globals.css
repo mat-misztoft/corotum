@@ -1710,7 +1710,9 @@ a {
 .dashboard-chrome { background: var(--paper); border-bottom: 1px solid color-mix(in srgb, var(--ink) 26%, transparent); position: sticky; top: 0; z-index: 2; }
 .dashboard-brand-rule { background: var(--vermillion); height: 4px; }
 .dashboard-chrome { border-bottom: 2px solid var(--ink); }
+.landing > .dashboard-chrome .dashboard-nav,
 .dashboard-nav { align-items: stretch; display: flex; gap: 0; margin: 0 auto; max-width: 1120px; min-height: 56px; padding: 0; }
+.landing > .dashboard-chrome .dashboard-nav { max-width: 1440px; }
 .dashboard-nav .wordmark { align-items: center; border-right: 1px solid color-mix(in srgb, var(--ink) 26%, transparent); color: var(--ink); display: flex; flex: 0 0 auto; padding: 0 24px 0 42px; }
 .dashboard-nav-links { display: flex; flex: 1 1 auto; gap: 0; margin: 0; min-width: 0; white-space: nowrap; }
 .dashboard-nav-links a, .dashboard-nav-links button { align-items: center; background: none; border: 0; border-right: 1px solid color-mix(in srgb, var(--ink) 26%, transparent); color: var(--graphite); cursor: pointer; display: flex; font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; padding: 0 18px; text-decoration: none; text-transform: uppercase; }
@@ -1963,4 +1965,39 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .not-found-page * { animation: none; transition: none; }
   .not-found-primary:active { transform: none; }
+}
+
+.legal-doc {
+  margin: 0 auto;
+  max-width: 720px;
+  padding: 72px 42px 96px;
+}
+.legal-doc h1 {
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  margin: 0 0 16px;
+}
+.legal-doc h2 {
+  font-size: 1.2rem;
+  margin: 40px 0 12px;
+}
+.legal-doc h3 {
+  font-size: 1rem;
+  margin: 28px 0 8px;
+}
+.legal-doc p,
+.legal-doc li {
+  color: var(--graphite);
+  line-height: 1.6;
+}
+.legal-doc p { margin: 0 0 12px; }
+.legal-doc ul {
+  margin: 0 0 16px;
+  padding-left: 1.2em;
+}
+.legal-doc li { margin: 0 0 6px; }
+
+@media (max-width: 850px) {
+  .legal-doc { padding: 48px 20px 72px; }
 }

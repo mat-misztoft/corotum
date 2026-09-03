@@ -37,10 +37,20 @@ test("final CTA copy, actions, and install command match planning", () => {
 });
 
 test("landing login and Cloud CTAs go to /sign-in", () => {
-  expect(page).toContain('<a href="/sign-in">Sign in</a>');
   expect(page).toContain('href="/sign-in">');
-  expect(page.match(/href="\/sign-in"/g)?.length).toBe(4);
+  expect(page.match(/href="\/sign-in"/g)?.length).toBe(3);
   expect(page).not.toContain('href="/dashboard"');
+});
+
+test("landing header uses dashboard chrome and swaps Sign in for Dashboard", async () => {
+  const header = await Bun.file(`${import.meta.dir}/landing-header.tsx`).text();
+  expect(page).toContain("<LandingHeader />");
+  expect(header).toContain('className="dashboard-chrome"');
+  expect(header).toContain('className="dashboard-sign-out"');
+  expect(header).toContain("authClient.useSession");
+  expect(header).toContain('href="/dashboard"');
+  expect(header).toContain("Dashboard");
+  expect(header).toContain('href="/sign-in"');
 });
 
 test("pricing keeps the hosted and self-hosted paths clear", () => {
