@@ -183,14 +183,12 @@ test("monthly and annual checkout charge $5.99 and $59.90 for the signed-in cust
   expect(checkouts).toEqual([
     {
       productId: "prod_month",
-      customPrice: 599,
       customer: { email: "ada@example.com", name: "Ada" },
       successUrl: "https://corotum.com/dashboard/billing",
       metadata: { userId: "user_1", billingInterval: "month" },
     },
     {
       productId: "prod_year",
-      customPrice: 5990,
       customer: { email: "ada@example.com", name: "Ada" },
       successUrl: "https://corotum.com/dashboard/billing",
       metadata: { userId: "user_1", billingInterval: "year" },

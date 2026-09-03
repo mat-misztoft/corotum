@@ -231,19 +231,21 @@ export function DashboardSurface({ view }: { view: View }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(interval ? { interval } : {}),
       });
-      const body = (await response.json()) as {
+      const body = (await response.json().catch(() => null)) as {
         checkoutUrl?: string;
         portalUrl?: string;
         error?: string;
-      };
-      const url = body.checkoutUrl ?? body.portalUrl;
+      } | null;
+      const url = body?.checkoutUrl ?? body?.portalUrl;
       if (response.status === 402) {
-        setEntitlement(body.error ?? "Hosted Cloud subscription required");
+        setEntitlement(body?.error ?? "Hosted Cloud subscription required");
         return;
       }
       if (!response.ok || !url)
-        throw new Error(body.error ?? "Unable to open billing");
-      window.location.assign(url);
+        throw new Error(body?.error ?? "Unable to open billing");
+      if (path === "portal")
+        window.open(url, "_blank", "noopener,noreferrer");
+      else window.location.assign(url);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to open billing",
@@ -577,26 +579,33 @@ export function DashboardSurface({ view }: { view: View }) {
                   className="dashboard-billing-actions"
                   aria-label="Billing actions"
                 >
-                  <button
-                    className="dashboard-primary-button"
-                    type="button"
-                    disabled={action !== null}
-                    onClick={() => billingAction("checkout", "month")}
-                  >
-                    {action === "checkout-month"
-                      ? "Opening monthly checkout…"
-                      : "Start monthly - $5.99"}
-                  </button>
-                  <button
-                    className="dashboard-secondary-button"
-                    type="button"
-                    disabled={action !== null}
-                    onClick={() => billingAction("checkout", "year")}
-                  >
-                    {action === "checkout-year"
-                      ? "Opening annual checkout…"
-                      : "Start annual - $59.90"}
-                  </button>
+                  {!(settings.subscription &&
+                    (settings.subscription.status === "active" ||
+                      settings.subscription.status === "trialing" ||
+                      settings.subscription.status === "paid")) && (
+                    <>
+                      <button
+                        className="dashboard-primary-button"
+                        type="button"
+                        disabled={action !== null}
+                        onClick={() => billingAction("checkout", "month")}
+                      >
+                        {action === "checkout-month"
+                          ? "Opening monthly checkout…"
+                          : "Start monthly - $5.99"}
+                      </button>
+                      <button
+                        className="dashboard-secondary-button"
+                        type="button"
+                        disabled={action !== null}
+                        onClick={() => billingAction("checkout", "year")}
+                      >
+                        {action === "checkout-year"
+                          ? "Opening annual checkout…"
+                          : "Start annual - $59.90"}
+                      </button>
+                    </>
+                  )}
                   {settings.subscription && (
                     <button
                       className="dashboard-secondary-button"

@@ -37,7 +37,7 @@ function billingError(error: unknown) {
     return jsonError(error.message, 401);
   if (error instanceof UnprocessableWebhookError)
     return jsonError(error.message, 400);
-  if (error instanceof CreemProviderError) return jsonError(error.message, 502);
+  if (error instanceof CreemProviderError) return jsonError(error.message, 503);
   throw error;
 }
 

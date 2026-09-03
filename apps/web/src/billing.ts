@@ -19,7 +19,6 @@ export type BillingEnvironment = {
 
 export type CreemCheckoutInput = Readonly<{
   productId: string;
-  customPrice: number;
   customer: Readonly<{ email: string; name?: string }>;
   successUrl: string;
   metadata: Readonly<Record<string, string>>;
@@ -154,7 +153,6 @@ export async function createHostedCheckout(
   }
   const checkout = await creem.createCheckout({
     productId: productIdFor(env, interval) as string,
-    customPrice: hostedPriceCents(interval),
     customer: { email: input.email, name: input.name },
     successUrl: input.successUrl,
     metadata: { userId: input.userId, billingInterval: interval },
@@ -291,7 +289,6 @@ export function createCreemClient(env: BillingEnvironment): CreemClient {
         },
         body: JSON.stringify({
           product_id: input.productId,
-          custom_price: input.customPrice,
           success_url: input.successUrl,
           customer: {
             email: input.customer.email,

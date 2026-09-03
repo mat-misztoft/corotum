@@ -27,6 +27,8 @@ test("billing and settings use the shared dashboard language without new control
   expect(surface).toContain("This Corotum Cloud instance is self-hosted.");
   expect(surface).toContain('className="dashboard-command"');
   expect(surface).toContain('if (view === "billing")');
+  expect(surface).toContain('window.open(url, "_blank", "noopener,noreferrer")');
+  expect(surface).toContain('settings.subscription.status === "paid"');
   expect(surface).not.toContain("dashboard-legacy");
 });
 
