@@ -411,10 +411,13 @@ function humanInspectResult(
   const blockers = blockerLines(result);
   if (kind === "DIFF") {
     const names = skillNames(result);
-    const ops = result.snapshot.plan.operations.map(
-      (operation) =>
-        `${operation.kind} ${names.get(operation.skill.id) ?? operation.skill.id}`,
-    );
+    const ops = result.snapshot.plan.operations.map((operation) => {
+      const skillId =
+        operation.kind === "INSTALL" || operation.kind === "REPAIR_TARGET"
+          ? operation.skill.id
+          : operation.skillId;
+      return `${operation.kind} ${names.get(skillId) ?? skillId}`;
+    });
     return [`${ops.length} operations planned.`, ...ops, ...blockers].join("\n") + "\n";
   }
   const lines = [
