@@ -1,8 +1,11 @@
+import { isLaunchFreePeriod } from "../src/billing";
 import { BillingToggle } from "./billing-toggle";
 import { FlowStory } from "./landing-flow-story";
 import { LandingHeader } from "./landing-header";
 import { SiteFooter } from "./site-footer";
 import { WebMcpTools } from "./webmcp-tools";
+
+export const dynamic = "force-dynamic";
 
 const deviceTargets = [
   { device: "Desktop", agent: "Codex", status: "SYNCED" },
@@ -62,6 +65,13 @@ export default function Home() {
             Manage your skills once. Corotum keeps every agent and every machine
             on the same exact version.
           </p>
+          {isLaunchFreePeriod() && (
+            <aside className="launch-promotion" aria-label="Free Launch Month">
+              <strong>FREE LAUNCH MONTH</strong>
+              <span>Cloud free until September 30, 2026 · No card required</span>
+              <small>$5.99/month or $59.90/year from October 1</small>
+            </aside>
+          )}
           <div className="hero-actions">
             <a className="button button-primary" href="/sign-in">
               Start with Corotum Cloud
@@ -271,6 +281,13 @@ export default function Home() {
             <p className="pricing-summary">
               Everything needed for hosted Cloud Sync.
             </p>
+            {isLaunchFreePeriod() && (
+              <aside className="launch-promotion pricing-launch-promotion">
+                <strong>FREE LAUNCH MONTH</strong>
+                <span>Cloud free until September 30, 2026 · No card required</span>
+                <small>$5.99/month or $59.90/year from October 1</small>
+              </aside>
+            )}
             <ul className="pricing-list">
               <li>Hosted desired state and unlimited devices</li>
               <li>Dashboard with device and agent sync status</li>

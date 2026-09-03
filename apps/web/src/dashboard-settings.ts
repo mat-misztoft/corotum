@@ -1,4 +1,5 @@
 import { jsonError } from "./api";
+import { isLaunchFreePeriod } from "./billing";
 import type { WorkspaceDatabase } from "./workspaces";
 
 export type LinkedSignIn = Readonly<{
@@ -8,6 +9,7 @@ export type LinkedSignIn = Readonly<{
 
 export type DashboardSettingsView = Readonly<{
   hosted: boolean;
+  launchFreePeriod: boolean;
   email: string | null;
   accounts: LinkedSignIn[];
   subscription: {
@@ -47,7 +49,15 @@ export async function readDashboardSettings(
     providerId: row.providerId,
     label: row.displayLabel || row.accountId,
   }));
-  if (!hosted) return { hosted: false, email, accounts, subscription: null };
+  if (!hosted) {
+    return {
+      hosted: false,
+      launchFreePeriod: false,
+      email,
+      accounts,
+      subscription: null,
+    };
+  }
   const subscription = await db
     .prepare(
       `SELECT billing_interval AS interval, status,
@@ -56,7 +66,13 @@ export async function readDashboardSettings(
     )
     .bind(userId)
     .first<DashboardSettingsView["subscription"]>();
-  return { hosted, email, accounts, subscription };
+  return {
+    hosted,
+    launchFreePeriod: isLaunchFreePeriod(),
+    email,
+    accounts,
+    subscription,
+  };
 }
 
 export async function handleDashboardSettingsGet(

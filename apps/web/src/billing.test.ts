@@ -11,6 +11,7 @@ import {
   HOSTED_ANNUAL_PRICE_CENTS,
   HOSTED_MONTHLY_PRICE_CENTS,
   hasHostedCloudAccess,
+  isLaunchFreePeriod,
   processCreemWebhook,
   verifyCreemSignature,
 } from "./billing";
@@ -46,6 +47,17 @@ const device = {
   architecture: "arm64",
   cliVersion: "0.1.0",
 };
+const launchEnd = Date.parse("2026-10-01T00:00:00.000Z");
+
+async function afterLaunch<T>(run: () => Promise<T>) {
+  const now = Date.now;
+  Date.now = () => launchEnd;
+  try {
+    return await run();
+  } finally {
+    Date.now = now;
+  }
+}
 
 async function billingDb() {
   const sqlite = new Database(":memory:");
@@ -262,7 +274,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     checkoutCompleted,
     await sign(checkoutCompleted, webhookSecret),
   );
-  expect(await hasHostedCloudAccess(db, "user_1", true)).toBe(false);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
 
   const payload = JSON.stringify({
     id: "evt_paid_dup",
@@ -288,7 +300,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     hostedEnv,
   );
   expect(invalid.status).toBe(401);
-  expect(await hasHostedCloudAccess(db, "user_1", true)).toBe(false);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
 
   const first = await processCreemWebhook(
     db,
@@ -298,7 +310,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     1_000,
   );
   expect(first).toEqual({ duplicate: false, eventType: "subscription.paid" });
-  expect(await hasHostedCloudAccess(db, "user_1", true)).toBe(true);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(true);
 
   sqlite
     .query("UPDATE subscriptions SET status = 'canceled', updated_at = ?")
@@ -339,7 +351,15 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     await sign(canceled, webhookSecret),
     4_000,
   );
-  expect(await hasHostedCloudAccess(db, "user_1", true)).toBe(false);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
+});
+
+test("the launch period ends at midnight UTC and then requires a subscription", async () => {
+  const { db } = await billingDb();
+  expect(isLaunchFreePeriod(launchEnd - 1)).toBe(true);
+  expect(isLaunchFreePeriod(launchEnd)).toBe(false);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd - 1)).toBe(true);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
 });
 
 test("login and pairing work without entitlement while hosted sync and mutations are denied", async () => {
@@ -369,7 +389,7 @@ test("login and pairing work without entitlement while hosted sync and mutations
   );
   const workspaceId = issued.workspaceId as string;
 
-  const pull = await handleGetWorkspaceState(
+  const pull = await afterLaunch(() => handleGetWorkspaceState(
     new Request(
       `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
@@ -382,10 +402,10 @@ test("login and pairing work without entitlement while hosted sync and mutations
     db,
     workspaceId,
     true,
-  );
+  ));
   expect(pull.status).toBe(402);
 
-  const push = await handlePutWorkspaceState(
+  const push = await afterLaunch(() => handlePutWorkspaceState(
     new Request(
       `https://corotum.com/api/v1/workspaces/${workspaceId}/state`,
       {
@@ -401,7 +421,7 @@ test("login and pairing work without entitlement while hosted sync and mutations
     db,
     workspaceId,
     true,
-  );
+  ));
   expect(push.status).toBe(402);
 
   const grant = JSON.stringify({

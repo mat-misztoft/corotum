@@ -7,7 +7,11 @@ import { handleDashboardGet, handleDashboardMutation } from "../../../../src/das
 const workerEnv = env as unknown as AuthEnvironment;
 
 export async function GET(request: Request) {
-  return handleDashboardGet(workerEnv.DB as never, await requireUserId(request, workerEnv));
+  return handleDashboardGet(
+    workerEnv.DB as never,
+    await requireUserId(request, workerEnv),
+    isHostedCloud(workerEnv),
+  );
 }
 
 export async function POST(request: Request) {

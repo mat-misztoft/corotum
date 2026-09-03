@@ -1,5 +1,8 @@
 import { DomainValidationError } from "../../../packages/core/src/index";
-import { HostedEntitlementRequiredError } from "./billing";
+import {
+  hasHostedCloudAccess,
+  HostedEntitlementRequiredError,
+} from "./billing";
 import {
   dashboardMutationResult,
   type DashboardMutation,
@@ -18,9 +21,21 @@ export function dashboardMutationErrorResponse(error: unknown) {
   throw error;
 }
 
-export async function handleDashboardGet(db: Parameters<typeof readDashboard>[0], userId: string | null) {
+export async function handleDashboardGet(
+  db: Parameters<typeof readDashboard>[0],
+  userId: string | null,
+  hosted = false,
+) {
   if (!userId) return jsonError("Authentication required", 401);
-  try { return Response.json(await readDashboard(db, userId)); } catch (error) { return dashboardMutationErrorResponse(error); }
+  try {
+    const dashboard = await readDashboard(db, userId);
+    return Response.json({
+      ...dashboard,
+      cloudAllowed: await hasHostedCloudAccess(db, userId, hosted),
+    });
+  } catch (error) {
+    return dashboardMutationErrorResponse(error);
+  }
 }
 
 export async function handleDashboardMutation(

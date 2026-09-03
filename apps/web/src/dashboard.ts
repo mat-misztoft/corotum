@@ -310,7 +310,9 @@ export async function mutateDashboard(
     mutation: DashboardMutation;
   }>,
 ): Promise<CloudRevision> {
-  await requireHostedCloudAccess(db, input.userId, input.hosted);
+  if (input.mutation.type !== "REMOVE" && input.mutation.type !== "CLEAR") {
+    await requireHostedCloudAccess(db, input.userId, input.hosted);
+  }
   const workspace = await ensureDefaultWorkspace(db, input.userId);
   const current = await loadCurrentDesiredState(db, input.userId, workspace.id);
   if (current.id !== input.baseRevisionId) throw new Error("BASE_REVISION_CONFLICT");

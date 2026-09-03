@@ -60,8 +60,10 @@ export default function TermsPage() {
 
       <h2>2. Current Availability</h2>
       <p>
-        Corotum Cloud is available as a paid hosted service. Current prices are
-        $5.99 per month or $59.90 per year.
+        During the Free Launch Month, Corotum Cloud is available free of charge
+        without a payment card until 30 September 2026, 23:59:59 UTC. From 1
+        October 2026, 00:00:00 UTC, Corotum Cloud is available as a paid hosted
+        service at $5.99 per month or $59.90 per year.
       </p>
       <p>
         Pricing, checkout, and subscription management are presented before

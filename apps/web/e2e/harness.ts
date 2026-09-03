@@ -459,7 +459,9 @@ export function startCloudServer(input: {
         );
       }
       if (path === "/api/v1/dashboard" && request.method === "GET") {
-        return asResponse(await handleDashboardGet(input.db as never, user.id));
+        return asResponse(
+          await handleDashboardGet(input.db as never, user.id, input.hosted),
+        );
       }
       if (path === "/api/v1/dashboard/settings" && request.method === "GET") {
         return asResponse(

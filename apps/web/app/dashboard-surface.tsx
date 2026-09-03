@@ -7,6 +7,7 @@ import { WebMcpTools } from "./webmcp-tools";
 
 type View = "overview" | "skills" | "devices" | "billing" | "settings";
 type Dashboard = {
+  cloudAllowed: boolean;
   workspace: { name: string };
   revision: { id: string | null; sequence: number };
   skills: {
@@ -33,6 +34,7 @@ type Dashboard = {
 };
 type Settings = {
   hosted: boolean;
+  launchFreePeriod: boolean;
   email: string | null;
   accounts: { providerId: string; label: string }[];
   subscription: {
@@ -627,11 +629,16 @@ export function DashboardSurface({ view }: { view: View }) {
             )}
             <form className="dashboard-add-skill" onSubmit={addSkill}>
               <p className="dashboard-add-skill-kicker">Add a Git-backed skill</p>
+              {!data.cloudAllowed && (
+                <p className="dashboard-add-skill-note">
+                  Cloud changes and sync require a Cloud subscription.
+                </p>
+              )}
               <label>
                 Source
                 <input
                   autoComplete="off"
-                  disabled={action === "add"}
+                  disabled={!data.cloudAllowed || action === "add"}
                   name="source"
                   placeholder="https://github.com/owner/skills.git"
                   required
@@ -642,7 +649,7 @@ export function DashboardSurface({ view }: { view: View }) {
                 Skill
                 <input
                   autoComplete="off"
-                  disabled={action === "add"}
+                  disabled={!data.cloudAllowed || action === "add"}
                   name="skill"
                   required
                   spellCheck={false}
@@ -652,13 +659,13 @@ export function DashboardSurface({ view }: { view: View }) {
                 Ref
                 <input
                   autoComplete="off"
-                  disabled={action === "add"}
+                  disabled={!data.cloudAllowed || action === "add"}
                   name="ref"
                   placeholder="main"
                   spellCheck={false}
                 />
               </label>
-              <button type="submit" disabled={action === "add"}>
+              <button type="submit" disabled={!data.cloudAllowed || action === "add"}>
                 {action === "add" ? "Adding…" : "Add skill"}
               </button>
               <p className="dashboard-add-skill-note">
@@ -757,6 +764,14 @@ export function DashboardSurface({ view }: { view: View }) {
             {settings.hosted ? (
               <>
                 <div className="dashboard-billing-summary">
+                  {settings.launchFreePeriod && (
+                    <p className="dashboard-billing-note">
+                      <strong>Free Launch Month</strong> — Corotum Cloud is free
+                      until September 30, 2026, 23:59:59 UTC. No card required.
+                      Standard pricing starts October 1: $5.99/month or
+                      $59.90/year.
+                    </p>
+                  )}
                   {settings.subscription ? (
                     <>
                       <p className="dashboard-billing-label">
@@ -803,7 +818,7 @@ export function DashboardSurface({ view }: { view: View }) {
                       <button
                         className="dashboard-primary-button"
                         type="button"
-                        disabled={action !== null}
+                        disabled={action !== null || settings.launchFreePeriod}
                         onClick={() => billingAction("checkout", "month")}
                       >
                         {action === "checkout-month"
@@ -813,7 +828,7 @@ export function DashboardSurface({ view }: { view: View }) {
                       <button
                         className="dashboard-secondary-button"
                         type="button"
-                        disabled={action !== null}
+                        disabled={action !== null || settings.launchFreePeriod}
                         onClick={() => billingAction("checkout", "year")}
                       >
                         {action === "checkout-year"

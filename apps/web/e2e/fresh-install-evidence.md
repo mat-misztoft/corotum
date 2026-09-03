@@ -8,8 +8,8 @@ Recorded against the product sources and tests in this repository. Playwright co
 | --- | --- | --- |
 | Official installer simulation | `install.sh` and `install.ps1` fixtures install a runnable CLI that prints `--version` before Git or Cloud work | PASS |
 | Git Sync without Cloud subscription | Two homes adopt/add and install identical locked bytes with no Creem or hosted Cloud | PASS |
-| Hosted Cloud entitlement gate | Hosted Cloud pull/push works only after a signed Creem grant | PASS |
-| Hosted Cloud without entitlement rejected | Hosted Cloud operations return `Hosted Cloud subscription required` before grant | PASS |
+| Hosted Cloud launch access | Hosted Cloud pull/push works without a Creem grant through 30 September 2026, 23:59:59 UTC | PASS |
+| Hosted Cloud after launch | Hosted Cloud operations return `Hosted Cloud subscription required` without a subscription from 1 October 2026, 00:00:00 UTC | PASS |
 | Self-hosted Cloud without Creem | Self-hosted Cloud sync works and billing checkout is unavailable | PASS |
 | Adoption and add | Git ADOPT then ADD, Cloud ADD of a locked skill | PASS |
 | Two-device sync | Second device pulls the same revision and reports only after local apply | PASS |
@@ -27,6 +27,6 @@ Recorded against the product sources and tests in this repository. Playwright co
 ## Notes
 
 - Fresh installer simulations run first and must print `toolmirror 0.1.0` before Git or Cloud cases.
-- Hosted `toolmirror.com` Cloud is gated by Creem; self-hosted Cloud is free.
+- Hosted Corotum Cloud is free through 30 September 2026, 23:59:59 UTC; after that it is gated by Creem. Self-hosted Cloud is free.
 - Git Sync remains free and does not require a ToolMirror Cloud subscription.
 - Device status is a report, never inferred as SYNCED from desired state alone.

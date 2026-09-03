@@ -3,6 +3,7 @@ import type { WorkspaceDatabase } from "./workspaces";
 export const CREEM_PROVIDER = "creem";
 export const HOSTED_MONTHLY_PRICE_CENTS = 599;
 export const HOSTED_ANNUAL_PRICE_CENTS = 5990;
+export const LAUNCH_FREE_PERIOD_END = "2026-10-01T00:00:00.000Z";
 
 export type BillingInterval = "month" | "year";
 export type BillingDatabase = WorkspaceDatabase;
@@ -107,12 +108,17 @@ export function hostedPriceCents(interval: BillingInterval) {
     : HOSTED_ANNUAL_PRICE_CENTS;
 }
 
+export function isLaunchFreePeriod(now = Date.now()) {
+  return now < Date.parse(LAUNCH_FREE_PERIOD_END);
+}
+
 export async function hasHostedCloudAccess(
   db: BillingDatabase,
   userId: string,
   hosted: boolean,
+  now = Date.now(),
 ) {
-  if (!hosted) return true;
+  if (!hosted || isLaunchFreePeriod(now)) return true;
   const row = await db
     .prepare("SELECT status FROM subscriptions WHERE user_id = ?")
     .bind(userId)

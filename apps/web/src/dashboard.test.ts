@@ -20,6 +20,18 @@ import { mutateDesiredState } from "./revisions";
 import { executeWebMcpMutationTool, executeWebMcpReadOnlyTool } from "./webmcp";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
+const launchEnd = Date.parse("2026-10-01T00:00:00.000Z");
+
+async function afterLaunch<T>(run: () => Promise<T>) {
+  const now = Date.now;
+  Date.now = () => launchEnd;
+  try {
+    return await run();
+  } finally {
+    Date.now = now;
+  }
+}
+
 const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
 const migrationFiles = readdirSync(migrationsDirectory)
   .filter((file) => file.endsWith(".sql"))
@@ -353,9 +365,9 @@ test("pending resolution, hosted entitlement and truthful target status keep exi
     userId: "user_1",
     hosted: true,
     tool: "list_skills",
-  })).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
+  })).resolves.toBeDefined();
 
-  await expect(handleDashboardMutation(
+  await expect(afterLaunch(() => handleDashboardMutation(
     new Request("https://corotum.com/api/v1/dashboard", {
       method: "POST",
       headers: { origin: "https://corotum.com", "content-type": "application/json" },
@@ -368,7 +380,27 @@ test("pending resolution, hosted entitlement and truthful target status keep exi
     db as never,
     "user_1",
     true,
-  ).then((response) => response.status)).resolves.toBe(402);
+  ).then((response) => response.status))).resolves.toBe(402);
+
+  const gatedDashboard = await afterLaunch(() =>
+    handleDashboardGet(db as never, "user_1", true),
+  );
+  expect((await gatedDashboard.json() as { cloudAllowed: boolean }).cloudAllowed).toBe(false);
+
+  await expect(afterLaunch(() => handleDashboardMutation(
+    new Request("https://corotum.com/api/v1/dashboard", {
+      method: "POST",
+      headers: { origin: "https://corotum.com", "content-type": "application/json" },
+      body: JSON.stringify({
+        baseRevisionId: view.revision.id,
+        idempotencyKey: "hosted-remove",
+        mutation: { type: "REMOVE", skillId: mutation.pendingResolution[0] },
+      }),
+    }),
+    db as never,
+    "user_1",
+    true,
+  ).then((response) => response.status))).resolves.toBe(200);
 });
 
 test("projected device status never claims SYNCED ahead of the applied revision", () => {
@@ -490,7 +522,7 @@ test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHI
   expect(reported.appliedRevisionSequence).toBe(4);
   expect((await readDashboard(db as never, "user_1")).devices[0]?.syncStatus).toBe("SYNCED");
 
-  const hostedDenied = await handleDashboardMutation(
+  const hostedDenied = await afterLaunch(() => handleDashboardMutation(
     new Request("https://corotum.com/api/v1/dashboard", {
       method: "POST",
       headers: { origin: "https://corotum.com", "content-type": "application/json" },
@@ -503,14 +535,14 @@ test("dashboard and WebMCP mutations write Cloud revisions and keep devices BEHI
     db as never,
     "user_1",
     true,
-  );
+  ));
   expect(hostedDenied.status).toBe(402);
-  await expect(executeWebMcpMutationTool(db as never, {
+  await expect(afterLaunch(() => executeWebMcpMutationTool(db as never, {
     userId: "user_1",
     hosted: true,
     tool: "add_skill",
     baseRevisionId: removedBody.revisionId,
     idempotencyKey: "hosted-webmcp-denied",
     arguments: { source: repository, skill: "other" },
-  })).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
+  }))).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
 });

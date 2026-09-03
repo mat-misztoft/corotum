@@ -1,4 +1,3 @@
-import { requireHostedCloudAccess } from "./billing";
 import {
   dashboardMutationResult,
   type DashboardMutation,
@@ -105,7 +104,6 @@ export async function executeWebMcpReadOnlyTool(
   input: Readonly<{ userId: string; hosted: boolean; tool: unknown }>,
 ) {
   if (!isWebMcpReadOnlyTool(input.tool)) throw new InvalidWebMcpToolError();
-  await requireHostedCloudAccess(db, input.userId, input.hosted);
   const dashboard = await readDashboard(db, input.userId);
   switch (input.tool) {
     case "list_skills": return { workspace: dashboard.workspace, revision: dashboard.revision, skills: dashboard.skills };

@@ -48,6 +48,7 @@ const evidencePath = fileURLToPath(
   new URL("./security-evidence.md", import.meta.url),
 );
 const webhookSecret = "whsec_test";
+const launchEnd = Date.parse("2026-10-01T00:00:00.000Z");
 const hostedEnv: BillingEnvironment = {
   COROTUM_HOSTED: "true",
   CREEM_API_KEY: "ck_test",
@@ -346,7 +347,7 @@ test("security: unsigned webhooks, rate limits, and old CLIs cannot mutate Cloud
     hostedEnv,
   );
   expect(forged.status).toBe(401);
-  expect(await hasHostedCloudAccess(db as never, "user_1", true)).toBe(false);
+  expect(await hasHostedCloudAccess(db as never, "user_1", true, launchEnd)).toBe(false);
 
   const signed = await handleCreemWebhook(
     new Request("https://corotum.com/api/v1/webhooks/creem", {

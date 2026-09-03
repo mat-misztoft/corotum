@@ -441,7 +441,7 @@ test("Git Sync completes without a Corotum Cloud subscription", async () => {
   );
 }, timeout);
 
-test("hosted Cloud requires entitlement; self-hosted Cloud does not", async () => {
+test("hosted Cloud is available during the launch period; self-hosted Cloud stays free", async () => {
   const { root, source, remote, stateWorktree } = await gitFixture();
   const lock = await lockFor(source, skillId("sk_review"), "adopted");
   const extra = await lockFor(source, skillId("sk_added"), "added");
@@ -470,10 +470,7 @@ test("hosted Cloud requires entitlement; self-hosted Cloud does not", async () =
       deviceToken: studio.token,
       fetch: fetchWithIp("10.0.0.1"),
     }).pull();
-    expect(unpaid).toMatchObject({
-      kind: "failure",
-      error: { message: "Hosted Cloud subscription required" },
-    });
+    expect(unpaid.kind).toBe("success");
 
     const payload = JSON.stringify({
       id: "evt_e2e_paid",
@@ -765,8 +762,8 @@ test("fresh-install evidence records every required path as PASS", async () => {
   for (const path of [
     "Official installer simulation",
     "Git Sync without Cloud subscription",
-    "Hosted Cloud entitlement gate",
-    "Hosted Cloud without entitlement rejected",
+    "Hosted Cloud launch access",
+    "Hosted Cloud after launch",
     "Self-hosted Cloud without Creem",
     "Adoption and add",
     "Two-device sync",

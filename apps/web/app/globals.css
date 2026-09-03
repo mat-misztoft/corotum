@@ -130,6 +130,31 @@ a {
   flex-wrap: wrap;
   gap: 22px;
 }
+.launch-promotion {
+  background: var(--vermillion);
+  color: var(--paper);
+  display: grid;
+  gap: 6px;
+  margin: 28px 0;
+  max-width: 480px;
+  padding: 16px 18px;
+}
+.launch-promotion strong,
+.launch-promotion small {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+}
+.launch-promotion strong {
+  font-size: 13px;
+}
+.launch-promotion span {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.launch-promotion small {
+  font-size: 11px;
+}
 .button {
   display: inline-flex;
   font-size: 19px;
@@ -986,6 +1011,10 @@ a {
 }
 .pricing-cloud .pricing-summary {
   color: #c9c1b5;
+}
+.pricing-launch-promotion {
+  margin: 0 0 26px;
+  max-width: none;
 }
 .pricing-list {
   display: grid;

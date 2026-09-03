@@ -6,6 +6,18 @@ import {
 } from "./webmcp";
 import { handleWebMcpTool } from "./webmcp-http";
 
+const launchEnd = Date.parse("2026-10-01T00:00:00.000Z");
+
+async function afterLaunch<T>(run: () => Promise<T>) {
+  const now = Date.now;
+  Date.now = () => launchEnd;
+  try {
+    return await run();
+  } finally {
+    Date.now = now;
+  }
+}
+
 function readOnlyDatabase() {
   let writes = 0;
   const db = {
@@ -248,7 +260,7 @@ test("WebMCP transport rejects missing authorization, base revision, and idempot
   expect(db.batches()).toBe(0);
 });
 
-test("WebMCP makes unknown tools and hosted entitlement failures explicit", async () => {
+test("WebMCP reads remain available while hosted writes require entitlement", async () => {
   const db = readOnlyDatabase();
   await expect(
     executeWebMcpReadOnlyTool(db as never, {
@@ -263,8 +275,8 @@ test("WebMCP makes unknown tools and hosted entitlement failures explicit", asyn
       hosted: true,
       tool: "list_skills",
     }),
-  ).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
-  await expect(
+  ).resolves.toBeDefined();
+  await expect(afterLaunch(() =>
     executeWebMcpMutationTool(db as never, {
       userId: "user_1",
       hosted: true,
@@ -273,5 +285,5 @@ test("WebMCP makes unknown tools and hosted entitlement failures explicit", asyn
       idempotencyKey: "hosted-denied",
       arguments: { source: "https://github.com/example/skills.git", skill: "review" },
     }),
-  ).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
+  )).rejects.toBeInstanceOf(HostedEntitlementRequiredError);
 });

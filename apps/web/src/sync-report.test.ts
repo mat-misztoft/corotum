@@ -23,6 +23,17 @@ const migrationFiles = readdirSync(migrationsDirectory)
   .filter((file) => file.endsWith(".sql"))
   .sort();
 const skill = skillId("sk_01JSyncReport");
+const launchEnd = Date.parse("2026-10-01T00:00:00.000Z");
+
+async function afterLaunch<T>(run: () => Promise<T>) {
+  const now = Date.now;
+  Date.now = () => launchEnd;
+  try {
+    return await run();
+  } finally {
+    Date.now = now;
+  }
+}
 const source = "https://github.com/example/skills.git";
 const desired = {
   manifest: {
@@ -323,7 +334,7 @@ test("a report cannot change another device or claim an unreported device is syn
 test("hosted Cloud sync-report requires entitlement while self-host does not", async () => {
   const { sqlite, db } = await reportDb();
   const issued = await pairDevice(db, sqlite, "studio", 1_000);
-  const denied = await handlePostDeviceSyncReport(
+  const denied = await afterLaunch(() => handlePostDeviceSyncReport(
     reportRequest(issued.deviceId, issued.token, {
       appliedRevisionId: null,
       syncStatus: "ERROR",
@@ -332,7 +343,7 @@ test("hosted Cloud sync-report requires entitlement while self-host does not", a
     db,
     issued.deviceId,
     true,
-  );
+  ));
   expect(denied.status).toBe(402);
 
   const allowed = await handlePostDeviceSyncReport(

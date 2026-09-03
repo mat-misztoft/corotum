@@ -60,6 +60,10 @@ test("pricing keeps the hosted and self-hosted paths clear", () => {
   expect(billing).toContain("const yearly = 59.9");
   expect(page).toContain("Self-hosted Corotum Cloud is free under AGPLv3.");
   expect(page).toContain("hosted corotum.com service.");
+  expect(page).toContain("FREE LAUNCH MONTH");
+  expect(page).toContain("isLaunchFreePeriod()");
+  expect(page).toContain("Cloud free until September 30, 2026");
+  expect(page).toContain('className="launch-promotion"');
   expect(styles).toContain(".pricing-plans");
   expect(styles).toContain("grid-template-columns: 1fr 1fr");
 });
