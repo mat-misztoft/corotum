@@ -121,6 +121,19 @@ Local configuration lives in `config.json`. Device Cloud tokens live in `credent
 
 `corotum config set` supports `telemetry` (`true` or `false`) and `origin` (Cloud URL). Telemetry is anonymous, opt-in, and stored on the device. It is not a dashboard account setting.
 
+## Optional CLI telemetry
+
+Telemetry is off until you confirm the first-run prompt or explicitly enable it. It is controlled locally on each device:
+
+```bash
+corotum config set telemetry true
+corotum config set telemetry false
+```
+
+When enabled, Corotum sends anonymous operational data to Cloudflare Analytics Engine: a random installation identifier, CLI version, OS, architecture, command name, duration, outcome/error code, managed-skill count, active-agent count, and supported-agent identifiers. It does not send skill names, repository URLs, local paths, skill contents, credentials, device names, or Git usernames/emails. Telemetry is retained for no longer than 90 days.
+
+CLI telemetry is separate from self-hosted Umami website analytics; their identifiers are not linked.
+
 Default locations:
 
 | Platform | Config | Named skills | Git cache |

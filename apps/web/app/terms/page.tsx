@@ -13,9 +13,8 @@ export default function TermsPage() {
         <strong>Last updated: September 3, 2026</strong>
       </p>
       <p>
-        These Terms of Service govern your use of Corotum, including the
-        Corotum website, Corotum Cloud, WebMCP, CLI integrations, and related
-        services.
+        These Terms of Service govern your use of Corotum, including the Corotum
+        website, Corotum Cloud, WebMCP, CLI integrations, and related services.
       </p>
       <p>By using Corotum, you agree to these Terms.</p>
 
@@ -55,14 +54,14 @@ export default function TermsPage() {
         not directly modify a remote device.
       </p>
       <p>
-        A device is reconciled only when the Corotum CLI runs on that device
-        and successfully applies the applicable desired state.
+        A device is reconciled only when the Corotum CLI runs on that device and
+        successfully applies the applicable desired state.
       </p>
 
       <h2>2. Current Availability</h2>
       <p>
-        Corotum Cloud is available as a paid hosted service. Current prices
-        are $5.99 per month or $59.90 per year.
+        Corotum Cloud is available as a paid hosted service. Current prices are
+        $5.99 per month or $59.90 per year.
       </p>
       <p>
         Pricing, checkout, and subscription management are presented before
@@ -76,8 +75,8 @@ export default function TermsPage() {
         licensed under the GNU Affero General Public License version 3, AGPLv3.
       </p>
       <p>
-        Your rights to use, copy, modify, and distribute software licensed
-        under AGPLv3 are governed by that license.
+        Your rights to use, copy, modify, and distribute software licensed under
+        AGPLv3 are governed by that license.
       </p>
       <p>
         These Terms govern use of services operated through corotum.com and do
@@ -91,8 +90,7 @@ export default function TermsPage() {
       <h2>4. Accounts</h2>
       <p>Some Corotum Cloud functionality may require an account.</p>
       <p>
-        Accounts may be created using supported authentication providers,
-        including GitHub and Google.
+        Accounts may be created using GitHub, Google, or an email magic link.
       </p>
       <p>You are responsible for:</p>
       <ul>
@@ -160,7 +158,16 @@ export default function TermsPage() {
         <li>identifiers</li>
         <li>synchronization state</li>
         <li>related configuration</li>
+        <li>
+          sanitized artifact-backed skill archives, where you choose that
+          storage mode
+        </li>
       </ul>
+      <p>
+        You grant Corotum the limited permission to host, copy, and transmit
+        that content solely to operate Corotum Cloud and provide it to your
+        authenticated devices.
+      </p>
       <p>
         You are responsible for ensuring that content managed through Corotum
         does not violate applicable law or third-party rights.
@@ -200,8 +207,8 @@ export default function TermsPage() {
         <li>product development</li>
       </ul>
       <p>
-        We may also change the availability or limits of the free hosted
-        service.
+        We may also change the availability, limits, or price of the hosted
+        service, subject to applicable law and notice requirements.
       </p>
 
       <h2>10. Availability</h2>
@@ -235,8 +242,7 @@ export default function TermsPage() {
       </p>
       <p>
         However, no software system can guarantee that data loss, configuration
-        conflicts, software defects, or synchronization errors will never
-        occur.
+        conflicts, software defects, or synchronization errors will never occur.
       </p>
       <p>
         You should review important changes before applying operations that may
@@ -260,9 +266,8 @@ export default function TermsPage() {
 
       <h2>13. Disclaimer</h2>
       <p>
-        Corotum is provided on an &quot;as is&quot; and &quot;as
-        available&quot; basis to the maximum extent permitted by applicable
-        law.
+        Corotum is provided on an &quot;as is&quot; and &quot;as available&quot;
+        basis to the maximum extent permitted by applicable law.
       </p>
       <p>We do not guarantee that Corotum will:</p>
       <ul>
@@ -319,7 +324,25 @@ export default function TermsPage() {
         under AGPLv3 for open source Corotum software.
       </p>
 
-      <h2>16. Changes to These Terms</h2>
+      <h2>16. Billing, Renewal, and Cancellation</h2>
+      <p>
+        Hosted Corotum Cloud subscriptions are purchased and managed through
+        Creem. Before payment, Creem presents the price, billing interval,
+        applicable taxes, renewal schedule, and any checkout-specific terms.
+      </p>
+      <p>
+        You can manage or cancel a hosted subscription through the Creem billing
+        portal. A cancellation, renewal, payment failure, or other billing
+        change affects hosted access when Corotum receives the corresponding
+        verified subscription status from Creem.
+      </p>
+      <p>
+        Except where required by applicable law or stated at checkout, payments
+        are non-refundable. Cancelling hosted Cloud does not affect Git Sync,
+        self-hosted Corotum Cloud, or the open-source license.
+      </p>
+
+      <h2>17. Changes to These Terms</h2>
       <p>
         We may update these Terms as Corotum evolves or where necessary because
         of legal, technical, security, or operational changes.
@@ -334,17 +357,17 @@ export default function TermsPage() {
         applicable law.
       </p>
 
-      <h2>17. Governing Law</h2>
+      <h2>18. Governing Law</h2>
       <p>These Terms are governed by Polish law.</p>
       <p>
         Mandatory consumer protection rules applicable to a user remain
         unaffected.
       </p>
 
-      <h2>18. Contact</h2>
+      <h2>19. Contact</h2>
       <p>Questions regarding these Terms may be sent to:</p>
       <p>
-        <strong>contact@corotum.com</strong>
+        <strong>support@corotum.com</strong>
       </p>
     </LegalDocument>
   );
