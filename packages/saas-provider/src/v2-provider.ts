@@ -214,6 +214,14 @@ export class V2SaaSProvider {
   private async failureFrom(response: Response, transport: "state" | "artifact"): Promise<V2CloudProviderError> {
     const message = await responseMessage(response);
     if (response.status === 401) return new V2CloudProviderError("AUTH_REQUIRED", "Cloud device authentication failed.");
+    if (response.status === 402) {
+      return new V2CloudProviderError(
+        "NETWORK_ERROR",
+        /subscription required/i.test(message)
+          ? message
+          : "Hosted Cloud subscription required",
+      );
+    }
     if (response.status === 409) return new V2CloudProviderError("CONFLICT", message);
     if (response.status === 404 && transport === "artifact") {
       return new V2CloudProviderError("ARTIFACT_UNAVAILABLE", message);

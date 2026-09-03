@@ -1,5 +1,9 @@
+import {
+  V2CloudProviderError,
+  type V2SaaSProvider,
+} from "../../../packages/saas-provider/src/index";
+import { CloudAuthError } from "./cloud-auth";
 import type { CredentialsStore, CorotumConfig } from "./config";
-import type { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
 
 export class CloudInitError extends Error {
   constructor(message: string) {
@@ -21,6 +25,32 @@ export function isHostedSubscriptionRequired(error: unknown): boolean {
     message === "Hosted Cloud subscription required" ||
     /subscription required/i.test(message)
   );
+}
+
+/** Maps Cloud transport failures to typed CLI errors without Git wording. */
+export function classifyCloudInspectError(error: unknown): Error {
+  if (
+    error instanceof V2CloudProviderError &&
+    error.code === "AUTH_REQUIRED"
+  ) {
+    return new CloudAuthError(
+      "Cloud device authentication failed. Run corotum login.",
+      "AUTH_REQUIRED",
+    );
+  }
+  if (isHostedSubscriptionRequired(error)) return hostedSubscriptionInitError();
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    (error instanceof V2CloudProviderError &&
+      error.code === "NETWORK_ERROR") ||
+    /cloud (origin )?is unreachable/i.test(message)
+  ) {
+    return new CloudAuthError(
+      "Cloud is unreachable. Check the origin and network, then retry.",
+      "NETWORK_ERROR",
+    );
+  }
+  return error instanceof Error ? error : new Error(message);
 }
 
 export type CloudInitAuth = Readonly<{

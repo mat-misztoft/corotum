@@ -4,10 +4,7 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import type { AgentId } from "../../../packages/agent-targets/src/index";
 import type { SourceLock } from "../../../packages/core/src/index";
-import {
-  V2CloudProviderError,
-  V2SaaSProvider,
-} from "../../../packages/saas-provider/src/index";
+import { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
 import { createArtifactArchive } from "../../../packages/skills-adapter/src/artifact-archive";
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
@@ -24,10 +21,7 @@ import {
   CredentialsStore,
   effectiveStoragePaths,
 } from "./config";
-import {
-  hostedSubscriptionInitError,
-  isHostedSubscriptionRequired,
-} from "./init-cloud";
+import { classifyCloudInspectError } from "./init-cloud";
 import {
   assertGitAvailable,
   notInitializedError,
@@ -226,15 +220,6 @@ async function mutationProvider(
 }
 
 function classifyCloudMutationError(error: unknown): Error {
-  if (
-    error instanceof V2CloudProviderError &&
-    error.code === "AUTH_REQUIRED"
-  ) {
-    return new CloudAuthError(
-      "Cloud device authentication failed. Run corotum login.",
-      "AUTH_REQUIRED",
-    );
-  }
-  if (isHostedSubscriptionRequired(error)) return hostedSubscriptionInitError();
-  return error instanceof Error ? error : new Error(String(error));
+  return classifyCloudInspectError(error);
 }
+

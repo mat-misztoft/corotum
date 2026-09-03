@@ -119,7 +119,8 @@ export function classifyGitInitError(error: unknown): Error {
     error instanceof InitError ||
     error instanceof GitCliError ||
     error instanceof CloudAuthError ||
-    error instanceof CloudInitError
+    error instanceof CloudInitError ||
+    (error instanceof Error && error.name === "V2CloudProviderError")
   ) {
     return error;
   }
@@ -137,6 +138,13 @@ export function classifyGitInitError(error: unknown): Error {
   }
   if (isMissingGit(error)) return missingGitError(error);
   const message = errorMessage(error);
+  if (
+    /hosted cloud subscription required|cloud device authentication failed|cloud is unreachable|run corotum login/i.test(
+      message,
+    )
+  ) {
+    return error instanceof Error ? error : new Error(message);
+  }
   if (
     /authentication|authorization|permission denied|could not read username|terminal prompts disabled|publickey|git authentication is required/i.test(
       message,

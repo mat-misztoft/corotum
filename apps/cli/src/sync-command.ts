@@ -7,10 +7,7 @@ import {
   detectAgents,
   localAgentFileSystem,
 } from "../../../packages/agent-targets/src/index";
-import {
-  V2CloudProviderError,
-  V2SaaSProvider,
-} from "../../../packages/saas-provider/src/index";
+import { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { CLI_VERSION, type CliIo, isNonInteractive } from "./cli";
@@ -31,6 +28,7 @@ import {
   CredentialsStore,
   effectiveStoragePaths,
 } from "./config";
+import { classifyCloudInspectError } from "./init-cloud";
 import {
   assertGitAvailable,
   notInitializedError,
@@ -318,16 +316,7 @@ async function createProvider(
         ledger: pulled.ledger,
       };
     } catch (error) {
-      if (
-        error instanceof V2CloudProviderError &&
-        error.code === "AUTH_REQUIRED"
-      ) {
-        throw new CloudAuthError(
-          "Cloud device authentication failed. Run corotum login.",
-          "AUTH_REQUIRED",
-        );
-      }
-      throw error;
+      throw classifyCloudInspectError(error);
     }
   };
   return {

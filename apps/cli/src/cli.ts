@@ -11,6 +11,7 @@ import {
 } from "./cli-contracts";
 import { registerCliUpdateCommand } from "./cli-update-command";
 import { CloudAuthError } from "./cloud-auth";
+import { CloudInitError } from "./init-cloud";
 import { registerCloudAuthCommands } from "./cloud-auth-command";
 import { ConfigError, registerConfigCommand } from "./config-command";
 import { classifyGitInitError, GitCliError, InitError } from "./init-errors";
@@ -179,9 +180,16 @@ function outcomeFor(error: unknown): CliOutcome {
     return "SUCCESS";
   }
   if (error instanceof CloudAuthError) return error.outcome;
+  if (error instanceof CloudInitError) return "GENERAL_ERROR";
   if (error instanceof ConfigError) return error.outcome;
   if (error instanceof InitError) return error.outcome;
   if (error instanceof GitCliError) return error.outcome;
+  if (error instanceof Error && error.name === "V2CloudProviderError") {
+    const code = (error as { code?: string }).code;
+    if (code === "AUTH_REQUIRED") return "AUTH_REQUIRED";
+    if (code === "NETWORK_ERROR") return "NETWORK_ERROR";
+    if (code === "CONFLICT") return "CONFLICT";
+  }
   return "GENERAL_ERROR";
 }
 

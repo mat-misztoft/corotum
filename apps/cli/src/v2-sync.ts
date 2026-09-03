@@ -138,7 +138,7 @@ export class V2SyncService {
         recovery: (await this.options.recovery?.load()) ?? null,
       };
     } catch (error) {
-      if (error instanceof Error && error.name === "CloudAuthError") throw error;
+      if (isTypedCloudFailure(error)) throw error;
       return {
         kind: "refused",
         reason: error instanceof Error ? error.message : "Inspect failed.",
@@ -154,7 +154,7 @@ export class V2SyncService {
     try {
       desired = await this.provider.pull();
     } catch (error) {
-      if (error instanceof Error && error.name === "CloudAuthError") throw error;
+      if (isTypedCloudFailure(error)) throw error;
       const reason =
         error instanceof Error ? error.message : "Desired state pull failed.";
       if (pendingPush || /waiting to be pushed/i.test(reason)) {
@@ -524,6 +524,13 @@ async function targetHash(
   } catch {
     return null;
   }
+}
+
+function isTypedCloudFailure(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "CloudAuthError" || error.name === "CloudInitError")
+  );
 }
 
 async function scanHash(path: string): Promise<string | null> {
