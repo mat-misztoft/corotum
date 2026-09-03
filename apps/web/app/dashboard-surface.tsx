@@ -36,7 +36,7 @@ type Settings = {
   hosted: boolean;
   launchFreePeriod: boolean;
   email: string | null;
-  accounts: { providerId: string; label: string }[];
+  accounts: { providerId: string; accountId: string; label: string }[];
   subscription: {
     interval: "month" | "year";
     status: string;
@@ -121,6 +121,7 @@ function DashboardShell({
                 {item.label}
               </a>
             ))}
+            <a href="https://docs.corotum.com">Docs</a>
             <button
               className="dashboard-sign-out"
               type="button"
@@ -356,11 +357,14 @@ export function DashboardSurface({ view }: { view: View }) {
     }
   }
 
-  async function unlinkProvider(provider: "github" | "google") {
+  async function unlinkProvider(
+    provider: "github" | "google",
+    accountId: string,
+  ) {
     setAction(`unlink-${provider}`);
     setAccountError(null);
     try {
-      const { error } = await authClient.unlinkAccount({ providerId: provider });
+      const { error } = await authClient.unlinkAccount({ accountId });
       if (error) throw new Error(error.message);
       const response = await fetch("/api/v1/dashboard/settings");
       if (response.status === 401) {
@@ -910,7 +914,9 @@ export function DashboardSurface({ view }: { view: View }) {
                 type="button"
                 disabled={action !== null}
                 onClick={() =>
-                  linked ? unlinkProvider(provider) : linkProvider(provider)
+                  linked
+                    ? unlinkProvider(provider, linked.accountId)
+                    : linkProvider(provider)
                 }
               >
                 {action === provider || action === `unlink-${provider}`

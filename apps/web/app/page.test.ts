@@ -51,6 +51,7 @@ test("landing header uses dashboard chrome and swaps Sign in for Dashboard", asy
   expect(header).toContain('href="/dashboard"');
   expect(header).toContain("Dashboard");
   expect(header).toContain('href="/sign-in"');
+  expect(header).toContain('href="https://docs.corotum.com"');
 });
 
 test("pricing keeps the hosted and self-hosted paths clear", () => {

@@ -4,6 +4,7 @@ import type { WorkspaceDatabase } from "./workspaces";
 
 export type LinkedSignIn = Readonly<{
   providerId: string;
+  accountId: string;
   label: string;
 }>;
 
@@ -47,6 +48,7 @@ export async function readDashboardSettings(
     }>();
   const accounts = (listed.results ?? []).map((row) => ({
     providerId: row.providerId,
+    accountId: row.accountId,
     label: row.displayLabel || row.accountId,
   }));
   if (!hosted) {

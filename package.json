@@ -33,6 +33,8 @@
     "check:skills-security": "bun ./scripts/check-skills-refactor-security.mjs",
     "lint": "bun run check:boundaries && bunx biome check .",
     "docs:check": "bun ./tooling/docs-check.ts",
+    "docs:dev": "bun run --cwd apps/docs dev",
+    "docs:build": "bun run --cwd apps/docs build",
     "test:e2e": "bun ./tooling/test-e2e.ts",
     "test:cli:invalid-target": "! ./scripts/build-cli.sh bun-invalid-x64",
     "typecheck": "bunx tsc --noEmit",

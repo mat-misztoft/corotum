@@ -24,6 +24,7 @@ jobs:
       - run: bun run typecheck
       - run: bun run web:build
       - run: bun run docs:check
+      - run: bun run docs:build
 
   build:
     name: compile-${{ matrix.id }}

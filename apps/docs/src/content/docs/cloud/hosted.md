@@ -1,6 +1,10 @@
+---
+title: Hosted corotum.com
+---
+
 # Hosted corotum.com
 
-This page is only for the hosted Corotum Cloud service at `https://corotum.com`. Self-hosted deployments must not follow the Creem steps here. See [self-hosting.md](./self-hosting.md) instead.
+This page is only for the hosted Corotum Cloud service at `https://corotum.com`. Self-hosted deployments must not follow the Creem steps here. See [self-hosting.md](/cloud/self-hosting/) instead.
 
 Hosted Cloud Sync, CLI Cloud skill mutations, dashboard Cloud mutations, and paid WebMCP Cloud operations require an active hosted Cloud entitlement. Login and device pairing are allowed without a subscription. The dashboard is a full product surface. Self-hosted Cloud does not use this Creem gate.
 
@@ -77,7 +81,7 @@ AUTH_EMAIL_FROM=auth@corotum.com
 
 ## Cloud Sync behavior
 
-After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/skills` using the same provenance rules as Git init. Zero agents is valid. The same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. Dashboard and WebMCP can mutate that state too. Devices apply exact locked revisions with `corotum sync`, then report the applied revision. The dashboard does not show `SYNCED` until that report exists. Source-backed skills are fetched with system Git on that device. Artifact-backed skills download from authenticated R2. Retention keeps the current artifact plus one previous artifact per skill. Sync never uses upstream `HEAD`. There is no daemon and no remote forced sync. Details: [skills.md](./skills.md).
+After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/skills` using the same provenance rules as Git init. Zero agents is valid. The same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. Dashboard and WebMCP can mutate that state too. Devices apply exact locked revisions with `corotum sync`, then report the applied revision. The dashboard does not show `SYNCED` until that report exists. Source-backed skills are fetched with system Git on that device. Artifact-backed skills download from authenticated R2. Retention keeps the current artifact plus one previous artifact per skill. Sync never uses upstream `HEAD`. There is no daemon and no remote forced sync. Details: [skills.md](/concepts/skills/).
 
 ## CLI against hosted Cloud
 

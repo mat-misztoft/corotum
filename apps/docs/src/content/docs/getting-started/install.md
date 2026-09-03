@@ -1,3 +1,7 @@
+---
+title: Install and cli-update
+---
+
 # Install and cli-update
 
 Official installers are the only supported installation method. Release artifacts are public, but manual binary download is not an officially supported installation path. v0.5 binaries are unsigned. Installers and `cli-update` verify SHA-256 before replacing a binary.

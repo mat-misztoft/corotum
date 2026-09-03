@@ -7,6 +7,7 @@ const links = [
   ["#git-cloud", "Git / Cloud"],
   ["#pricing", "Pricing"],
   ["#agents", "Agents"],
+  ["https://docs.corotum.com", "Docs"],
   ["https://github.com/mat_misztoft/corotum", "GitHub"],
 ] as const;
 

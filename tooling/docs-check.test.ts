@@ -104,12 +104,12 @@ Done.
     );
 
     await writeFile(
-      join(fixture, "docs/cli.md"),
-      `${await readFile(join(root, "docs/cli.md"))}\n\n\`corotum agents scan\`\n`,
+      join(fixture, "apps/docs/src/content/docs/cli/commands.md"),
+      `${await readFile(join(root, "apps/docs/src/content/docs/cli/commands.md"))}\n\n\`corotum agents scan\`\n`,
     );
     await writeFile(
-      join(fixture, "docs/self-hosting.md"),
-      `${await readFile(join(root, "docs/self-hosting.md"))}\nCREEM_API_KEY=required\n`,
+      join(fixture, "apps/docs/src/content/docs/cloud/self-hosting.md"),
+      `${await readFile(join(root, "apps/docs/src/content/docs/cloud/self-hosting.md"))}\nCREEM_API_KEY=required\n`,
     );
 
     const findings = await checkDocs(fixture);
@@ -121,8 +121,8 @@ Done.
     ).toBe(true);
 
     await writeFile(
-      join(fixture, "docs/cli.md"),
-      `${await readFile(join(root, "docs/cli.md"))}\nWrite toolmirror.yaml\n\n\`corotum init --source owner/skills\`\n`,
+      join(fixture, "apps/docs/src/content/docs/cli/commands.md"),
+      `${await readFile(join(root, "apps/docs/src/content/docs/cli/commands.md"))}\nWrite toolmirror.yaml\n\n\`corotum init --source owner/skills\`\n`,
     );
     const legacy = await checkDocs(fixture);
     expect(

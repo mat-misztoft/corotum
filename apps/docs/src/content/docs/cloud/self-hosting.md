@@ -1,3 +1,7 @@
+---
+title: Self-hosted Corotum Cloud
+---
+
 # Self-hosted Corotum Cloud
 
 Self-hosted Corotum Cloud is free under AGPLv3. Hosted Corotum billing is not required for self-hosted Cloud. Creem is not required. Do not configure Creem. Auth and OAuth are configured independently from hosted billing.
@@ -23,7 +27,7 @@ Creem, a Creem account, and hosted corotum.com subscription products are not pre
 
 ## AGPL obligations
 
-This software is licensed under [GNU AGPLv3](../LICENSE). If you run a modified version as a network service, you must offer the corresponding source to users who interact with it over the network. Keep the license text, copyright notices, and a way to obtain the source you actually deploy.
+This software is licensed under [GNU AGPLv3](https://github.com/mat_misztoft/corotum/blob/main/LICENSE). If you run a modified version as a network service, you must offer the corresponding source to users who interact with it over the network. Keep the license text, copyright notices, and a way to obtain the source you actually deploy.
 
 ## Create D1 and bindings
 
@@ -56,7 +60,7 @@ bun run db:migrate
 | `ASSETS` | `dist/client` | Built web assets |
 | `COROTUM_TELEMETRY` | Analytics Engine dataset `corotum_telemetry` | Optional anonymous CLI telemetry ingest |
 
-Create the R2 bucket named `corotum-artifacts` (or change `bucket_name` to a bucket you own) before serving artifact-backed skills. D1 stores no archive bytes. Retention keeps the current artifact plus one previous artifact per skill; GC deletes an object only when it is absent from both references. See [skills.md](./skills.md).
+Create the R2 bucket named `corotum-artifacts` (or change `bucket_name` to a bucket you own) before serving artifact-backed skills. D1 stores no archive bytes. Retention keeps the current artifact plus one previous artifact per skill; GC deletes an object only when it is absent from both references. See [skills.md](/concepts/skills/).
 
 You do not need a Creem webhook route configuration for self-hosting. Hosted billing routes return that billing is unavailable when the deployment is not hosted.
 
@@ -153,7 +157,7 @@ Confirm `https://cloud.example.com` serves the site. Unauthenticated users go to
 
 ## Operational setup
 
-1. Install the official CLI on each device ([install.md](./install.md)).
+1. Install the official CLI on each device ([install.md](/getting-started/install/)).
 2. Sign in at `/sign-in` with GitHub, Google, or an email magic link. A default workspace is created for the user.
 3. Pair a device:
 
@@ -170,7 +174,7 @@ corotum init cloud --origin https://cloud.example.com
 `init cloud` opens the pairing browser flow when the device is not already logged in. Hosted entitlement is not required.
 
 4. Open `/dashboard` for skills, devices, target reports, and settings. The dashboard is a full product surface. Self-hosted billing UI states that Cloud functionality is free and has no billing portal.
-5. Mutate Cloud desired state with the same CLI skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) or with [WebMCP](./dashboard-and-webmcp.md) / the same-origin dashboard mutation API. Then run `corotum sync` on each device; the device reports the applied revision. There is no daemon and no remote forced sync. Zero agents is valid.
+5. Mutate Cloud desired state with the same CLI skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) or with [WebMCP](/webmcp/dashboard-and-webmcp/) / the same-origin dashboard mutation API. Then run `corotum sync` on each device; the device reports the applied revision. There is no daemon and no remote forced sync. Zero agents is valid.
 6. Revoke a device from `/dashboard/devices`. Revoke invalidates only that device token and keeps remote machine data.
 7. `corotum logout --origin https://cloud.example.com` revokes the local token.
 
@@ -178,7 +182,7 @@ Pairing codes expire after 10 minutes. Cloud may return `426 Upgrade Required` w
 
 ## Supported agents and migration
 
-Supported agents are listed in [cli.md](./cli.md). v0.5 manages global/user-level skills only.
+Supported agents are listed in [cli.md](/cli/commands/). v0.5 manages global/user-level skills only.
 
 Git ↔ Cloud migration:
 
@@ -187,7 +191,7 @@ corotum migrate cloud --strategy replace --origin https://cloud.example.com
 corotum migrate git git@github.com:example/corotum-state.git --strategy merge --origin https://cloud.example.com
 ```
 
-See [migration.md](./migration.md). Identity (skill id, source, ref, lock revision, hash, targets) is preserved. The canonical local store is not rewritten by migrate.
+See [migration.md](/guides/migration/). Identity (skill id, source, ref, lock revision, hash, targets) is preserved. The canonical local store is not rewritten by migrate.
 
 ## Limitations
 

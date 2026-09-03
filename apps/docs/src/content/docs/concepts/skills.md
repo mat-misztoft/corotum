@@ -1,3 +1,7 @@
+---
+title: Skills storage and v2 contracts
+---
+
 # Skills storage and v2 contracts
 
 Managed skills live in a named shared root. Desired-state files use the Corotum v2 names `corotum.yaml`, `corotum.lock`, and `corotum.transitions.json`. Sync installs the exact locked revision. It never substitutes upstream `HEAD`.
@@ -97,4 +101,4 @@ Retention keeps the current artifact and one immediately preceding artifact per 
 
 ## Legacy names
 
-Current writes use Corotum roots and `corotum.*` files. Old ToolMirror paths and `toolmirror.*` files are a recoverable import source only. See [migration.md](./migration.md).
+Current writes use Corotum roots and `corotum.*` files. Old ToolMirror paths and `toolmirror.*` files are a recoverable import source only. See [migration.md](/guides/migration/).

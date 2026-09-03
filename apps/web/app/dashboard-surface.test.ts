@@ -31,7 +31,8 @@ test("billing and settings use the shared dashboard language without new control
   expect(surface).toContain('settings.subscription.status === "paid"');
   expect(surface).toContain("`Connect ${label}`");
   expect(surface).toContain("`Disconnect ${label}`");
-  expect(surface).toContain("authClient.unlinkAccount(");
+  expect(surface).toContain("authClient.unlinkAccount({ accountId })");
+  expect(surface).toContain("unlinkProvider(provider, linked.accountId)");
   expect(surface).toContain("` · ${linked.label}`");
   expect(surface).toContain('view === "billing" || view === "settings"');
   expect(surface).toContain("authClient.linkSocial(");
@@ -61,6 +62,7 @@ test("dashboard operate chrome uses frozen tokens and truthful status chips", ()
   expect(surface).toContain('href: "/dashboard/devices"');
   expect(surface).toContain('href: "/dashboard/billing"');
   expect(surface).toContain('href: "/settings"');
+  expect(surface).toContain('href="https://docs.corotum.com"');
   expect(surface).toContain("Sign out");
   expect(surface).toContain("authClient.signOut()");
   expect(surface).toContain('className="dashboard-chrome"');

@@ -1,8 +1,12 @@
+---
+title: CLI
+---
+
 # CLI
 
-The compiled `corotum` binary is the v0.5 client. Cloud Sync is the current workstream. Git Sync / Free remains documented. Desired-state mutations use the same CLI skill commands in both modes. The [dashboard and WebMCP](./dashboard-and-webmcp.md) can also mutate Cloud desired state. Local reconcile (`status`, `diff`, `sync`) works in both modes. After Cloud `sync`, the device reports the applied revision.
+The compiled `corotum` binary is the v0.5 client. Cloud Sync is the current workstream. Git Sync / Free remains documented. Desired-state mutations use the same CLI skill commands in both modes. The [dashboard and WebMCP](/webmcp/dashboard-and-webmcp/) can also mutate Cloud desired state. Local reconcile (`status`, `diff`, `sync`) works in both modes. After Cloud `sync`, the device reports the applied revision.
 
-Contracts for named storage, source versus artifact, denylist, typed errors, and non-interactive consent are in [skills.md](./skills.md).
+Contracts for named storage, source versus artifact, denylist, typed errors, and non-interactive consent are in [skills.md](/concepts/skills/).
 
 ```text
 corotum --help
@@ -148,7 +152,7 @@ Default Cloud origin is `https://corotum.com`. Override with `COROTUM_CLOUD_ORIG
 
 ## Cloud Sync
 
-Cloud Sync is the current workstream. Git Sync remains available ([git-sync.md](./git-sync.md)).
+Cloud Sync is the current workstream. Git Sync remains available ([git-sync.md](/concepts/git-sync/)).
 
 `corotum login` pairs this device in a browser. On a TTY it prints the verification URL and user code. It never prints the device token. `--non-interactive` and a missing TTY fail instead of waiting for a browser. Pairing does not require hosted entitlement. `corotum logout` revokes the server token when possible and always deletes local Cloud credentials.
 

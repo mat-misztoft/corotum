@@ -1,3 +1,7 @@
+---
+title: Git Sync
+---
+
 # Git Sync
 
 Git Sync / Free remains a fully documented Git-backed backend. No Corotum account is required. Cloud Sync is the current workstream; Git Sync is not hidden or removed. System Git must be installed. If Git is missing, Corotum stops before partial mutation and tells you to install Git.
@@ -13,7 +17,7 @@ corotum.transitions.json
 artifacts/
 ```
 
-Source-backed locks store metadata only. Artifact-backed skills store sanitized files under `artifacts/`. See [skills.md](./skills.md) for source-versus-artifact rules, denylist, and `--allow-artifacts`.
+Source-backed locks store metadata only. Artifact-backed skills store sanitized files under `artifacts/`. See [skills.md](/concepts/skills/) for source-versus-artifact rules, denylist, and `--allow-artifacts`.
 
 Cloud mode does not require Git unless a skill source is a Git repository.
 

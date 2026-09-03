@@ -1,3 +1,7 @@
+---
+title: Dashboard and WebMCP
+---
+
 # Dashboard and WebMCP
 
 The Cloud dashboard is a full product surface: overview, skills, devices, billing, and settings. Cloud UI and WebMCP call the same application services as the CLI. They change desired state only. v0.5 has no `sync_device` or `sync_all_devices` tool and does not remotely force a device to sync. A device applies revisions only when `corotum sync` runs on that device, then reports the applied revision. The dashboard never shows `SYNCED` before that report. There is no revision-history route.

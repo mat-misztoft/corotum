@@ -3,15 +3,15 @@ import { join } from "node:path";
 
 export const REQUIRED_DOC_FILES = [
   "README.md",
-  "docs/README.md",
-  "docs/install.md",
-  "docs/cli.md",
-  "docs/skills.md",
-  "docs/git-sync.md",
-  "docs/self-hosting.md",
-  "docs/hosted-cloud.md",
-  "docs/dashboard-and-webmcp.md",
-  "docs/migration.md",
+  "apps/docs/src/content/docs/index.md",
+  "apps/docs/src/content/docs/getting-started/install.md",
+  "apps/docs/src/content/docs/cli/commands.md",
+  "apps/docs/src/content/docs/concepts/skills.md",
+  "apps/docs/src/content/docs/concepts/git-sync.md",
+  "apps/docs/src/content/docs/cloud/self-hosting.md",
+  "apps/docs/src/content/docs/cloud/hosted.md",
+  "apps/docs/src/content/docs/webmcp/dashboard-and-webmcp.md",
+  "apps/docs/src/content/docs/guides/migration.md",
 ] as const;
 
 const LEGACY_WRITE_FORMATS = [
@@ -159,7 +159,7 @@ export async function checkDocs(
     }
   }
 
-  const cliDocs = files.get("docs/cli.md") ?? "";
+  const cliDocs = files.get("apps/docs/src/content/docs/cli/commands.md") ?? "";
   for (const missing of includesAll(cliDocs, [
     "reports the applied revision",
     "PENDING_RESOLUTION",
@@ -172,24 +172,24 @@ export async function checkDocs(
     "set-ref",
   ])) {
     findings.push({
-      file: "docs/cli.md",
+      file: "apps/docs/src/content/docs/cli/commands.md",
       message: `Missing Cloud Sync CLI coverage: ${missing}.`,
     });
   }
 
-  const dashboard = files.get("docs/dashboard-and-webmcp.md") ?? "";
+  const dashboard = files.get("apps/docs/src/content/docs/webmcp/dashboard-and-webmcp.md") ?? "";
   for (const missing of includesAll(dashboard, [
     "full product surface",
     "reports the applied revision",
     "PENDING_RESOLUTION",
   ])) {
     findings.push({
-      file: "docs/dashboard-and-webmcp.md",
+      file: "apps/docs/src/content/docs/webmcp/dashboard-and-webmcp.md",
       message: `Missing Cloud dashboard coverage: ${missing}.`,
     });
   }
 
-  const selfHost = files.get("docs/self-hosting.md") ?? "";
+  const selfHost = files.get("apps/docs/src/content/docs/cloud/self-hosting.md") ?? "";
   for (const missing of includesAll(selfHost, [
     "Creem is not required",
     "hosted Corotum billing is not required",
@@ -205,26 +205,26 @@ export async function checkDocs(
     "Google OAuth",
   ])) {
     findings.push({
-      file: "docs/self-hosting.md",
+      file: "apps/docs/src/content/docs/cloud/self-hosting.md",
       message: `Missing required self-hosting coverage: ${missing}.`,
     });
   }
   for (const env of SELF_HOST_FORBIDDEN_ENV) {
     if (selfHost.includes(env)) {
       findings.push({
-        file: "docs/self-hosting.md",
+        file: "apps/docs/src/content/docs/cloud/self-hosting.md",
         message: `Self-hosting docs must not require ${env}. Creem is hosted-only.`,
       });
     }
   }
   if (/COROTUM_HOSTED["']?\s*[:=]\s*["']true["']/.test(selfHost)) {
     findings.push({
-      file: "docs/self-hosting.md",
+      file: "apps/docs/src/content/docs/cloud/self-hosting.md",
       message: "Self-hosting docs must not set COROTUM_HOSTED to true.",
     });
   }
 
-  const hosted = files.get("docs/hosted-cloud.md") ?? "";
+  const hosted = files.get("apps/docs/src/content/docs/cloud/hosted.md") ?? "";
   for (const missing of includesAll(hosted, [
     "Creem",
     "checkout",
@@ -236,14 +236,14 @@ export async function checkDocs(
     "year",
   ])) {
     findings.push({
-      file: "docs/hosted-cloud.md",
+      file: "apps/docs/src/content/docs/cloud/hosted.md",
       message: `Missing hosted billing coverage: ${missing}.`,
     });
   }
   for (const env of HOSTED_REQUIRED_ENV) {
     if (!hosted.includes(env)) {
       findings.push({
-        file: "docs/hosted-cloud.md",
+        file: "apps/docs/src/content/docs/cloud/hosted.md",
         message: `Hosted docs must document ${env}.`,
       });
     }
@@ -251,7 +251,7 @@ export async function checkDocs(
 
   for (const [file, markdown, required] of [
     [
-      "docs/hosted-cloud.md",
+      "apps/docs/src/content/docs/cloud/hosted.md",
       hosted,
       [
         "Email Sending",
@@ -265,7 +265,7 @@ export async function checkDocs(
       ],
     ],
     [
-      "docs/self-hosting.md",
+      "apps/docs/src/content/docs/cloud/self-hosting.md",
       selfHost,
       [
         "own email-delivery configuration",
@@ -285,7 +285,7 @@ export async function checkDocs(
     }
   }
 
-  const install = files.get("docs/install.md") ?? "";
+  const install = files.get("apps/docs/src/content/docs/getting-started/install.md") ?? "";
   for (const missing of includesAll(install, [
     "curl -fsSL https://corotum.com/install.sh | sh",
     "irm https://corotum.com/install.ps1 | iex",
@@ -294,12 +294,12 @@ export async function checkDocs(
     "SHA-256",
   ])) {
     findings.push({
-      file: "docs/install.md",
+      file: "apps/docs/src/content/docs/getting-started/install.md",
       message: `Missing installer coverage: ${missing}.`,
     });
   }
 
-  const migrate = files.get("docs/migration.md") ?? "";
+  const migrate = files.get("apps/docs/src/content/docs/guides/migration.md") ?? "";
   for (const missing of includesAll(migrate, [
     "corotum migrate cloud",
     "corotum migrate git",
@@ -308,12 +308,12 @@ export async function checkDocs(
     "corotum migrate legacy-cleanup",
   ])) {
     findings.push({
-      file: "docs/migration.md",
+      file: "apps/docs/src/content/docs/guides/migration.md",
       message: `Missing migration coverage: ${missing}.`,
     });
   }
 
-  const skills = files.get("docs/skills.md") ?? "";
+  const skills = files.get("apps/docs/src/content/docs/concepts/skills.md") ?? "";
   for (const missing of includesAll(skills, [
     "~/.agents/skills",
     ".skill-lock.json",
@@ -326,14 +326,14 @@ export async function checkDocs(
     "corotum.lock",
   ])) {
     findings.push({
-      file: "docs/skills.md",
+      file: "apps/docs/src/content/docs/concepts/skills.md",
       message: `Missing v2 contract coverage: ${missing}.`,
     });
   }
 
   for (const [relative, markdown] of files) {
     const searchable =
-      relative === "docs/migration.md"
+      relative === "apps/docs/src/content/docs/guides/migration.md"
         ? withoutUpgradeSection(markdown)
         : markdown;
     for (const phrase of LEGACY_WRITE_FORMATS) {

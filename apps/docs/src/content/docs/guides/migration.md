@@ -1,3 +1,7 @@
+---
+title: Migration
+---
+
 # Migration
 
 v0.5 copies desired state between Git Sync and Cloud, and can import recoverable ToolMirror files into Corotum v2. Skill id, source, ref, lock revision, hash, materialization, and targets are preserved. The named local store is not rewritten by Git ↔ Cloud migrate.

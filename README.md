@@ -43,14 +43,14 @@ Zero installed or enabled agents is valid. Global skills live in `~/.agents/skil
 
 ## Docs
 
-- [Public documentation](./docs/README.md)
-- [CLI](./docs/cli.md)
-- [Skills and v2 contracts](./docs/skills.md)
-- [Git Sync](./docs/git-sync.md)
-- [Dashboard and WebMCP](./docs/dashboard-and-webmcp.md)
-- [Migration](./docs/migration.md)
-- [Self-hosted Cloud](./docs/self-hosting.md) — Creem is not required
-- [Hosted corotum.com](./docs/hosted-cloud.md)
+- [Public documentation](https://docs.corotum.com)
+- [CLI](https://docs.corotum.com/cli/commands/)
+- [Skills and v2 contracts](https://docs.corotum.com/concepts/skills/)
+- [Git Sync](https://docs.corotum.com/concepts/git-sync/)
+- [Dashboard and WebMCP](https://docs.corotum.com/webmcp/dashboard-and-webmcp/)
+- [Migration](https://docs.corotum.com/guides/migration/)
+- [Self-hosted Cloud](https://docs.corotum.com/cloud/self-hosting/) — Creem is not required
+- [Hosted corotum.com](https://docs.corotum.com/cloud/hosted/)
 
 ## Development
 
@@ -61,6 +61,7 @@ bun install
 bun run typecheck
 bun run lint
 bun run docs:check
+bun run docs:build
 ```
 
 Build a standalone CLI binary:
