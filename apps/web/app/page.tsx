@@ -2,6 +2,7 @@ import { BillingToggle } from "./billing-toggle";
 import { FlowStory } from "./landing-flow-story";
 import { LandingHeader } from "./landing-header";
 import { SiteFooter } from "./site-footer";
+import { WebMcpTools } from "./webmcp-tools";
 
 const deviceTargets = [
   { device: "Desktop", agent: "Codex", status: "SYNCED" },
@@ -50,6 +51,7 @@ function StatusLabel({ status }: { status: string }) {
 export default function Home() {
   return (
     <main className="landing">
+      <WebMcpTools landing />
       <LandingHeader />
 
       <section className="hero" aria-labelledby="hero-heading">

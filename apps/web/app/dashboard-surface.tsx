@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { authClient } from "../src/auth-client";
 import { SiteFooter } from "./site-footer";
 import { validEmail } from "./sign-in/sign-in-form";
+import { WebMcpTools } from "./webmcp-tools";
 
 type View = "overview" | "skills" | "devices" | "billing" | "settings";
 type Dashboard = {
@@ -101,6 +102,7 @@ function DashboardShell({
 }) {
   return (
     <div className="dashboard dashboard-shell">
+      <WebMcpTools />
       <header className="dashboard-chrome">
         <div className="dashboard-brand-rule" />
         <nav className="dashboard-nav" aria-label="Corotum">
