@@ -5,6 +5,7 @@ import {
 } from "../../../packages/skills-adapter/src/git-source";
 import { CloudAuthError } from "./cloud-auth";
 import type { CliOutcome } from "./cli-contracts";
+import { CloudInitError } from "./init-cloud";
 
 export type InitErrorCode =
   | "PROVIDER_REQUIRED"
@@ -117,7 +118,8 @@ export function classifyGitInitError(error: unknown): Error {
   if (
     error instanceof InitError ||
     error instanceof GitCliError ||
-    error instanceof CloudAuthError
+    error instanceof CloudAuthError ||
+    error instanceof CloudInitError
   ) {
     return error;
   }

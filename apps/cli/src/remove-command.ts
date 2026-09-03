@@ -1,27 +1,14 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Command } from "commander";
-import type { AgentId } from "../../../packages/agent-targets/src/index";
-import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
-import { createCliV2GitStateProvider } from "./artifact-consent";
-import { ConfigStore, effectiveStoragePaths } from "./config";
-import {
-  assertGitAvailable,
-  notInitializedError,
-  withGitCliErrors,
-} from "./init-errors";
-import { LocalOperationalStateStore } from "./local-state";
-import { MutationLock } from "./mutation-lock";
-import { resolvePlatformPaths } from "./platform";
-import { V2LocalApplier } from "./v2-local-applier";
 import {
   LifecycleRecoveryStore,
   V2LifecycleService,
   type V2LifecycleResult,
 } from "./v2-lifecycle";
+import { withV2MutationRuntime } from "./v2-mutation-session";
 
 /** Registers desired-state deletion and local-preserving unmanage commands. */
 export function registerRemoveCommands(program: Command, io: CliIo): void {
@@ -37,58 +24,31 @@ export function registerRemoveCommands(program: Command, io: CliIo): void {
       .command(`${name} <skill>`)
       .description(description)
       .action(async (skill: string) => {
-        await withGitCliErrors(async () => {
-        const homeDir = homedir();
-        const paths = resolvePlatformPaths({
-          homeDir,
-          platform: process.platform as "darwin" | "linux" | "win32",
-          env: process.env,
-        });
-        await assertGitAvailable();
-        const release = await new MutationLock(
-          join(paths.stateDir, "process.lock"),
-        ).acquire();
-        try {
-          const config = await new ConfigStore(paths).load();
-          if (config.mode !== "git" || !config.gitRepository)
-            throw notInitializedError(`${name}ing Git skills`);
-          const storage = effectiveStoragePaths(config, paths);
-          const stateStore = new LocalOperationalStateStore(
-            join(paths.stateDir, "state.json"),
-          );
-          const service = new V2LifecycleService(
-            createCliV2GitStateProvider({
-              storagePath: storage.gitStoragePath,
-              source: config.gitRepository,
-              options: program.opts(),
-              io,
-            }),
-            new V2LocalApplier(
-              stateStore,
-              new CanonicalSkillStore(storage.skillsStoragePath),
-              {
-                storagePath: storage.gitStoragePath,
-                repository: config.gitRepository,
-                enabledAgentIds: Object.entries(config.agents)
-                  .filter(([, value]) => value.enabled)
-                  .map(([id]) => id) as AgentId[],
-                homeDir,
-              },
-            ),
-            stateStore,
-            new LifecycleRecoveryStore(
-              join(paths.stateDir, "lifecycle-transaction.json"),
-            ),
-          );
-          const result =
-            operation === "REMOVE"
-              ? await service.remove(skill)
-              : await service.unmanage(skill);
-          writeLifecycleResult(io, program.opts<{ json?: boolean }>().json === true, result, skill);
-        } finally {
-          await release();
-        }
-        });
+        await withV2MutationRuntime(
+          program,
+          io,
+          { action: `${name}ing skills`, requireGit: false },
+          async (runtime) => {
+            const release = await runtime.acquireLock();
+            try {
+              const service = new V2LifecycleService(
+                runtime.provider,
+                runtime.applier,
+                runtime.stateStore,
+                new LifecycleRecoveryStore(
+                  join(runtime.paths.stateDir, "lifecycle-transaction.json"),
+                ),
+              );
+              const result =
+                operation === "REMOVE"
+                  ? await service.remove(skill)
+                  : await service.unmanage(skill);
+              writeLifecycleResult(io, runtime.json, result, skill);
+            } finally {
+              await release();
+            }
+          },
+        );
       });
   }
 }

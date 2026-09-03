@@ -131,12 +131,21 @@ export class V2MutationService {
   }
 
   private async replaceSourceLock(current: Awaited<ReturnType<V2MutationProvider["pull"]>>, id: SkillId, metadata: SourceMetadata, source: SourceLock): Promise<V2MutationResult> {
+    const manifest = current.state.manifest.skills.find((skill) => skill.id === id);
     const existing = current.state.lockfile.skills.find((lock) => lock.id === id);
-    if (!existing) return { kind: "refused", reason: "Managed skill has no current materialization." };
-    const lock: V2LockedSkill = { id, name: existing.name, source, materialization: { kind: "source", contentHash: source.contentHash } };
+    if (!manifest) return { kind: "refused", reason: "Managed skill was not found or is ambiguous." };
+    if (!existing && manifest.resolutionStatus !== "PENDING_RESOLUTION") {
+      return { kind: "refused", reason: "Managed skill has no current materialization." };
+    }
+    const lock: V2LockedSkill = { id, name: existing?.name ?? manifest.name, source, materialization: { kind: "source", contentHash: source.contentHash } };
     return this.persistAndApply(current, {
       manifest: { version: 2, skills: current.state.manifest.skills.map((skill) => skill.id === id ? { ...skill, source: metadata, resolutionStatus: "RESOLVED" } : skill) },
-      lockfile: { version: 2, skills: current.state.lockfile.skills.map((entry) => entry.id === id ? lock : entry) },
+      lockfile: {
+        version: 2,
+        skills: existing
+          ? current.state.lockfile.skills.map((entry) => entry.id === id ? lock : entry)
+          : [...current.state.lockfile.skills, lock],
+      },
     }, [id]);
   }
 

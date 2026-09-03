@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { DispositionLedger, V2DesiredState } from "../../../packages/core/src/index";
+import { skillId, type DispositionLedger, type V2DesiredState } from "../../../packages/core/src/index";
 import { V2MutationService, type V2MutationProvider } from "./v2-mutations";
 
 const hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -119,6 +119,34 @@ describe("v2 mutation commands", () => {
       source: { repository: "https://example.test/a.git", path: "alpha", ref: "main" },
     })).toMatchObject({ kind: "refused", reason: "upstream unavailable" });
     expect(state.pushes).toBe(0);
+  });
+
+  test("update resolves a Cloud PENDING_RESOLUTION skill and refuses a second materialization gap", async () => {
+    const pendingId = skillId("sk_pendingresolution0001");
+    const pending: V2DesiredState = {
+      manifest: {
+        version: 2,
+        skills: [{
+          id: pendingId,
+          name: "alpha",
+          targets: "all",
+          source: { repository: "https://example.test/a.git", path: "alpha", ref: "main" },
+          resolutionStatus: "PENDING_RESOLUTION",
+        }],
+      },
+      lockfile: { version: 2, skills: [] },
+    };
+    const state = provider(pending);
+    const service = new V2MutationService(state, resolver);
+    expect(await service.update("alpha")).toEqual([
+      { kind: "success", skillId: pendingId, revision },
+    ]);
+    const saved = await state.pull();
+    expect(saved.state.manifest.skills[0]?.resolutionStatus).toBe("RESOLVED");
+    expect(saved.state.lockfile.skills[0]?.source?.revision).toBe(revision);
+    expect(await service.update("alpha")).toEqual([
+      { kind: "success", skillId: pendingId, revision },
+    ]);
   });
 
   test("set-ref resolves before persistence and check is read-only", async () => {

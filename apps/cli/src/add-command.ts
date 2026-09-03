@@ -1,32 +1,19 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 import type { Command } from "commander";
-import type { AgentId } from "../../../packages/agent-targets/src/index";
-import type { SourceLock } from "../../../packages/core/src/index";
-import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
 import {
   GitSkillMaterializer,
   normalizeGitSource,
 } from "../../../packages/skills-adapter/src/git-source";
 import type { AddCandidate } from "./add";
-import { createCliV2GitStateProvider } from "./artifact-consent";
 import type { CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
-import { ConfigStore, effectiveStoragePaths } from "./config";
-import {
-  assertGitAvailable,
-  notInitializedError,
-  withGitCliErrors,
-} from "./init-errors";
-import { LocalOperationalStateStore } from "./local-state";
-import { MutationLock } from "./mutation-lock";
-import { resolvePlatformPaths } from "./platform";
 import { selectOption } from "./prompts";
-import { V2LocalApplier } from "./v2-local-applier";
+import {
+  gitSourceResolver,
+  withV2MutationRuntime,
+} from "./v2-mutation-session";
 import { V2MutationService } from "./v2-mutations";
 
-/** Registers Git-backed skill addition. Cloud add is intentionally deferred. */
+/** Registers Git-backed skill addition for Git Sync and Cloud Sync. */
 export function registerAddCommand(program: Command, io: CliIo): void {
   program
     .command("add <source>")
@@ -35,61 +22,63 @@ export function registerAddCommand(program: Command, io: CliIo): void {
     .option("--ref <ref>", "branch, tag, or commit to lock", "HEAD")
     .action(
       async (sourceInput: string, options: { skill?: string; ref: string }) => {
-        await withGitCliErrors(async () => {
-        const homeDir = homedir();
-        const paths = resolvePlatformPaths({
-          homeDir,
-          platform: process.platform as "darwin" | "linux" | "win32",
-          env: process.env,
-        });
-        await assertGitAvailable();
-        const release = await new MutationLock(
-          join(paths.stateDir, "process.lock"),
-        ).acquire();
-        try {
-          const config = await new ConfigStore(paths).load();
-          if (config.mode !== "git" || !config.gitRepository)
-            throw notInitializedError("adding Git skills");
-          const source = normalizeGitSource(sourceInput);
-          const materializer = new GitSkillMaterializer();
-          const candidates = await materializer.discover(source, options.ref);
-          const candidate = await selectCandidate(
-            candidates,
-            options.skill,
-            program.opts<{ nonInteractive?: boolean }>().nonInteractive ===
-              true || !io.stdinIsTTY,
-          );
-          const storage = effectiveStoragePaths(config, paths);
-          const stateStore = new LocalOperationalStateStore(
-            join(paths.stateDir, "state.json"),
-          );
-          const service = new V2MutationService(
-            createCliV2GitStateProvider({ storagePath: storage.gitStoragePath, source: config.gitRepository, options: program.opts(), io }),
-            { resolve: async (metadata): Promise<SourceLock> => {
-              const resolved = await materializer.resolve({ id: "pending-add" as never, source: metadata.repository, skill: candidate.name, ref: metadata.ref, path: metadata.path });
-              return { ...resolved, ref: metadata.ref, contentHash: resolved.contentHash as `sha256:${string}` };
-            } },
-            new V2LocalApplier(stateStore, new CanonicalSkillStore(storage.skillsStoragePath), {
-              storagePath: storage.gitStoragePath, repository: config.gitRepository,
-              enabledAgentIds: Object.entries(config.agents).filter(([, value]) => value.enabled).map(([id]) => id) as AgentId[], homeDir,
-            }),
-          );
-          const result = await service.add({ name: candidate.name, source: { repository: source, path: candidate.path, ref: options.ref } });
-          if (result.kind === "refused") throw new Error(result.reason);
-          if (result.kind === "duplicate") {
-            writeResult(io, program.opts<{ json?: boolean }>().json === true, { outcome: "SUCCESS", status: "DUPLICATE", skillId: result.skillId });
-            return;
-          }
-          if (result.kind === "source-unavailable") throw new Error(result.reason);
-          writeResult(io, program.opts<{ json?: boolean }>().json === true, {
-            outcome: result.kind === "persisted-not-applied" ? "PARTIAL_SUCCESS" : "SUCCESS",
-            status: result.kind === "persisted-not-applied" ? "PERSISTED_NOT_APPLIED" : "ADDED",
-            skill: candidate.name, skillId: result.skillId, revision: result.revision,
-          });
-        } finally {
-          await release();
-        }
-        });
+        await withV2MutationRuntime(
+          program,
+          io,
+          { action: "adding skills", requireGit: true },
+          async (runtime) => {
+            const source = normalizeGitSource(sourceInput);
+            const materializer = new GitSkillMaterializer();
+            const candidates = await materializer.discover(source, options.ref);
+            const candidate = await selectCandidate(
+              candidates,
+              options.skill,
+              program.opts<{ nonInteractive?: boolean }>().nonInteractive ===
+                true || !io.stdinIsTTY,
+            );
+            const release = await runtime.acquireLock();
+            try {
+              const result = await new V2MutationService(
+                runtime.provider,
+                gitSourceResolver(materializer, candidate.name),
+                runtime.applier,
+              ).add({
+                name: candidate.name,
+                source: {
+                  repository: source,
+                  path: candidate.path,
+                  ref: options.ref,
+                },
+              });
+              if (result.kind === "refused") throw new Error(result.reason);
+              if (result.kind === "duplicate") {
+                writeResult(io, runtime.json, {
+                  outcome: "SUCCESS",
+                  status: "DUPLICATE",
+                  skillId: result.skillId,
+                });
+                return;
+              }
+              if (result.kind === "source-unavailable")
+                throw new Error(result.reason);
+              writeResult(io, runtime.json, {
+                outcome:
+                  result.kind === "persisted-not-applied"
+                    ? "PARTIAL_SUCCESS"
+                    : "SUCCESS",
+                status:
+                  result.kind === "persisted-not-applied"
+                    ? "PERSISTED_NOT_APPLIED"
+                    : "ADDED",
+                skill: candidate.name,
+                skillId: result.skillId,
+                revision: result.revision,
+              });
+            } finally {
+              await release();
+            }
+          },
+        );
       },
     );
 }
