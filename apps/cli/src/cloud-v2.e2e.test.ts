@@ -443,6 +443,7 @@ async function initializeCloudHome(
     canonicalStore: new CanonicalSkillStore(current.skillsDir),
     enabledAgentIds: ["codex"],
     homeDir: home,
+    downloadArtifact: (lock) => cloud.downloadArtifact(lock),
   }).run({ outcomes });
 }
 

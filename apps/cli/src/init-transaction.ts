@@ -426,6 +426,13 @@ export class InitTransactionService {
     const nextSkills = { ...saved.skills };
     let ownership = managedTargetsFromState(saved);
     const targets = new AgentTargetManager();
+    const gitArtifactPath = this.deps.gitStoragePath && this.deps.gitRepository
+      ? (locator: string) =>
+          `${this.deps.gitStoragePath}/${sourceKey(this.deps.gitRepository!)}/${locator}`
+      : undefined;
+    const resolveGitArtifactTree = gitArtifactPath
+      ? async (locator: string) => gitArtifactPath(locator)
+      : undefined;
     const materializer = new ExactContentMaterializer(
       undefined,
       this.deps.downloadArtifact
@@ -438,14 +445,10 @@ export class InitTransactionService {
             if (!lock) throw new Error("Artifact locator is not in desired state.");
             return this.deps.downloadArtifact!(lock);
           }
-        : this.deps.gitStoragePath && this.deps.gitRepository
-          ? async (locator) =>
-              new Uint8Array(
-                await readFile(
-                  `${this.deps.gitStoragePath}/${sourceKey(this.deps.gitRepository!)}/${locator}`,
-                ),
-              )
+        : gitArtifactPath
+          ? async (locator) => new Uint8Array(await readFile(gitArtifactPath(locator)))
           : undefined,
+      resolveGitArtifactTree,
     );
 
     let installed = 0;
