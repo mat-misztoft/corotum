@@ -1,8 +1,15 @@
 import { jsonError } from "./api";
 import type { WorkspaceDatabase } from "./workspaces";
 
+export type LinkedSignIn = Readonly<{
+  providerId: string;
+  label: string;
+}>;
+
 export type DashboardSettingsView = Readonly<{
   hosted: boolean;
+  email: string | null;
+  accounts: LinkedSignIn[];
   subscription: {
     interval: "month" | "year";
     status: string;
@@ -16,7 +23,31 @@ export async function readDashboardSettings(
   userId: string,
   hosted: boolean,
 ): Promise<DashboardSettingsView> {
-  if (!hosted) return { hosted: false, subscription: null };
+  const email =
+    (
+      await db
+        .prepare("SELECT email FROM user WHERE id = ?")
+        .bind(userId)
+        .first<{ email: string }>()
+    )?.email ?? null;
+  const listed = await db
+    .prepare(
+      `SELECT provider_id AS providerId, account_id AS accountId,
+              display_label AS displayLabel
+       FROM account
+       WHERE user_id = ? AND provider_id IN ('github', 'google')`,
+    )
+    .bind(userId)
+    .all<{
+      providerId: string;
+      accountId: string;
+      displayLabel: string | null;
+    }>();
+  const accounts = (listed.results ?? []).map((row) => ({
+    providerId: row.providerId,
+    label: row.displayLabel || row.accountId,
+  }));
+  if (!hosted) return { hosted: false, email, accounts, subscription: null };
   const subscription = await db
     .prepare(
       `SELECT billing_interval AS interval, status,
@@ -25,7 +56,7 @@ export async function readDashboardSettings(
     )
     .bind(userId)
     .first<DashboardSettingsView["subscription"]>();
-  return { hosted, subscription };
+  return { hosted, email, accounts, subscription };
 }
 
 export async function handleDashboardSettingsGet(

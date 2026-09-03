@@ -29,6 +29,14 @@ test("billing and settings use the shared dashboard language without new control
   expect(surface).toContain('if (view === "billing")');
   expect(surface).toContain('window.open(url, "_blank", "noopener,noreferrer")');
   expect(surface).toContain('settings.subscription.status === "paid"');
+  expect(surface).toContain("`Connect ${label}`");
+  expect(surface).toContain("`Disconnect ${label}`");
+  expect(surface).toContain("authClient.unlinkAccount(");
+  expect(surface).toContain("` · ${linked.label}`");
+  expect(surface).toContain('view === "billing" || view === "settings"');
+  expect(surface).toContain("authClient.linkSocial(");
+  expect(surface).toContain("authClient.changeEmail(");
+  expect(surface).toContain("Magic link email");
   expect(surface).not.toContain("dashboard-legacy");
 });
 

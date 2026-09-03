@@ -50,6 +50,14 @@ test("local development can use an ephemeral development-only auth secret", () =
   });
 });
 
+test("OAuth linking may use a different email and Corotum email can change", async () => {
+  const source = await Bun.file(new URL("./auth.ts", import.meta.url)).text();
+  expect(source).toContain("allowDifferentEmails: true");
+  expect(source).toContain("allowUnlinkingAll: true");
+  expect(source).toContain("changeEmail: { enabled: true }");
+  expect(source).toContain("persistAccountDisplayLabel(");
+});
+
 function createMagicLinkRuntime() {
   const database = new Database(":memory:");
   database.exec(`

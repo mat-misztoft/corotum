@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { authClient } from "../src/auth-client";
+import { validEmail } from "./sign-in/sign-in-form";
 
 type View = "overview" | "skills" | "devices" | "billing" | "settings";
 type Dashboard = {
@@ -30,6 +31,8 @@ type Dashboard = {
 };
 type Settings = {
   hosted: boolean;
+  email: string | null;
+  accounts: { providerId: string; label: string }[];
   subscription: {
     interval: "month" | "year";
     status: string;
@@ -165,6 +168,9 @@ export function DashboardSurface({ view }: { view: View }) {
   const [error, setError] = useState<string | null>(null);
   const [entitlement, setEntitlement] = useState<string | null>(null);
   const [action, setAction] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
   useEffect(() => {
     fetch("/api/v1/dashboard")
       .then(async (response) => {
@@ -181,7 +187,7 @@ export function DashboardSurface({ view }: { view: View }) {
         else setError(body.error ?? "Unable to load dashboard");
       })
       .catch(() => setError("Unable to load dashboard"));
-    if (view === "billing")
+    if (view === "billing" || view === "settings")
       fetch("/api/v1/dashboard/settings")
         .then(async (response) => {
           if (response.status === 401) {
@@ -197,6 +203,9 @@ export function DashboardSurface({ view }: { view: View }) {
           else setError(body.error ?? "Unable to load settings");
         })
         .catch(() => setError("Unable to load settings"));
+    if (view === "settings" &&
+      new URLSearchParams(window.location.search).get("error"))
+      setAccountError("Unable to connect that account. Try again.");
   }, [view]);
 
   async function revokeDevice(deviceId: string) {
@@ -225,6 +234,67 @@ export function DashboardSurface({ view }: { view: View }) {
       setError(
         cause instanceof Error ? cause.message : "Unable to revoke device",
       );
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function linkProvider(provider: "github" | "google") {
+    setAction(provider);
+    setAccountError(null);
+    try {
+      const { error } = await authClient.linkSocial({
+        provider,
+        callbackURL: "/settings",
+        errorCallbackURL: "/settings",
+      });
+      if (error) throw new Error(error.message);
+    } catch {
+      setAccountError("Unable to connect that account. Try again.");
+      setAction(null);
+    }
+  }
+
+  async function unlinkProvider(provider: "github" | "google") {
+    setAction(`unlink-${provider}`);
+    setAccountError(null);
+    try {
+      const { error } = await authClient.unlinkAccount({ providerId: provider });
+      if (error) throw new Error(error.message);
+      const response = await fetch("/api/v1/dashboard/settings");
+      if (response.status === 401) {
+        window.location.assign("/sign-in");
+        return;
+      }
+      const body = (await response.json()) as Settings & { error?: string };
+      if (!response.ok) throw new Error(body.error);
+      setSettings(body);
+    } catch {
+      setAccountError("Unable to disconnect that account. Try again.");
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function submitEmailChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = emailDraft.trim();
+    if (!validEmail(next)) {
+      setAccountError("Enter a valid email address or try again.");
+      return;
+    }
+    setAction("email");
+    setAccountError(null);
+    setEmailSent(false);
+    try {
+      const { error } = await authClient.changeEmail({
+        newEmail: next,
+        callbackURL: "/settings",
+      });
+      if (error) throw new Error(error.message);
+      setEmailSent(true);
+    } catch {
+      setAccountError("Unable to change email. Try again.");
     } finally {
       setAction(null);
     }
@@ -654,6 +724,94 @@ export function DashboardSurface({ view }: { view: View }) {
           {data.revision.id ? data.revision.id.slice(0, 12) : "not yet created"}
         </p>
       </header>
+      {!settings ? (
+        <Loading />
+      ) : (
+        <>
+      <section
+        className="dashboard-panel dashboard-settings-panel"
+        aria-labelledby="sign-in-methods"
+      >
+        <h2 id="sign-in-methods">Sign-in methods</h2>
+        <p>
+          Magic link uses {settings.email ?? "your Corotum email"}. GitHub and
+          Google can use a different address; they stay on this account after
+          you connect them here.
+        </p>
+        {accountError && (
+          <p className="dashboard-pending" role="alert">
+            {accountError}
+          </p>
+        )}
+        {(["github", "google"] as const).map((provider) => {
+          const linked = settings.accounts.find(
+            (account) => account.providerId === provider,
+          );
+          const label = provider === "github" ? "GitHub" : "Google";
+          return (
+            <div className="dashboard-account-row" key={provider}>
+              <p className="dashboard-billing-label">
+                {label}
+                {linked ? ` · ${linked.label}` : ""}
+              </p>
+              <button
+                className="dashboard-secondary-button"
+                type="button"
+                disabled={action !== null}
+                onClick={() =>
+                  linked ? unlinkProvider(provider) : linkProvider(provider)
+                }
+              >
+                {action === provider || action === `unlink-${provider}`
+                  ? linked
+                    ? `Disconnecting ${label}…`
+                    : `Connecting ${label}…`
+                  : linked
+                    ? `Disconnect ${label}`
+                    : `Connect ${label}`}
+              </button>
+            </div>
+          );
+        })}
+      </section>
+      <section
+        className="dashboard-panel dashboard-settings-panel"
+        aria-labelledby="magic-link-email-heading"
+      >
+        <h2 id="magic-link-email-heading">Magic link email</h2>
+        <p>
+          Sign-in links go to this address. GitHub and Google stay connected
+          if you change it.
+        </p>
+        {emailSent ? (
+          <p className="dashboard-pending">
+            We sent a confirmation link to the new address.
+          </p>
+        ) : (
+          <form className="dashboard-email-change" onSubmit={submitEmailChange}>
+            <label htmlFor="magic-link-email">Email</label>
+            <input
+              autoComplete="email"
+              disabled={action !== null}
+              id="magic-link-email"
+              inputMode="email"
+              name="email"
+              onChange={(event) => setEmailDraft(event.target.value)}
+              placeholder={settings.email ?? undefined}
+              required
+              type="email"
+              value={emailDraft}
+            />
+            <button
+              className="dashboard-secondary-button"
+              disabled={action !== null}
+              type="submit"
+            >
+              {action === "email" ? "Sending link…" : "Change email"}
+            </button>
+          </form>
+        )}
+      </section>
       <section
         className="dashboard-panel dashboard-settings-panel"
         aria-labelledby="cli-preferences"
@@ -673,6 +831,8 @@ export function DashboardSurface({ view }: { view: View }) {
           corotum config set telemetry false
         </code>
       </section>
+        </>
+      )}
     </DashboardShell>
   );
 }

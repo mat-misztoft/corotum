@@ -1,0 +1,1 @@
+ALTER TABLE `account` ADD `display_label` text;

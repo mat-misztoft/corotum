@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./db/schema";
+import { persistAccountDisplayLabel } from "./account-label";
 import type { EmailEnvironment, EmailService } from "./email";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
@@ -106,9 +107,25 @@ export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
     account: {
       accountLinking: {
         enabled: true,
+        allowDifferentEmails: true,
+        allowUnlinkingAll: true,
         trustedProviders: ["github", "google"],
       },
     },
+    user: {
+      changeEmail: { enabled: true },
+    },
+    emailVerification: emailService
+      ? {
+          async sendVerificationEmail({ user, url }) {
+            await emailService.sendAuthenticationEmail({
+              to: user.email,
+              subject: "Confirm your Corotum email",
+              link: url,
+            });
+          },
+        }
+      : undefined,
     plugins: emailService ? [createMagicLinkPlugin(emailService)] : [],
     databaseHooks: {
       user: {
@@ -117,6 +134,23 @@ export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
             await ensureDefaultWorkspace(
               env.DB as unknown as WorkspaceDatabase,
               user.id,
+            );
+          },
+        },
+      },
+      account: {
+        create: {
+          after: async (account) => {
+            if (account.providerId !== "github" && account.providerId !== "google")
+              return;
+            await persistAccountDisplayLabel(
+              env.DB as unknown as WorkspaceDatabase,
+              {
+                id: account.id,
+                providerId: account.providerId,
+                accountId: account.accountId,
+                accessToken: account.accessToken,
+              },
             );
           },
         },

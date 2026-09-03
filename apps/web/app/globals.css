@@ -1737,8 +1737,14 @@ a {
 .dashboard-primary-button:active { transform: translateY(1px); }
 .dashboard-primary-button:disabled { cursor: wait; opacity: .65; }
 .dashboard-settings-panel { max-width: 720px; }
+.dashboard-settings-panel + .dashboard-settings-panel { margin-top: 28px; }
 .dashboard-settings-panel > p { color: var(--machine-muted); line-height: 1.55; margin: 0; max-width: 62ch; }
 .dashboard-settings-panel .dashboard-settings-instruction { margin-top: 20px; }
+.dashboard-account-row { align-items: center; display: flex; gap: 16px; justify-content: space-between; margin-top: 20px; }
+.dashboard-account-row p { overflow-wrap: anywhere; }
+.dashboard-email-change { display: grid; gap: 12px; margin-top: 28px; max-width: 28rem; }
+.dashboard-email-change label { font-size: 14px; font-weight: 700; }
+.dashboard-email-change input { background: var(--machine); border: 1px solid var(--machine-muted); color: var(--paper); font: inherit; min-height: 48px; padding: 10px 12px; }
 .dashboard-command { background: var(--ink); color: var(--paper); display: block; font: 12px / 1.65 ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 10px; overflow-wrap: anywhere; padding: 16px; user-select: all; width: fit-content; }
 
 @media (max-width: 850px) {

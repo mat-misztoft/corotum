@@ -94,3 +94,12 @@ test("device skill targets live in dedicated relational rows", async () => {
   expect(sql).toContain("device_skill_targets_unique");
   expect(sql).toContain("'SYNCED', 'DRIFTED', 'AUTH_REQUIRED', 'ERROR'");
 });
+
+test("account rows store Better Auth issuer keys", async () => {
+  const sql = await Bun.file(
+    new URL("../../migrations/0012_faulty_nighthawk.sql", import.meta.url),
+  ).text();
+  expect(sql).toContain("ADD `issuer`");
+  expect(sql).toContain("local:oauth:");
+  expect(sql).toContain("account_issuer_account_id_unique");
+});
