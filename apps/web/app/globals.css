@@ -1674,8 +1674,8 @@ a {
 .dashboard-nav { align-items: center; display: flex; gap: 28px; margin: 0 auto; max-width: 1120px; min-height: 64px; padding: 0 42px; }
 .dashboard-nav .wordmark { color: var(--ink); flex: 0 0 auto; }
 .dashboard-nav-links { display: flex; flex: 1 1 auto; gap: clamp(20px, 2vw, 28px); justify-content: flex-end; margin-left: auto; min-width: 0; white-space: nowrap; }
-.dashboard-nav a { color: var(--graphite); font-size: 14px; font-weight: 700; text-decoration: none; }
-.dashboard-nav a:hover { color: var(--ink); }
+.dashboard-nav a, .dashboard-nav button { background: none; border: 0; color: var(--graphite); cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; padding: 0; text-decoration: none; }
+.dashboard-nav a:hover, .dashboard-nav button:hover { color: var(--ink); }
 .dashboard-nav a[aria-current="page"] { border-bottom: 2px solid var(--vermillion); color: var(--ink); font-weight: 800; padding: 20px 0 18px; }
 .dashboard button, .dashboard-panel, .dashboard-command, .dashboard-skeleton-panel { border-radius: 0; }
 .dashboard a:focus-visible, .dashboard button:focus-visible { outline: 3px solid var(--vermillion); outline-offset: 3px; }

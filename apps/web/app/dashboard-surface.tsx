@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { authClient } from "../src/auth-client";
 
 type View = "overview" | "skills" | "devices" | "billing" | "settings";
 type Dashboard = {
@@ -104,6 +105,15 @@ function DashboardShell({
                 {item.label}
               </a>
             ))}
+            <button
+              type="button"
+              onClick={async () => {
+                await authClient.signOut();
+                window.location.assign("/sign-in");
+              }}
+            >
+              Sign out
+            </button>
           </div>
         </nav>
       </header>

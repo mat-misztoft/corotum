@@ -46,6 +46,8 @@ test("dashboard operate chrome uses frozen tokens and truthful status chips", ()
   expect(surface).toContain('href: "/dashboard/devices"');
   expect(surface).toContain('href: "/dashboard/billing"');
   expect(surface).toContain('href: "/settings"');
+  expect(surface).toContain("Sign out");
+  expect(surface).toContain("authClient.signOut()");
   expect(surface).toContain('className="dashboard-chrome"');
   expect(surface).not.toContain("/dashboard/history");
   expect(surface).not.toContain("dark-mode");
