@@ -3,7 +3,6 @@ import { BillingToggle } from "./billing-toggle";
 import { FlowStory } from "./landing-flow-story";
 import { LandingHeader } from "./landing-header";
 import { SiteFooter } from "./site-footer";
-import { WebMcpTools } from "./webmcp-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +53,6 @@ function StatusLabel({ status }: { status: string }) {
 export default function Home() {
   return (
     <main className="landing">
-      <WebMcpTools landing />
       <LandingHeader />
 
       <section className="hero" aria-labelledby="hero-heading">

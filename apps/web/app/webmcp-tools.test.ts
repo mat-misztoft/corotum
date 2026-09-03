@@ -18,13 +18,8 @@ test("dashboard registers the planned WebMCP tools through document.modelContext
   ])
     expect(source).toContain(`name: "${tool}"`);
   expect(source).toContain("modelContext.registerTool");
+  expect(source).toContain("readOnlyHint: true");
+  expect(source).toContain("additionalProperties: false");
   expect(source).toContain('fetch("/api/v1/webmcp"');
   expect(source).toContain('fetch("/api/v1/dashboard"');
-});
-
-test("landing exposes only a dashboard navigation tool", () => {
-  expect(source).toContain('name: "open_dashboard"');
-  expect(source).toContain('window.location.assign("/dashboard")');
-  expect(source).toContain("? [openDashboardTool]");
-  expect(source).toContain(": dashboardTools.map");
 });

@@ -6,6 +6,7 @@ type Tool = {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  annotations?: { readOnlyHint: boolean };
   execute: (
     input: Record<string, unknown>,
     options: { signal: AbortSignal },
@@ -59,6 +60,7 @@ const schema = (
   type: "object",
   properties,
   required,
+  additionalProperties: false,
 });
 
 const dashboardTools: Omit<Tool, "execute">[] = [
@@ -66,14 +68,16 @@ const dashboardTools: Omit<Tool, "execute">[] = [
     name,
     description: {
       list_skills:
-        "List the current workspace skills and desired-state revision.",
-      list_devices: "List paired devices in the current workspace.",
+        "Use to list, show, inspect, or summarize skills in the current workspace.",
+      list_devices:
+        "Use to list, show, or inspect paired devices in the current workspace.",
       get_sync_status:
-        "Get device-reported sync status for the current workspace.",
+        "Use to inspect the device-reported sync status of the current workspace.",
       check_skill_updates:
-        "Get device-reported skill update checks without contacting Git.",
+        "Use to inspect device-reported skill update checks without contacting Git.",
     }[name],
     inputSchema: schema({}),
+    annotations: { readOnlyHint: true },
   })),
   {
     name: "add_skill",
@@ -133,34 +137,21 @@ const dashboardTools: Omit<Tool, "execute">[] = [
   },
 ];
 
-const openDashboardTool: Tool = {
-  name: "open_dashboard",
-  description:
-    "Open the dashboard to manage Cloud desired state and use Corotum tools. Sign in first if you do not have an active session.",
-  inputSchema: schema({}),
-  execute: async () => {
-    window.location.assign("/dashboard");
-    return "Opening dashboard.";
-  },
-};
-
 /** Registers browser-local WebMCP tools; authorization remains enforced by the existing API. */
-export function WebMcpTools({ landing = false }: { landing?: boolean }) {
+export function WebMcpTools() {
   useEffect(() => {
     const modelContext = (
       document as Document & { modelContext?: ModelContext }
     ).modelContext;
     if (!modelContext) return;
     const controller = new AbortController();
-    const registered = landing
-      ? [openDashboardTool]
-      : dashboardTools.map((tool) => ({
-          ...tool,
-          execute: (
-            input: Record<string, unknown>,
-            { signal }: { signal: AbortSignal },
-          ) => callTool(tool.name, input, signal),
-        }));
+    const registered = dashboardTools.map((tool) => ({
+      ...tool,
+      execute: (
+        input: Record<string, unknown>,
+        { signal }: { signal: AbortSignal },
+      ) => callTool(tool.name, input, signal),
+    }));
     void Promise.all(
       registered.map((tool) =>
         modelContext.registerTool(tool, { signal: controller.signal }),
@@ -170,6 +161,6 @@ export function WebMcpTools({ landing = false }: { landing?: boolean }) {
         console.warn("WebMCP tool registration failed", error);
     });
     return () => controller.abort();
-  }, [landing]);
+  }, []);
   return null;
 }
