@@ -25,7 +25,7 @@ export async function smokeWorkerdEndpoints(
   if (
     !installSh.ok ||
     !installShText.includes("Official Corotum installer") ||
-    !installShText.includes("v0.1 binaries are unsigned")
+    !installShText.includes("v0.5 binaries are unsigned")
   ) {
     errors.push("docs installer endpoint /install.sh failed");
   }

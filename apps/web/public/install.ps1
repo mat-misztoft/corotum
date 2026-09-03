@@ -1,7 +1,7 @@
 # Official Corotum installer.
 # This is the only officially supported installation method.
 # Manual binary download is not an officially supported installation method.
-# v0.1 binaries are unsigned.
+# v0.5 binaries are unsigned.
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -18,7 +18,7 @@ function Get-ReleaseTarget {
   $arch = $env:COROTUM_ARCH
   if (-not $arch) {
     if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64") {
-      throw "Windows arm64 is not supported in Corotum v0.1."
+      throw "Windows arm64 is not supported in Corotum v0.5."
     }
     $arch = "x64"
   }
@@ -53,7 +53,7 @@ function Add-UserPath {
 Write-Output "Official Corotum installer"
 Write-Output "This is the only officially supported installation method."
 Write-Output "Manual binary download is not an officially supported installation method."
-Write-Output "v0.1 binaries are unsigned."
+Write-Output "v0.5 binaries are unsigned."
 
 $target = Get-ReleaseTarget
 $releaseBase = $env:COROTUM_RELEASE_BASE

@@ -271,10 +271,10 @@ describe("final release layout", () => {
     const responses: Record<string, Response> = {
       "https://corotum.com/api/health": Response.json({ status: "ok" }),
       "https://corotum.com/install.sh": new Response(
-        "# Official Corotum installer.\n# v0.1 binaries are unsigned.\n",
+        "# Official Corotum installer.\n# v0.5 binaries are unsigned.\n",
       ),
       "https://corotum.com/install.ps1": new Response(
-        "# Official Corotum installer\n# v0.1 binaries are unsigned.\n",
+        "# Official Corotum installer\n# v0.5 binaries are unsigned.\n",
       ),
       "https://corotum.com/api/v1/cli/pairings": new Response(
         JSON.stringify({ error: "CLI upgrade required" }),

@@ -1,6 +1,6 @@
 # Install and cli-update
 
-Official installers are the only supported installation method. Release artifacts are public, but manual binary download is not an officially supported installation path. v0.1 binaries are unsigned. Installers and `cli-update` verify SHA-256 before replacing a binary.
+Official installers are the only supported installation method. Release artifacts are public, but manual binary download is not an officially supported installation path. v0.5 binaries are unsigned. Installers and `cli-update` verify SHA-256 before replacing a binary.
 
 GitHub Actions rebuilds every release target from the tagged source, writes checksums and `releases/latest.json`, and publishes only after tests, installer smoke, and workerd endpoint checks pass. Pipeline-proof binaries from earlier CI are not reused.
 
@@ -24,7 +24,7 @@ irm https://corotum.com/install.ps1 | iex
 
 Default location: `%LOCALAPPDATA%\ToolMirror\bin\corotum.exe`. The installer is per-user and does not require Administrator. It adds that directory to the user `Path` when it is not already present.
 
-Windows arm64 is not supported in v0.1.
+Windows arm64 is not supported in v0.5.
 
 ## What the installer does
 
@@ -33,7 +33,7 @@ Windows arm64 is not supported in v0.1.
 3. Verifies the archive SHA-256.
 4. Runs `--version` on the staged binary.
 5. Replaces the previous binary only after those checks succeed.
-6. Prints that v0.1 binaries are unsigned.
+6. Prints that v0.5 binaries are unsigned.
 
 Installer overrides (optional):
 

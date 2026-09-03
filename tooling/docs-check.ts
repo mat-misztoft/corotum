@@ -144,7 +144,7 @@ export async function checkDocs(
 
   const corpus = [...files.values()].join("\n");
   for (const phrase of [
-    "v0.1 binaries are unsigned",
+    "binaries are unsigned",
     "no daemon",
     "remote forced sync",
     "official installer",

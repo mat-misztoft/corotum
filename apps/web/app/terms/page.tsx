@@ -61,17 +61,13 @@ export default function TermsPage() {
 
       <h2>2. Current Availability</h2>
       <p>
-        Corotum Cloud is currently provided free of charge during its initial
-        release period.
-      </p>
-      <p>We may introduce paid plans or usage limits in the future.</p>
-      <p>
-        If paid plans are introduced, pricing and applicable terms will be
-        clearly presented before any payment is required.
+        Corotum Cloud is available as a paid hosted service. Current prices
+        are $5.99 per month or $59.90 per year.
       </p>
       <p>
-        Using the current free version does not automatically enroll you in a
-        future paid subscription.
+        Pricing, checkout, and subscription management are presented before
+        payment is required. Git Sync and self-hosted Corotum Cloud remain
+        available without a hosted subscription.
       </p>
 
       <h2>3. Open Source Software</h2>

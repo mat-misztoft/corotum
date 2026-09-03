@@ -142,7 +142,7 @@ async function runWindowsInstallerFixture(
     "Official Corotum installer",
     "This is the only officially supported installation method.",
     "Manual binary download is not an officially supported installation method.",
-    "v0.1 binaries are unsigned.",
+    "v0.5 binaries are unsigned.",
   ];
   const pathFile = join(localAppData, "user-path.txt");
   const dest = join(localAppData, "ToolMirror", "bin", "corotum.exe");
@@ -251,7 +251,7 @@ describe("official installers", () => {
       expect(source).toContain(
         "Manual binary download is not an officially supported installation method.",
       );
-      expect(source).toContain("v0.1 binaries are unsigned");
+      expect(source).toContain("v0.5 binaries are unsigned");
       expect(source).not.toMatch(/download the binary from GitHub/i);
     }
     expect(ps1).toContain("LOCALAPPDATA");

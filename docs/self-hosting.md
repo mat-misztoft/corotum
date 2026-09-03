@@ -178,7 +178,7 @@ Pairing codes expire after 10 minutes. Cloud may return `426 Upgrade Required` w
 
 ## Supported agents and migration
 
-Supported agents are listed in [cli.md](./cli.md). v0.1 manages global/user-level skills only.
+Supported agents are listed in [cli.md](./cli.md). v0.5 manages global/user-level skills only.
 
 Git ↔ Cloud migration:
 
@@ -191,7 +191,7 @@ See [migration.md](./migration.md). Identity (skill id, source, ref, lock revisi
 
 ## Limitations
 
-- v0.1 binaries are unsigned. Official installers are the supported install path.
+- v0.5 binaries are unsigned. Official installers are the supported install path.
 - No daemon, watch mode, scheduled updates, or remote forced sync.
 - No project-level skills, teams/RBAC, or Windows arm64.
 - Production auth requires both GitHub and Google OAuth.

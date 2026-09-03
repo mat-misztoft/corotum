@@ -4,7 +4,7 @@ Keep your agent skills in sync.
 
 Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. Cloud Sync is the current workstream (hosted corotum.com or self-hosted Cloud). Git Sync / Free remains a fully documented Git-backed backend with no Corotum account. Neither mode is hidden or removed.
 
-v0.1 binaries are unsigned. Official installers are the only supported installation method. There is no daemon and no remote forced sync.
+v0.5 binaries are unsigned. Official installers are the only supported installation method. There is no daemon and no remote forced sync.
 
 ## Install
 

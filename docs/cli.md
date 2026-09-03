@@ -1,6 +1,6 @@
 # CLI
 
-The compiled `corotum` binary is the v0.1 client. Cloud Sync is the current workstream. Git Sync / Free remains documented. Desired-state mutations use the same CLI skill commands in both modes. The [dashboard and WebMCP](./dashboard-and-webmcp.md) can also mutate Cloud desired state. Local reconcile (`status`, `diff`, `sync`) works in both modes. After Cloud `sync`, the device reports the applied revision.
+The compiled `corotum` binary is the v0.5 client. Cloud Sync is the current workstream. Git Sync / Free remains documented. Desired-state mutations use the same CLI skill commands in both modes. The [dashboard and WebMCP](./dashboard-and-webmcp.md) can also mutate Cloud desired state. Local reconcile (`status`, `diff`, `sync`) works in both modes. After Cloud `sync`, the device reports the applied revision.
 
 Contracts for named storage, source versus artifact, denylist, typed errors, and non-interactive consent are in [skills.md](./skills.md).
 
@@ -161,7 +161,7 @@ Missing login is a typed `corotum login` error. Hosted corotum.com Cloud mutatio
 
 Agents are optional. Zero detected or enabled agents is a valid Corotum state. Global skill management, Git Sync, and Cloud Sync do not require an agent. Missing `~/.agents/skills` is valid. Existing global skills are discovered independently of agent detection.
 
-v0.1 detects a closed built-in list. Interactive init may offer to enable detected agents; declining is valid. Non-interactive init never enables agents automatically.
+v0.5 detects a closed built-in list. Interactive init may offer to enable detected agents; declining is valid. Non-interactive init never enables agents automatically.
 
 ```bash
 corotum agents
@@ -186,7 +186,7 @@ corotum agents disable pi
 | `github-copilot` | GitHub Copilot |
 | `kiro-cli` | Kiro CLI |
 
-v0.1 manages global/user-level skills only. Project-level skills are out of scope.
+v0.5 manages global/user-level skills only. Project-level skills are out of scope.
 
 ## Mutation lock
 

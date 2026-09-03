@@ -69,10 +69,10 @@ export type LatestJson = Readonly<{
 }>;
 
 export const FINAL_NOTES =
-  "Corotum v0.1. Unsigned. Official installers are the only supported installation method. Manual binary download is not an officially supported installation method.";
+  "Corotum v0.5. Unsigned. Official installers are the only supported installation method. Manual binary download is not an officially supported installation method.";
 
 export const UNSIGNED_NOTICE =
-  "Corotum v0.1 binaries are unsigned. Signing and notarization are out of scope for v0.1.";
+  "Corotum v0.5 binaries are unsigned. Signing and notarization are out of scope for v0.5.";
 
 export function compiledBinaryName(target: ReleaseTarget): string {
   return target.id === "windows-x64"
@@ -137,7 +137,7 @@ export function parseSourceMarker(text: string): string {
     !text.includes("final=true") ||
     !text.includes(`channel=${RELEASE_CHANNEL}`)
   ) {
-    throw new Error("SOURCE marker must declare unsigned final v0.1 artifacts");
+    throw new Error("SOURCE marker must declare unsigned final release artifacts");
   }
   return match[1];
 }
@@ -264,7 +264,7 @@ export function verifyReleaseLayout(
   } else if (channel !== RELEASE_CHANNEL) {
     errors.push(`latest.json must use the ${RELEASE_CHANNEL} channel`);
   }
-  if (latest.unsigned !== true) errors.push("v0.1 binaries must be unsigned");
+  if (latest.unsigned !== true) errors.push("release binaries must be unsigned");
   if (latest.final !== true) {
     errors.push("final artifacts must be marked final");
   }

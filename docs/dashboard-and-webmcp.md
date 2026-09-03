@@ -1,6 +1,6 @@
 # Dashboard and WebMCP
 
-The Cloud dashboard is a full product surface: overview, skills, devices, billing, and settings. Cloud UI and WebMCP call the same application services as the CLI. They change desired state only. v0.1 has no `sync_device` or `sync_all_devices` tool and does not remotely force a device to sync. A device applies revisions only when `corotum sync` runs on that device, then reports the applied revision. The dashboard never shows `SYNCED` before that report. There is no revision-history route.
+The Cloud dashboard is a full product surface: overview, skills, devices, billing, and settings. Cloud UI and WebMCP call the same application services as the CLI. They change desired state only. v0.5 has no `sync_device` or `sync_all_devices` tool and does not remotely force a device to sync. A device applies revisions only when `corotum sync` runs on that device, then reports the applied revision. The dashboard never shows `SYNCED` before that report. There is no revision-history route.
 
 CLI skill commands (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) also mutate Cloud desired state. Zero agents is valid.
 
@@ -43,7 +43,7 @@ Mutation tools require `baseRevisionId` and `idempotencyKey`. Mutations also req
 
 | Tool | Arguments |
 | --- | --- |
-| `add_skill` | `source`, `skill`, optional `ref`, optional `targets` |
+| `add_skill` | `source`, `skill`, optional `ref`, optional `path`, optional `targets` |
 | `remove_skill` | `skillId` |
 | `update_skill` | `skillId` |
 | `set_skill_ref` | `skillId`, `ref` |
