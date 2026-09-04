@@ -4,6 +4,7 @@ import {
   createCloudflareEmailService,
   EmailDeliveryError,
   type EmailService,
+  lazyCloudflareEmailService,
 } from "./email";
 
 const authMessage = {
@@ -20,6 +21,13 @@ function binding(messages: unknown[], reject = false): CloudflareEmailBinding {
     },
   };
 }
+
+test("lazy email construction does not require EMAIL until send", async () => {
+  const service = lazyCloudflareEmailService({ COROTUM_HOSTED: "true" });
+  await expect(service.sendAuthenticationEmail(authMessage)).rejects.toEqual(
+    new EmailDeliveryError(),
+  );
+});
 
 test("an authentication email test double needs no Cloudflare binding details", async () => {
   const messages: unknown[] = [];

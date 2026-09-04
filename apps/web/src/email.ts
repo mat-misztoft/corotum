@@ -63,6 +63,17 @@ export function createCloudflareEmailService(
   };
 }
 
+/** Build auth without requiring email until a magic-link send. */
+export function lazyCloudflareEmailService(
+  env: EmailEnvironment,
+): EmailService {
+  return {
+    async sendAuthenticationEmail(message) {
+      return createCloudflareEmailService(env).sendAuthenticationEmail(message);
+    },
+  };
+}
+
 function senderFrom(env: EmailEnvironment) {
   const from = env.AUTH_EMAIL_FROM?.trim();
   if (!from || !isEmail(from)) throw new EmailDeliveryError();

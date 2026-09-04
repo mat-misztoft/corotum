@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { toNextJsHandler } from "better-auth/next-js";
 import { type AuthEnvironment, createAuth } from "../../../../src/auth";
 import { protectCloudRequest } from "../../../../src/cloud-protect";
-import { createCloudflareEmailService } from "../../../../src/email";
+import { lazyCloudflareEmailService } from "../../../../src/email";
 import type {
   RateLimitDatabase,
   RateLimitKind,
@@ -11,7 +11,7 @@ import type {
 // vinext's generated `cloudflare:workers` type does not include app bindings.
 const workerEnv = env as unknown as AuthEnvironment;
 const handlers = toNextJsHandler(
-  createAuth(workerEnv, createCloudflareEmailService(workerEnv)),
+  createAuth(workerEnv, lazyCloudflareEmailService(workerEnv)),
 );
 
 async function withAuthRateLimit(
