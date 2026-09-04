@@ -57,13 +57,10 @@ export function validateAuthConfiguration(env: Omit<AuthEnvironment, "DB">) {
   );
   const secret = authSecret(env as AuthEnvironment);
 
-  if (env.COROTUM_ENVIRONMENT !== "development") {
-    if (!env.BETTER_AUTH_URL)
-      throw new Error("BETTER_AUTH_URL is required outside local development");
-    if (!github || !google)
-      throw new Error(
-        "GitHub and Google OAuth must be configured outside local development",
-      );
+  if (env.COROTUM_ENVIRONMENT !== "development" && (!github || !google)) {
+    throw new Error(
+      "GitHub and Google OAuth must be configured outside local development",
+    );
   }
 
   return { secret, github, google };
@@ -85,13 +82,17 @@ export function createMagicLinkPlugin(emailService: EmailService) {
 }
 
 /** Creates request-runtime auth because D1 is supplied by the Cloudflare Worker binding. */
-export function createAuth(env: AuthEnvironment, emailService?: EmailService) {
+export function createAuth(
+  env: AuthEnvironment,
+  emailService?: EmailService,
+  origin?: string,
+) {
   if (!env.DB) throw new Error("Cloudflare D1 binding DB is required");
   const { secret, github, google } = validateAuthConfiguration(env);
 
   return betterAuth({
     appName: "Corotum",
-    baseURL: env.BETTER_AUTH_URL,
+    baseURL: env.BETTER_AUTH_URL || origin,
     trustedOrigins: ["https://corotum.com", "https://dev.corotum.com"],
     secret,
     advanced: { disableOriginCheck: false },

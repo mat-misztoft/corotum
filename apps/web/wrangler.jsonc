@@ -3,6 +3,13 @@
   "name": "corotum-web",
   "compatibility_date": "2026-03-26",
   "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
+  "vars": {
+    "BETTER_AUTH_URL": "https://corotum.com",
+    "COROTUM_ENVIRONMENT": "production",
+    "COROTUM_HOSTED": "true",
+    "AUTH_EMAIL_FROM": "auth@corotum.com"
+  },
   "main": "vinext/server/fetch-handler",
   "assets": {
     "directory": "dist/client",

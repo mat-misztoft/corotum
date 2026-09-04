@@ -10,9 +10,16 @@ import type {
 
 // vinext's generated `cloudflare:workers` type does not include app bindings.
 const workerEnv = env as unknown as AuthEnvironment;
-const handlers = toNextJsHandler(
-  createAuth(workerEnv, lazyCloudflareEmailService(workerEnv)),
-);
+
+function handlersFor(request: Request) {
+  return toNextJsHandler(
+    createAuth(
+      workerEnv,
+      lazyCloudflareEmailService(workerEnv),
+      new URL(request.url).origin,
+    ),
+  );
+}
 
 async function withAuthRateLimit(
   request: Request,
@@ -29,9 +36,17 @@ async function withAuthRateLimit(
 }
 
 export function GET(request: Request) {
-  return withAuthRateLimit(request, handlers.GET, "normal");
+  return withAuthRateLimit(
+    request,
+    (req) => handlersFor(req).GET(req),
+    "normal",
+  );
 }
 
 export function POST(request: Request) {
-  return withAuthRateLimit(request, handlers.POST, "pairingAuth");
+  return withAuthRateLimit(
+    request,
+    (req) => handlersFor(req).POST(req),
+    "pairingAuth",
+  );
 }
