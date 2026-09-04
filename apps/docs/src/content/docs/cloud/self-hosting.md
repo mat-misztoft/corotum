@@ -14,14 +14,14 @@ Leave `COROTUM_HOSTED` unset or set it to `false`. Only `true` or `1` turns on h
 
 ## Prerequisites
 
-- A Cloudflare account and Wrangler authenticated for that account
+- A Cloudflare account and Wrangler authenticated for that account (`npx wrangler login`)
 - [Bun](https://bun.sh/) 1.3 or newer
 - A GitHub OAuth App
 - A Google OAuth App
-- Public HTTPS origin for the Worker
+- Public HTTPS origin for the Worker (`*.workers.dev` or a custom domain)
 - An independently configured transactional email service/binding for magic-link delivery
 
-Creem, a Creem account, and hosted corotum.com subscription products are not prerequisites.
+Creem, a Creem account, and hosted corotum.com subscription products are not prerequisites. GitHub and Google sign-in work without email. Magic links need the `EMAIL` binding, `AUTH_EMAIL_FROM`, and a matching allowed sender.
 
 ## AGPL obligations
 
@@ -58,7 +58,17 @@ bun run db:migrate
 | `ASSETS` | `dist/client` | Built web assets |
 | `COROTUM_TELEMETRY` | Analytics Engine dataset `corotum_telemetry` | Optional anonymous CLI telemetry ingest |
 
-Create the R2 bucket named `corotum-artifacts` (or change `bucket_name` to a bucket you own) before serving artifact-backed skills. D1 stores no archive bytes. Retention keeps the current artifact plus one previous artifact per skill; GC deletes an object only when it is absent from both references. See [skills.md](/concepts/skills/).
+Create the R2 bucket before `wrangler deploy` (or change `bucket_name` to a bucket you own):
+
+```bash
+npx wrangler r2 bucket create corotum-artifacts
+```
+
+D1 stores no archive bytes. Retention keeps the current artifact plus one previous artifact per skill; GC deletes an object only when it is absent from both references. See [skills.md](/concepts/skills/).
+
+The `COROTUM_TELEMETRY` binding is already in `wrangler.jsonc`. Cloudflare creates the Analytics Engine dataset on first write. You do not create it by hand. CLI devices send events only if they opt in.
+
+The shipped `send_email` binding allows only `auth@corotum.com`. Change `allowed_sender_addresses` in `apps/web/wrangler.jsonc` to your own sender before production deploy. It must match `AUTH_EMAIL_FROM`.
 
 You do not need a Creem webhook route configuration for self-hosting. Hosted billing routes return that billing is unavailable when the deployment is not hosted.
 
@@ -96,7 +106,7 @@ Required for a production self-host:
 | `GOOGLE_CLIENT_ID` | `vars` | |
 | `COROTUM_ENVIRONMENT` | `vars` | `production` |
 | `COROTUM_HOSTED` | `vars` | `false` or omit |
-| `AUTH_EMAIL_FROM` | `.dev.vars` locally; Worker environment in production | Sender address from your own sending domain |
+| `AUTH_EMAIL_FROM` | `vars` in production; `.dev.vars` locally | Sender address from your own sending domain; must match `send_email.allowed_sender_addresses` |
 
 Example `vars` (do not put secrets here):
 
@@ -106,11 +116,21 @@ Example `vars` (do not put secrets here):
   "GITHUB_CLIENT_ID": "your-github-client-id",
   "GOOGLE_CLIENT_ID": "your-google-client-id",
   "COROTUM_ENVIRONMENT": "production",
-  "COROTUM_HOSTED": "false"
+  "COROTUM_HOSTED": "false",
+  "AUTH_EMAIL_FROM": "auth@cloud.example.com"
 }
 ```
 
-Do not set hosted billing variables. Hosted Corotum billing is not required for self-hosted Cloud.
+Do not set hosted billing variables. Hosted Corotum billing is not required for self-hosted Cloud. Official GitHub Actions secrets (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`) publish Corotum CLI builds; a self-host does not need them.
+
+Optional cookieless website analytics (self-hosted Umami). Omit both to leave analytics off. Separate from `COROTUM_TELEMETRY` CLI ingest.
+
+| Name | How to set | Notes |
+| --- | --- | --- |
+| `UMAMI_HOST` | `vars` | Umami origin, no trailing slash, for example `https://stats.example.com` |
+| `UMAMI_WEBSITE_ID` | `vars` | Umami website id |
+
+Both must be set. The Worker then loads `script.js` and `recorder.js` in the document head. Product clicks use `data-umami-event`; the UI does not send emails, skill names, or workspace ids.
 
 ## Email magic links
 
@@ -124,7 +144,7 @@ For local development, put only the email sender setting in `apps/web/.dev.vars`
 AUTH_EMAIL_FROM=auth@corotum.com
 ```
 
-Use your own sender address in a real self-host. `EMAIL` is not a `.dev.vars` secret: it is the Worker `send_email` binding declared in `wrangler.jsonc`. That binding path does not require an email API key. Ensure your chosen provider has enabled sending and that its required sender-domain DNS/authentication records are live before testing real delivery.
+Use your own sender address in a real self-host. Set `AUTH_EMAIL_FROM` in `vars` and the same address in `send_email.allowed_sender_addresses`. `EMAIL` is not a `.dev.vars` secret: it is the Worker `send_email` binding declared in `wrangler.jsonc`. That binding path does not require an email API key. Enable Cloudflare Email Sending on your account, onboard your sending domain, and publish the DNS/authentication records Cloudflare supplies before testing real delivery.
 
 Authentication and pairing remain available without a subscription. In contrast, the hosted `corotum.com` deployment uses its own Cloudflare Email Service binding and separately gates paid Cloud operations with Creem; self-hosted Cloud stays usable without Creem.
 
@@ -134,6 +154,18 @@ Optional CLI-side variables, used on devices rather than the Worker:
 | --- | --- |
 | `COROTUM_CLOUD_ORIGIN` | Cloud origin for `login`, `init cloud`, and `migrate`. Also `corotum config set origin` |
 | `COROTUM_RELEASE_BASE` | CLI release origin for installers and `cli-update` |
+
+## Local development
+
+From the repository root:
+
+```bash
+bun install
+bun run db:migrate
+bun run web:dev
+```
+
+Local values go in `apps/web/.dev.vars` (email sender is documented below). `COROTUM_ENVIRONMENT=development` (the default when unset in local Worker dev) does not require `BETTER_AUTH_URL` or both OAuth providers. Production does.
 
 ## Deploy
 
@@ -151,7 +183,9 @@ npx wrangler d1 migrations apply corotum --remote
 npx wrangler deploy
 ```
 
-Confirm `https://cloud.example.com` serves the site. Unauthenticated users go to `/sign-in` (GitHub, Google, or email magic link) and reach `/dashboard` after a session is created.
+`wrangler deploy` prints a `*.workers.dev` URL. That is a valid public origin. For a custom domain, attach it in the Cloudflare dashboard (Workers → this worker → Custom Domains) or add `routes` in `wrangler.jsonc`. `BETTER_AUTH_URL` and the OAuth callback URLs must be that exact origin, with no trailing slash.
+
+Confirm the origin serves the site. Unauthenticated users go to `/sign-in` (GitHub, Google, or email magic link) and reach `/dashboard` after a session is created.
 
 ## Operational setup
 
@@ -180,7 +214,7 @@ Pairing codes expire after 10 minutes. Cloud may return `426 Upgrade Required` w
 
 ## Supported agents and migration
 
-Supported agents are listed in [cli.md](/cli/commands/). v0.5 manages global/user-level skills only.
+Supported agents are listed in the [CLI reference](/cli/commands/). v0.5 manages global/user-level skills only.
 
 Git ↔ Cloud migration:
 

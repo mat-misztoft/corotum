@@ -48,10 +48,33 @@ These variables are for the corotum.com deployment only:
 | `CREEM_PRODUCT_MONTHLY` | Monthly product id |
 | `CREEM_PRODUCT_ANNUAL` | Annual product id |
 | `CREEM_API_URL` | Optional. Default `https://api.creem.io` |
+| `UMAMI_HOST` | Optional. Self-hosted Umami origin, no trailing slash |
+| `UMAMI_WEBSITE_ID` | Optional. Umami website id |
 
 Webhook endpoint: `POST https://corotum.com/api/v1/webhooks/creem`.
 
+Website analytics is cookieless Umami, separate from CLI telemetry. Set both `UMAMI_HOST` and `UMAMI_WEBSITE_ID` to load `script.js` and `recorder.js` in the document head. Omit both to leave it off.
+
 Hosted auth still requires the same Better Auth secret, `BETTER_AUTH_URL`, GitHub OAuth, and Google OAuth as self-hosting. Creem is additional hosted billing, not a replacement for authentication.
+
+Worker `vars` and `wrangler secret put` live on the Cloudflare Worker. They are not GitHub Actions secrets.
+
+## Official CLI release (GitHub Actions)
+
+`.github/workflows/release.yml` rebuilds CLI binaries from the tag and uploads them to the public releases R2 bucket. It does not deploy the Worker and does not inject auth, Creem, email, or Umami variables.
+
+Repository secrets for `bun run release:upload`:
+
+| Name | Purpose |
+| --- | --- |
+| `R2_ACCOUNT_ID` | Cloudflare account id for the releases S3 API |
+| `R2_ACCESS_KEY_ID` | R2 access key |
+| `R2_SECRET_ACCESS_KEY` | R2 secret key |
+| `R2_BUCKET` | Releases bucket name |
+
+The workflow sets `RELEASE_REQUIRE_UPLOAD=1`. `.github/workflows/cli-compile.yml` has no secrets.
+
+`bun run release:deploy` is a separate Worker deploy: `CLOUDFLARE_API_TOKEN` is required, `CLOUDFLARE_ACCOUNT_ID` is optional. That script is not wired into `release.yml`.
 
 ## Email magic-link authentication
 
