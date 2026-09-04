@@ -12,14 +12,14 @@
   "r2_buckets": [
     {
       "binding": "ARTIFACTS",
-      "bucket_name": "corotum-artifacts"
+      "bucket_name": "corotum"
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "corotum",
-      "database_id": "local-toolmirror-d1",
+      "database_id": "c985f7b4-f3d9-47d1-89b2-b898ad18c1c6",
       "migrations_dir": "migrations"
     }
   ],
