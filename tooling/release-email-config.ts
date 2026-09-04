@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 type WranglerSecret = Readonly<{ name?: string }>;
 
 const workerDirectory = fileURLToPath(new URL("../apps/web", import.meta.url));
-const workerName = "toolmirror-web";
+const workerName = "corotum-web";
 
 export function emailReleaseConfigurationErrors(input: {
   authEmailFrom?: string;

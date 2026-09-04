@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "toolmirror-web",
+  "name": "corotum-web",
   "compatibility_date": "2026-03-26",
   "compatibility_flags": ["nodejs_compat"],
   "main": "vinext/server/fetch-handler",

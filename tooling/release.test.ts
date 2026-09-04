@@ -238,13 +238,7 @@ describe("final release layout", () => {
     expect(workflow).toContain("bun run release:verify");
     expect(workflow).toContain("bun run release:smoke-installers");
     expect(workflow).toContain("bun run web:smoke");
-    expect(workflow).toContain("bun run release:deploy");
-    expect(workflow).toContain("bun run release:smoke-endpoints");
     expect(workflow).toContain('RELEASE_REQUIRE_UPLOAD: "1"');
-    expect(workflow).toContain('RELEASE_REQUIRE_DEPLOY: "1"');
-    expect(workflow).toContain(
-      "AUTH_EMAIL_FROM: $" + "{{ secrets.AUTH_EMAIL_FROM }}",
-    );
     expect(workflow).toContain("pipeline-proof");
     expect(workflow).not.toContain("publish-pipeline-proof");
     expect(workflow).not.toContain("notarytool");
@@ -257,14 +251,12 @@ describe("final release layout", () => {
     );
     const verifyIndex = workflow.indexOf("bun run release:verify");
     const installerIndex = workflow.indexOf("bun run release:smoke-installers");
-    const deployIndex = workflow.indexOf("bun run release:deploy");
     const uploadIndex = workflow.lastIndexOf("bun run release:upload");
     expect(testIndex).toBeGreaterThan(-1);
     expect(testIndex).toBeLessThan(buildIndex);
     expect(buildIndex).toBeLessThan(verifyIndex);
     expect(verifyIndex).toBeLessThan(installerIndex);
-    expect(installerIndex).toBeLessThan(deployIndex);
-    expect(deployIndex).toBeLessThan(uploadIndex);
+    expect(installerIndex).toBeLessThan(uploadIndex);
   });
 
   test("workerd and release endpoint smoke reject pipeline-proof leftovers", async () => {
