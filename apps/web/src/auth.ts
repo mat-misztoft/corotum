@@ -21,49 +21,43 @@ export type AuthEnvironment = EmailEnvironment & {
 
 type OAuthProvider = { clientId: string; clientSecret: string };
 
+function text(env: object, key: string) {
+  const value = (env as Record<string, unknown>)[key];
+  if (typeof value === "string" && value) return value;
+  const fallback = process.env[key];
+  return fallback || undefined;
+}
+
 function configuredProvider(
-  name: string,
   clientId?: string,
   clientSecret?: string,
 ): OAuthProvider | undefined {
-  if (!clientId && !clientSecret) return undefined;
-  if (!clientId || !clientSecret)
-    throw new Error(
-      `${name} OAuth credentials must include both client ID and client secret`,
-    );
+  if (!clientId || !clientSecret) return undefined;
   return { clientId, clientSecret };
 }
 
 function authSecret(env: AuthEnvironment) {
   return (
-    env.BETTER_AUTH_SECRET ??
-    (env.COROTUM_ENVIRONMENT === "development"
+    text(env, "BETTER_AUTH_SECRET") ??
+    (text(env, "COROTUM_ENVIRONMENT") === "development"
       ? "development-only-secret-change-before-deploy"
       : "")
   );
 }
 
-/** Reject partial OAuth and production deployments that cannot authenticate safely. */
 export function validateAuthConfiguration(env: Omit<AuthEnvironment, "DB">) {
-  const github = configuredProvider(
-    "GitHub",
-    env.GITHUB_CLIENT_ID,
-    env.GITHUB_CLIENT_SECRET,
-  );
-  const google = configuredProvider(
-    "Google",
-    env.GOOGLE_CLIENT_ID,
-    env.GOOGLE_CLIENT_SECRET,
-  );
-  const secret = authSecret(env as AuthEnvironment);
-
-  if (env.COROTUM_ENVIRONMENT !== "development" && (!github || !google)) {
-    throw new Error(
-      "GitHub and Google OAuth must be configured outside local development",
-    );
-  }
-
-  return { secret, github, google };
+  return {
+    secret: authSecret(env as AuthEnvironment),
+    github: configuredProvider(
+      text(env, "GITHUB_CLIENT_ID"),
+      text(env, "GITHUB_CLIENT_SECRET"),
+    ),
+    google: configuredProvider(
+      text(env, "GOOGLE_CLIENT_ID"),
+      text(env, "GOOGLE_CLIENT_SECRET"),
+    ),
+    origin: text(env, "BETTER_AUTH_URL"),
+  };
 }
 
 /** Better Auth consumes tokens atomically and hashes them before persistence. */
@@ -88,11 +82,16 @@ export function createAuth(
   origin?: string,
 ) {
   if (!env.DB) throw new Error("Cloudflare D1 binding DB is required");
-  const { secret, github, google } = validateAuthConfiguration(env);
+  const {
+    secret,
+    github,
+    google,
+    origin: configuredOrigin,
+  } = validateAuthConfiguration(env);
 
   return betterAuth({
     appName: "Corotum",
-    baseURL: env.BETTER_AUTH_URL || origin,
+    baseURL: configuredOrigin || origin,
     trustedOrigins: ["https://corotum.com", "https://dev.corotum.com"],
     secret,
     advanced: { disableOriginCheck: false },

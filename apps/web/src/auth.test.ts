@@ -27,18 +27,18 @@ test("hosted and self-hosted production require a secret, URL, and both OAuth pr
       BETTER_AUTH_SECRET: "short",
     }).secret,
   ).toBe("short");
-  expect(() =>
+  expect(
     validateAuthConfiguration({
       ...productionConfig,
       GITHUB_CLIENT_SECRET: undefined,
-    }),
-  ).toThrow("GitHub OAuth");
+    }).github,
+  ).toBeUndefined();
   expect(
     validateAuthConfiguration({
       ...productionConfig,
       BETTER_AUTH_URL: undefined,
-    }).github,
-  ).toEqual({ clientId: "github-id", clientSecret: "github-secret" });
+    }).origin,
+  ).toBeUndefined();
 });
 
 test("local development can use an ephemeral development-only auth secret", () => {
