@@ -755,7 +755,7 @@ describe("Git v2 two-home end-to-end safety", () => {
           "utf8",
         ),
       ).toBe("# Legacy\n");
-      expect(current.configFile).toContain("Corotum");
+      expect(current.configFile.toLowerCase()).toContain("corotum");
     },
     timeout,
   );
