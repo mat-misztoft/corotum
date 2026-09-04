@@ -80,7 +80,11 @@ export default function ActivatePage() {
                   {error}
                 </p>
               )}
-              <button type="submit" disabled={busy}>
+              <button
+                data-umami-event="device-approve"
+                type="submit"
+                disabled={busy}
+              >
                 {busy ? "Approving…" : "Approve device"}
               </button>
             </form>

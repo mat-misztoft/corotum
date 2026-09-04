@@ -11,6 +11,11 @@ const links = [
   ["https://github.com/mat_misztoft/corotum", "GitHub"],
 ] as const;
 
+const linkEvents: Partial<Record<(typeof links)[number][0], string>> = {
+  "https://docs.corotum.com": "nav-docs",
+  "https://github.com/mat_misztoft/corotum": "nav-github",
+};
+
 export function LandingHeader() {
   const { data: session } = authClient.useSession();
   return (
@@ -21,16 +26,24 @@ export function LandingHeader() {
         </a>
         <div className="dashboard-nav-links">
           {links.map(([href, label]) => (
-            <a href={href} key={href}>
+            <a data-umami-event={linkEvents[href]} href={href} key={href}>
               {label}
             </a>
           ))}
           {session ? (
-            <a className="dashboard-sign-out" href="/dashboard">
+            <a
+              className="dashboard-sign-out"
+              data-umami-event="nav-dashboard"
+              href="/dashboard"
+            >
               Dashboard
             </a>
           ) : (
-            <a className="dashboard-sign-out" href="/sign-in">
+            <a
+              className="dashboard-sign-out"
+              data-umami-event="nav-sign-in"
+              href="/sign-in"
+            >
               Sign in
             </a>
           )}

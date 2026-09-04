@@ -37,7 +37,7 @@ test("final CTA copy, actions, and install command match planning", () => {
 });
 
 test("landing login and Cloud CTAs go to /sign-in", () => {
-  expect(page).toContain('href="/sign-in">');
+  expect(page).toContain('href="/sign-in"');
   expect(page.match(/href="\/sign-in"/g)?.length).toBe(3);
   expect(page).not.toContain('href="/dashboard"');
 });

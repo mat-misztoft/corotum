@@ -124,6 +124,7 @@ function DashboardShell({
             <a href="https://docs.corotum.com">Docs</a>
             <button
               className="dashboard-sign-out"
+              data-umami-event="sign-out"
               type="button"
               onClick={async () => {
                 await authClient.signOut();
@@ -643,6 +644,7 @@ export function DashboardSurface({ view }: { view: View }) {
                         <td data-label="Actions">
                           <button
                             className="dashboard-secondary-button"
+                            data-umami-event="skill-remove"
                             type="button"
                             disabled={action === skill.id}
                             onClick={() => removeSkill(skill.id, skill.skill)}
@@ -697,6 +699,7 @@ export function DashboardSurface({ view }: { view: View }) {
                 />
               </label>
               <button
+                data-umami-event="skill-add"
                 type="submit"
                 disabled={!data.cloudAllowed || action === "add"}
               >
@@ -758,6 +761,7 @@ export function DashboardSurface({ view }: { view: View }) {
                     )}
                     <button
                       className="dashboard-secondary-button"
+                      data-umami-event="device-revoke"
                       type="button"
                       disabled={action === device.id}
                       onClick={() => revokeDevice(device.id)}
@@ -860,6 +864,8 @@ export function DashboardSurface({ view }: { view: View }) {
                     <>
                       <button
                         className="dashboard-primary-button"
+                        data-umami-event="billing-checkout"
+                        data-umami-event-interval="month"
                         type="button"
                         disabled={action !== null || settings.launchFreePeriod}
                         onClick={() => billingAction("checkout", "month")}
@@ -870,6 +876,8 @@ export function DashboardSurface({ view }: { view: View }) {
                       </button>
                       <button
                         className="dashboard-secondary-button"
+                        data-umami-event="billing-checkout"
+                        data-umami-event-interval="year"
                         type="button"
                         disabled={action !== null || settings.launchFreePeriod}
                         onClick={() => billingAction("checkout", "year")}
@@ -883,6 +891,7 @@ export function DashboardSurface({ view }: { view: View }) {
                   {settings.subscription && (
                     <button
                       className="dashboard-secondary-button"
+                      data-umami-event="billing-portal"
                       type="button"
                       disabled={action !== null}
                       onClick={() => billingAction("portal")}
@@ -1042,6 +1051,7 @@ export function DashboardSurface({ view }: { view: View }) {
             </p>
             <button
               className="dashboard-secondary-button"
+              data-umami-event="cloud-skills-delete"
               type="button"
               disabled={action !== null}
               onClick={() => clearCloudData()}
@@ -1060,6 +1070,7 @@ export function DashboardSurface({ view }: { view: View }) {
             </p>
             {deleteError && <p role="alert">{deleteError}</p>}
             <button
+              data-umami-event="account-delete"
               type="button"
               disabled={action !== null}
               onClick={deleteAccount}

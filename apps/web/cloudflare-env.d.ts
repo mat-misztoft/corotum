@@ -19,4 +19,6 @@ interface Env {
   CREEM_PRODUCT_ANNUAL?: string;
   CREEM_API_URL?: string;
   COROTUM_TELEMETRY: AnalyticsEngineDataset;
+  UMAMI_HOST?: string;
+  UMAMI_WEBSITE_ID?: string;
 }

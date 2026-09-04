@@ -100,6 +100,7 @@ export function SignInForm() {
       )}
       <div className="oauth-actions" aria-busy={oauthProvider !== null}>
         <button
+          data-umami-event="sign-in-github"
           disabled={busy}
           type="button"
           onClick={() => signInWith("github")}
@@ -109,6 +110,7 @@ export function SignInForm() {
             : "Continue with GitHub"}
         </button>
         <button
+          data-umami-event="sign-in-google"
           disabled={busy}
           type="button"
           onClick={() => signInWith("google")}
@@ -144,7 +146,7 @@ export function SignInForm() {
             Enter a valid email address or try again.
           </p>
         )}
-        <button type="submit" disabled={busy}>
+        <button data-umami-event="sign-in-email" type="submit" disabled={busy}>
           {submitting ? "Sending sign-in link…" : "Continue with email"}
         </button>
       </form>

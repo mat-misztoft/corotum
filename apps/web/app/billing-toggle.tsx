@@ -21,6 +21,8 @@ export function BillingToggle() {
         <label>
           <input
             checked={period === "monthly"}
+            data-umami-event="billing-period"
+            data-umami-event-period="monthly"
             name="billing-period"
             onChange={() => setPeriod("monthly")}
             type="radio"
@@ -31,6 +33,8 @@ export function BillingToggle() {
         <label>
           <input
             checked={period === "yearly"}
+            data-umami-event="billing-period"
+            data-umami-event-period="yearly"
             name="billing-period"
             onChange={() => setPeriod("yearly")}
             type="radio"

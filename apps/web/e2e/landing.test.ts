@@ -83,7 +83,7 @@ test("landing e2e: visual QA evidence records desktop and mobile PASS", () => {
 });
 
 test("landing e2e: login and Cloud CTAs go to /sign-in", () => {
-  expect(page).toContain('href="/sign-in">');
+  expect(page).toContain('href="/sign-in"');
   expect(page.match(/href="\/sign-in"/g)?.length).toBe(3);
   expect(page).not.toContain('href="/dashboard"');
 });

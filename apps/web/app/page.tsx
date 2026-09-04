@@ -73,11 +73,18 @@ export default function Home() {
             </aside>
           )}
           <div className="hero-actions">
-            <a className="button button-primary" href="/sign-in">
+            <a
+              className="button button-primary"
+              data-umami-event="cta-cloud"
+              data-umami-event-location="hero"
+              href="/sign-in"
+            >
               Start with Corotum Cloud
             </a>
             <a
               className="button button-secondary"
+              data-umami-event="cta-github"
+              data-umami-event-location="hero"
               href="https://github.com/mat_misztoft/corotum"
             >
               View on GitHub
@@ -267,6 +274,8 @@ export default function Home() {
             </ul>
             <a
               className="pricing-link"
+              data-umami-event="cta-github"
+              data-umami-event-location="pricing"
               href="https://github.com/mat_misztoft/corotum"
             >
               View on GitHub
@@ -297,7 +306,12 @@ export default function Home() {
               <li>Device pairing and Cloud API</li>
               <li>Git to Cloud migration and back</li>
             </ul>
-            <a className="button button-primary" href="/sign-in">
+            <a
+              className="button button-primary"
+              data-umami-event="cta-cloud"
+              data-umami-event-location="pricing"
+              href="/sign-in"
+            >
               Start with Corotum Cloud
             </a>
           </article>
@@ -396,11 +410,18 @@ export default function Home() {
           Start with Corotum Cloud, or use your own Git repository for free.
         </p>
         <div className="hero-actions">
-          <a className="button button-primary" href="/sign-in">
+          <a
+            className="button button-primary"
+            data-umami-event="cta-cloud"
+            data-umami-event-location="final"
+            href="/sign-in"
+          >
             Start with Corotum Cloud
           </a>
           <a
             className="button button-secondary"
+            data-umami-event="cta-github"
+            data-umami-event-location="final"
             href="https://github.com/mat_misztoft/corotum"
           >
             View on GitHub
