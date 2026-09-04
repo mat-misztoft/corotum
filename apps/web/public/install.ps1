@@ -50,6 +50,13 @@ function Add-UserPath {
   [Environment]::SetEnvironmentVariable("Path", $updated, "User")
 }
 
+Write-Output @"
+,-----.                       ,--.                     
+'  .--./ ,---. ,--.--. ,---. ,-'  '-.,--.,--.,--,--,--. 
+|  |    | .-. ||  .--'| .-. |'-.  .-'|  ||  ||        | 
+'  '--'\' '-' '|  |   ' '-' '  |  |  '  ''  '|  |  |  | 
+ `-----' `---' `--'    `---'   `--'   `----' `--`--`--' 
+"@
 Write-Output "Official Corotum installer"
 Write-Output "This is the only officially supported installation method."
 Write-Output "Manual binary download is not an officially supported installation method."

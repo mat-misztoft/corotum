@@ -12,6 +12,13 @@ die() {
 }
 
 print_banner() {
+  cat <<'BANNER'
+,-----.                       ,--.                     
+'  .--./ ,---. ,--.--. ,---. ,-'  '-.,--.,--.,--,--,--. 
+|  |    | .-. ||  .--'| .-. |'-.  .-'|  ||  ||        | 
+'  '--'\' '-' '|  |   ' '-' '  |  |  '  ''  '|  |  |  | 
+ `-----' `---' `--'    `---'   `--'   `----' `--`--`--' 
+BANNER
   printf '%s\n' "Official Corotum installer"
   printf '%s\n' "This is the only officially supported installation method."
   printf '%s\n' "Manual binary download is not an officially supported installation method."
