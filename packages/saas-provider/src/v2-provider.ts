@@ -89,6 +89,28 @@ export class V2SaaSProvider {
     );
   }
 
+  async resolvePending(
+    input: Readonly<{
+      skillId: string;
+      baseRevision: string;
+      repository: string;
+      revision: string;
+      path: string;
+      contentHash: string;
+      idempotencyKey?: string;
+    }>,
+  ): Promise<V2CloudStateEnvelope> {
+    return this.readEnvelope(
+      await this.send(`${this.stateUrl()}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...input,
+          idempotencyKey: input.idempotencyKey ?? crypto.randomUUID(),
+        }),
+      }),
+    );
+  }
+
   async push(input: V2CloudPushInput): Promise<V2CloudStateEnvelope> {
     const state = validateV2DesiredState(input.state);
     const ledger = parseDispositionLedger(JSON.stringify(input.ledger));

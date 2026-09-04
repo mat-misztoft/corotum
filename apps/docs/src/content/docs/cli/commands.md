@@ -289,7 +289,7 @@ set-ref
 
 Missing login is a typed `corotum login` error. Hosted corotum.com Cloud mutations require an active entitlement (HTTP `402`). Self-hosted Cloud does not use Creem.
 
-`add`, `update`, and `set-ref` resolve Git on this device. The dashboard and WebMCP can also mutate Cloud desired state. Skills they add or retarget may stay `PENDING_RESOLUTION` until a device with repository access locks exact content. A later CLI resolve on a device with Git access can complete that lock. Sync never installs upstream `HEAD`.
+`add`, `update`, and `set-ref` resolve Git on this device. The dashboard and WebMCP can also mutate Cloud desired state. Skills they add or retarget may stay `PENDING_RESOLUTION` until a device with repository access runs `corotum sync` and locks exact content. Sync never installs upstream `HEAD`.
 
 `status`, `diff`, and `sync` pull exact lockfile state. After a verified local sync, the device reports the applied revision. The dashboard does not show `SYNCED` until that report exists. Partial skill or target failure is `PARTIALLY_SYNCED` (or a per-target error), not a silent full success. There is no daemon and no remote forced sync.
 

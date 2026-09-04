@@ -24,7 +24,7 @@ Revoking a device invalidates only that device's Cloud token. Remote machine row
 
 Device status chips sit on machine panels. A machine is not `SYNCED` until it reports an applied revision. Pending, behind, partial, drift, error, `AUTH_REQUIRED`, and hosted `402` states are visible as status, not decoration.
 
-Skills that dashboard or WebMCP add or retarget are `PENDING_RESOLUTION` until a device with repository access resolves the exact lock (CLI resolve on a machine with Git also works). The UI states that no remote sync is requested. Devices then install that locked SHA or artifact; they never follow upstream `HEAD` during `corotum sync`.
+Skills that dashboard or WebMCP add or retarget are `PENDING_RESOLUTION` until a device with repository access runs `corotum sync` and resolves the exact lock. The UI states that no remote sync is requested. Devices then install that locked SHA or artifact; they never follow upstream `HEAD` during `corotum sync`.
 
 Cloud skill mutations from the browser use same-origin `POST /api/v1/dashboard` with `baseRevisionId`, `idempotencyKey`, and a mutation object (`ADD`, `REMOVE`, `UPDATE`, `SET_REF`, `CLEAR`). A stale `baseRevisionId` returns HTTP `409`.
 

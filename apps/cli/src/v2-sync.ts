@@ -112,6 +112,7 @@ export class V2SyncService {
       enabledAgentIds: readonly AgentId[];
       recovery?: LifecycleRecoveryStore;
       reporter?: V2SyncReportHook;
+      resolvePending?: (desired: V2SyncEnvelope) => Promise<V2SyncEnvelope>;
     }>,
   ) {}
 
@@ -164,6 +165,9 @@ export class V2SyncService {
       }
       return { kind: "refused", reason, pendingPush };
     }
+
+    if (this.options.resolvePending)
+      desired = await this.options.resolvePending(desired);
 
     const recovered = await this.operationalState(desired);
     const actual = await discoverV2ActualState({

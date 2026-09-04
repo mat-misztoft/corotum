@@ -193,6 +193,61 @@ function startCloudServer(options?: {
       if (options?.unauthorized) {
         return Response.json({ error: "unauthorized" }, { status: 401 });
       }
+      if (
+        /\/api\/v1\/workspaces\/[^/]+\/state\/resolve$/.test(url.pathname) &&
+        request.method === "POST"
+      ) {
+        const body = (await request.json()) as {
+          skillId: string;
+          repository: string;
+          revision: string;
+          path: string;
+          contentHash: string;
+        };
+        const pending = state.manifest.skills.find(
+          (skill) => skill.id === body.skillId,
+        );
+        if (!pending)
+          return Response.json({ error: "not found" }, { status: 404 });
+        state = {
+          manifest: {
+            version: 2,
+            skills: state.manifest.skills.map((skill) =>
+              skill.id === body.skillId
+                ? { ...skill, resolutionStatus: "RESOLVED" }
+                : skill,
+            ),
+          },
+          lockfile: {
+            version: 2,
+            skills: [
+              ...state.lockfile.skills,
+              {
+                id: pending.id,
+                name: pending.name,
+                source: {
+                  repository: body.repository,
+                  path: body.path,
+                  ref: pending.source?.ref ?? "HEAD",
+                  revision: body.revision,
+                  contentHash: body.contentHash,
+                },
+                materialization: {
+                  kind: "source",
+                  contentHash: body.contentHash,
+                },
+              },
+            ],
+          },
+        } as typeof emptyState;
+        revisionId = "rev_resolved";
+        return Response.json({
+          revisionId,
+          revisionSequence: 2,
+          state,
+          dispositionLedger: { version: 2, activeDispositions: {} },
+        });
+      }
       if (/\/api\/v1\/workspaces\/[^/]+\/state$/.test(url.pathname)) {
         if (request.method === "GET") {
           return Response.json({
@@ -445,6 +500,61 @@ describe("real corotum Cloud status/diff/sync CLI", () => {
         ).toBe("# Locked\n");
         expect(cloud.reports[0]).toMatchObject({
           appliedRevisionId: "rev_locked",
+          syncStatus: "SYNCED",
+        });
+      } finally {
+        cloud.stop();
+      }
+    },
+    timeout,
+  );
+
+  test(
+    "sync resolves a pending Cloud source before installing it",
+    async () => {
+      const root = await temp("pending-resolution");
+      const home = join(root, "home");
+      await seedCloudHome(home);
+      const notes = await skillRepo(root, "notes", "# Notes\n");
+      const state = {
+        manifest: {
+          version: 2,
+          skills: [
+            {
+              id: "sk_pendingnotes",
+              name: "notes",
+              targets: "all",
+              source: {
+                repository: notes.repository,
+                path: "skills/notes",
+                ref: "main",
+              },
+              resolutionStatus: "PENDING_RESOLUTION" as const,
+            },
+          ],
+        },
+        lockfile: { version: 2, skills: [] },
+      };
+      const cloud = startCloudServer({ state, revisionId: "rev_pending" });
+      try {
+        const synced = await spawnCli(
+          home,
+          ["--json", "--non-interactive", "sync"],
+          { COROTUM_CLOUD_ORIGIN: cloud.origin },
+        );
+        expect(synced.code).toBe(ExitCode.SUCCESS);
+        expect(synced.json).toMatchObject({
+          status: "SYNCED",
+          appliedRevision: "rev_resolved",
+        });
+        expect(
+          await readFile(
+            join(home, ".agents", "skills", "notes", "SKILL.md"),
+            "utf8",
+          ),
+        ).toBe("# Notes\n");
+        expect(cloud.reports[0]).toMatchObject({
+          appliedRevisionId: "rev_resolved",
           syncStatus: "SYNCED",
         });
       } finally {

@@ -9,6 +9,7 @@ import {
 } from "../../../packages/agent-targets/src/index";
 import { V2SaaSProvider } from "../../../packages/saas-provider/src/index";
 import { CanonicalSkillStore } from "../../../packages/skills-adapter/src/canonical-store";
+import { GitSkillMaterializer } from "../../../packages/skills-adapter/src/git-source";
 import { createCliV2GitStateProvider } from "./artifact-consent";
 import { CLI_VERSION, type CliIo, isNonInteractive } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
@@ -36,6 +37,7 @@ import { resolvePlatformPaths } from "./platform";
 import { confirmOption, withSpinner } from "./prompts";
 import { LifecycleRecoveryStore } from "./v2-lifecycle";
 import { V2LocalApplier } from "./v2-local-applier";
+import { gitSourceResolver } from "./v2-mutation-session";
 import {
   type V2InspectResult,
   type V2SyncEnvelope,
@@ -241,6 +243,7 @@ async function createRuntime(
           });
         }
       : undefined;
+  const cloud = provider.cloud;
   return {
     mode: provider.mode,
     service: new V2SyncService(provider.port, applier, stateStore, {
@@ -249,6 +252,37 @@ async function createRuntime(
       enabledAgentIds,
       recovery,
       reporter,
+      resolvePending: cloud
+        ? async (desired) => {
+            let resolved = desired;
+            const resolver = gitSourceResolver(new GitSkillMaterializer());
+            for (const skill of desired.state.manifest.skills.filter(
+              (candidate) =>
+                candidate.resolutionStatus === "PENDING_RESOLUTION",
+            )) {
+              if (!skill.source) continue;
+              try {
+                const source = await resolver.resolve(skill.source);
+                const saved = await cloud.resolvePending({
+                  skillId: skill.id,
+                  baseRevision: resolved.revisionId,
+                  repository: source.repository,
+                  revision: source.revision,
+                  path: source.path,
+                  contentHash: source.contentHash,
+                });
+                resolved = {
+                  revisionId: saved.revisionId ?? "",
+                  state: saved.state,
+                  ledger: saved.ledger,
+                };
+              } catch {
+                return resolved;
+              }
+            }
+            return resolved;
+          }
+        : undefined,
     }),
   };
 }
