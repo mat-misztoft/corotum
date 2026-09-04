@@ -93,6 +93,11 @@ export default function Home() {
           <code className="install-command">
             curl -fsSL https://corotum.com/install.sh | sh
           </code>
+          <p className="install-next">
+            After install, open a new terminal and run <code>corotum</code>,
+            then <code>corotum init</code>. If the command is not found:{" "}
+            <code>export PATH="$HOME/.local/bin:$PATH"</code>
+          </p>
         </div>
 
         {/* biome-ignore lint/performance/noImgElement: Static landing artwork must retain its supplied dimensions. */}
@@ -430,6 +435,11 @@ export default function Home() {
         <code className="install-command">
           curl -fsSL https://corotum.com/install.sh | sh
         </code>
+        <p className="install-next">
+          After install, open a new terminal and run <code>corotum</code>, then{" "}
+          <code>corotum init</code>. If the command is not found:{" "}
+          <code>export PATH="$HOME/.local/bin:$PATH"</code>
+        </p>
       </section>
       <SiteFooter />
     </main>

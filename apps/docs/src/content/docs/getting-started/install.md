@@ -16,6 +16,14 @@ curl -fsSL https://corotum.com/install.sh | sh
 
 Default location: `~/.local/bin/corotum`. The installer is per-user and does not require sudo. It appends that directory to `PATH` in the user shell startup files when it is not already present.
 
+The current terminal does not pick that up. Open a new terminal, or run:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+corotum
+corotum init
+```
+
 Supported targets: `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`.
 
 ## Windows
@@ -25,6 +33,8 @@ irm https://corotum.com/install.ps1 | iex
 ```
 
 Default location: `%LOCALAPPDATA%\ToolMirror\bin\corotum.exe`. The installer is per-user and does not require Administrator. It adds that directory to the user `Path` when it is not already present.
+
+Open a new terminal, then run `corotum` and `corotum init`.
 
 Windows arm64 is not supported in v0.5.
 

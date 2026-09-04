@@ -194,6 +194,17 @@ a {
   user-select: all;
   width: fit-content;
 }
+.install-next {
+  color: var(--graphite);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 14px 0 0;
+  max-width: 42rem;
+}
+.install-next code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
 
 .dispatch-board {
   align-self: center;
