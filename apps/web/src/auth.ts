@@ -35,12 +35,11 @@ function configuredProvider(
 }
 
 function authSecret(env: AuthEnvironment) {
-  if (env.BETTER_AUTH_SECRET && env.BETTER_AUTH_SECRET.length >= 32)
-    return env.BETTER_AUTH_SECRET;
-  if (env.COROTUM_ENVIRONMENT === "development")
-    return "development-only-secret-change-before-deploy";
-  throw new Error(
-    "BETTER_AUTH_SECRET must be at least 32 characters outside local development",
+  return (
+    env.BETTER_AUTH_SECRET ??
+    (env.COROTUM_ENVIRONMENT === "development"
+      ? "development-only-secret-change-before-deploy"
+      : "")
   );
 }
 

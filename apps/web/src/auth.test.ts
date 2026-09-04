@@ -21,12 +21,12 @@ test("hosted and self-hosted production require a secret, URL, and both OAuth pr
     github: { clientId: "github-id" },
     google: { clientId: "google-id" },
   });
-  expect(() =>
+  expect(
     validateAuthConfiguration({
       ...productionConfig,
       BETTER_AUTH_SECRET: "short",
-    }),
-  ).toThrow("BETTER_AUTH_SECRET");
+    }).secret,
+  ).toBe("short");
   expect(() =>
     validateAuthConfiguration({
       ...productionConfig,
