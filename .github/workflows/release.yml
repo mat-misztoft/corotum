@@ -4,13 +4,29 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - "cli-v*"
 
 # Rebuild every target from this source. Do not reuse pipeline-proof binaries.
 # v0.1 artifacts are unsigned. Signing and notarization are out of scope.
 
+concurrency:
+  group: cli-release
+  cancel-in-progress: false
+
 jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun test ./tooling/release.test.ts ./tooling/installers.test.ts ./apps/cli/src/cli.test.ts ./apps/cli/src/cli-update.test.ts
+
   build:
+    needs: test
     name: compile-${{ matrix.id }}
     runs-on: ubuntu-latest
     strategy:

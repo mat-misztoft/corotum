@@ -1,9 +1,9 @@
 import { hostname } from "node:os";
-
 import {
   CLI_VERSION_HEADER,
   DEVICE_TOKEN_HEADER,
 } from "../../../packages/saas-provider/src/index";
+import { version } from "../package.json";
 import type { CliOutcome } from "./cli-contracts";
 import type { ConfigStore, CredentialsStore } from "./config";
 
@@ -145,7 +145,7 @@ export class CloudAuthService {
     this.sleep = deps.sleep ?? defaultSleep;
     this.openUrl = deps.openUrl;
     this.logger = deps.logger;
-    this.device = deps.device ?? defaultCloudDevice("0.7.2");
+    this.device = deps.device ?? defaultCloudDevice(version);
     this.pollIntervalMs = deps.pollIntervalMs ?? PAIRING_POLL_INTERVAL_MS;
     this.openBrowser = deps.openBrowser ?? true;
     this.onPairing = deps.onPairing;

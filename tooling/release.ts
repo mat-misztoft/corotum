@@ -80,6 +80,12 @@ export function compiledBinaryName(target: ReleaseTarget): string {
     : `corotum-${target.id}`;
 }
 
+export function assertCliReleaseTag(version: string, ref?: string): void {
+  if (ref?.startsWith("refs/tags/") && ref !== `refs/tags/cli-v${version}`) {
+    throw new Error(`CLI release tag must be cli-v${version}, got ${ref}`);
+  }
+}
+
 export function versionDir(version: string): string {
   return `${R2_RELEASE_PREFIX}/v${version}`;
 }

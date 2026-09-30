@@ -1,5 +1,6 @@
 import { Command, CommanderError } from "commander";
 import { V2ArtifactConsentRequiredError } from "../../../packages/git-provider/src/index";
+import { version } from "../package.json";
 import { registerAddCommand } from "./add-command";
 import { registerAdoptCommand } from "./adopt-command";
 import { registerAgentsCommand } from "./agents-command";
@@ -31,7 +32,7 @@ import {
   type WelcomeDeps,
 } from "./welcome";
 
-export const CLI_VERSION = "0.7.2";
+export const CLI_VERSION = version;
 
 export type CliOptions = Readonly<{
   json: boolean;

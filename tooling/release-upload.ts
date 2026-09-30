@@ -21,7 +21,9 @@ function requiredEnv(name: string): string | undefined {
 }
 
 const version = (
-  (await Bun.file(join(root, "package.json")).json()) as { version: string }
+  (await Bun.file(join(root, "apps/cli/package.json")).json()) as {
+    version: string;
+  }
 ).version;
 const keys = listUploadKeys(version);
 const requireUpload = process.env.RELEASE_REQUIRE_UPLOAD === "1";

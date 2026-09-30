@@ -25,7 +25,7 @@ function hostTarget(): { os: string; arch: string } | null {
   return { os, arch };
 }
 
-const pkg = (await Bun.file(join(root, "package.json")).json()) as {
+const pkg = (await Bun.file(join(root, "apps/cli/package.json")).json()) as {
   version: string;
 };
 const files = new Map<string, Uint8Array>();

@@ -26,7 +26,7 @@ async function readLayout(): Promise<Map<string, Uint8Array>> {
   return files;
 }
 
-const pkg = (await Bun.file(join(root, "package.json")).json()) as {
+const pkg = (await Bun.file(join(root, "apps/cli/package.json")).json()) as {
   version: string;
 };
 const files = await readLayout();

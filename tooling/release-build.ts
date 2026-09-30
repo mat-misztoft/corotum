@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   artifactObject,
+  assertCliReleaseTag,
   buildLatestJson,
   compiledBinaryName,
   formatChecksums,
@@ -31,7 +32,7 @@ function argValue(flag: string): string | undefined {
 }
 
 async function packageJsonVersion(): Promise<string> {
-  const pkg = (await Bun.file(join(root, "package.json")).json()) as {
+  const pkg = (await Bun.file(join(root, "apps/cli/package.json")).json()) as {
     version: string;
   };
   return pkg.version;
@@ -159,6 +160,7 @@ async function main(): Promise<void> {
   const assembleOnly = Bun.argv.includes("--assemble-only");
   const targetName = argValue("--target");
   const version = await packageJsonVersion();
+  assertCliReleaseTag(version, process.env.GITHUB_REF);
 
   if (targetName) {
     const target = RELEASE_TARGETS.find(

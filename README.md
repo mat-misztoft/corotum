@@ -84,6 +84,24 @@ Verify (example, macOS arm64):
 
 Linux x64 is also built and run in [the compile proof workflow](./.github/workflows/cli-compile.yml).
 
+## CLI releases
+
+The CLI version lives in `apps/cli/package.json`, independently of the website,
+repository, and docs versions. Bump it only for CLI releases. The binary and R2
+release scripts use that version.
+
+After committing and pushing the CLI changes, publish an annotated matching tag:
+
+```bash
+git tag -a cli-v0.7.3 -m "CLI 0.7.3"
+git push origin cli-v0.7.3
+```
+
+The `Final release` workflow tests, builds all five targets, and uploads to R2.
+It rejects tags that disagree with the CLI package version. Website commits and
+legacy `v*` tags do not publish the CLI. A manual workflow run publishes the CLI
+version from the selected ref.
+
 ## License
 
 [GNU Affero General Public License v3.0 or later](./LICENSE).

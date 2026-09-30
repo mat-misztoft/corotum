@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertCliReleaseTag,
   buildLatestJson,
   createReleaseLayout,
   formatChecksums,
@@ -53,6 +54,31 @@ function layoutFiles(
 }
 
 describe("final release layout", () => {
+  test("CLI tags match the independent CLI package version", () => {
+    expect(() =>
+      assertCliReleaseTag("0.7.3", "refs/tags/cli-v0.7.3"),
+    ).not.toThrow();
+    expect(() => assertCliReleaseTag("0.7.3", "refs/heads/main")).not.toThrow();
+    expect(() => assertCliReleaseTag("0.7.3")).not.toThrow();
+    for (const ref of ["refs/tags/v0.7.3", "refs/tags/cli-v0.7.2"]) {
+      expect(() => assertCliReleaseTag("0.7.3", ref)).toThrow(
+        "CLI release tag must be cli-v0.7.3",
+      );
+    }
+    for (const script of [
+      "release-build",
+      "release-verify",
+      "release-upload",
+      "release-installer-smoke",
+    ]) {
+      const source = readFileSync(join(root, `tooling/${script}.ts`), "utf8");
+      expect(source).toContain('join(root, "apps/cli/package.json")');
+      expect(source).not.toContain('join(root, "package.json")');
+    }
+    expect(
+      readFileSync(join(root, "tooling/release-build.ts"), "utf8"),
+    ).toContain("assertCliReleaseTag(version, process.env.GITHUB_REF)");
+  });
   test("covers the v0.1 unsigned matrix and R2 key layout", () => {
     expect(RELEASE_TARGETS.map((target) => target.id)).toEqual([
       "darwin-arm64",
@@ -232,12 +258,15 @@ describe("final release layout", () => {
     }
     expect(workflow).toContain("name: Final release");
     expect(workflow).toContain("bun test");
-    expect(workflow).toContain("bun run test:e2e");
-    expect(workflow).toContain("bun run web:build");
+    expect(workflow).toContain('"cli-v*"');
+    expect(workflow).not.toContain('"v*"');
+    expect(workflow).toContain("needs: test");
+    expect(workflow).toContain("group: cli-release");
+    expect(workflow).not.toContain("bun run web:build");
     expect(workflow).toContain("bun ./tooling/release-build.ts --target");
     expect(workflow).toContain("bun run release:verify");
     expect(workflow).toContain("bun run release:smoke-installers");
-    expect(workflow).toContain("bun run web:smoke");
+    expect(workflow).not.toContain("bun run web:smoke");
     expect(workflow).toContain('RELEASE_REQUIRE_UPLOAD: "1"');
     expect(workflow).toContain("pipeline-proof");
     expect(workflow).not.toContain("publish-pipeline-proof");
