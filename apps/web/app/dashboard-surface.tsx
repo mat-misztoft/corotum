@@ -811,9 +811,9 @@ export function DashboardSurface({ view }: { view: View }) {
                 <div className="dashboard-billing-summary">
                   {settings.launchFreePeriod && (
                     <p className="dashboard-billing-note">
-                      <strong>Free Launch Month</strong> — Corotum Cloud is free
-                      until September 30, 2026, 23:59:59 UTC. No card required.
-                      Standard pricing starts October 1: $5.99/month or
+                      <strong>FREE LAUNCH EXTENDED</strong> — Corotum Cloud is free
+                      until October 14, 2026, 23:59:59 UTC. No card required.
+                      Standard pricing starts October 15: $5.99/month or
                       $59.90/year.
                     </p>
                   )}

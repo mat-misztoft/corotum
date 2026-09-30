@@ -3,7 +3,7 @@ import { HostedEntitlementRequiredError } from "./billing";
 import { executeWebMcpMutationTool, executeWebMcpReadOnlyTool } from "./webmcp";
 import { handleWebMcpTool } from "./webmcp-http";
 
-const launchEnd = Date.parse("2026-10-01T00:00:00.000Z");
+const launchEnd = Date.parse("2026-10-15T00:00:00.000Z");
 
 async function afterLaunch<T>(run: () => Promise<T>) {
   const now = Date.now;

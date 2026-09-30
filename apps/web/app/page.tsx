@@ -64,12 +64,12 @@ export default function Home() {
             on the same exact version.
           </p>
           {isLaunchFreePeriod() && (
-            <aside className="launch-promotion" aria-label="Free Launch Month">
-              <strong>FREE LAUNCH MONTH</strong>
+            <aside className="launch-promotion" aria-label="Free Launch Extended">
+              <strong>FREE LAUNCH EXTENDED</strong>
               <span>
-                Cloud free until September 30, 2026 · No card required
+                Cloud free until October 14, 2026 · No card required
               </span>
-              <small>$5.99/month or $59.90/year from October 1</small>
+              <small>$5.99/month or $59.90/year from October 15</small>
             </aside>
           )}
           <div className="hero-actions">
@@ -297,11 +297,11 @@ export default function Home() {
             </p>
             {isLaunchFreePeriod() && (
               <aside className="launch-promotion pricing-launch-promotion">
-                <strong>FREE LAUNCH MONTH</strong>
+                <strong>FREE LAUNCH EXTENDED</strong>
                 <span>
-                  Cloud free until September 30, 2026 · No card required
+                  Cloud free until October 14, 2026 · No card required
                 </span>
-                <small>$5.99/month or $59.90/year from October 1</small>
+                <small>$5.99/month or $59.90/year from October 15</small>
               </aside>
             )}
             <ul className="pricing-list">

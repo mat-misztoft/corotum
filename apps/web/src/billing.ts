@@ -3,7 +3,7 @@ import type { WorkspaceDatabase } from "./workspaces";
 export const CREEM_PROVIDER = "creem";
 export const HOSTED_MONTHLY_PRICE_CENTS = 599;
 export const HOSTED_ANNUAL_PRICE_CENTS = 5990;
-export const LAUNCH_FREE_PERIOD_END = "2026-10-01T00:00:00.000Z";
+export const LAUNCH_FREE_PERIOD_END = "2026-10-15T00:00:00.000Z";
 
 export type BillingInterval = "month" | "year";
 export type BillingDatabase = WorkspaceDatabase;

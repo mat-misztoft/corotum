@@ -23,7 +23,7 @@ const migrationFiles = readdirSync(migrationsDirectory)
   .filter((file) => file.endsWith(".sql"))
   .sort();
 const skill = skillId("sk_01JSyncReport");
-const launchEnd = Date.parse("2026-10-01T00:00:00.000Z");
+const launchEnd = Date.parse("2026-10-15T00:00:00.000Z");
 
 async function afterLaunch<T>(run: () => Promise<T>) {
   const now = Date.now;
