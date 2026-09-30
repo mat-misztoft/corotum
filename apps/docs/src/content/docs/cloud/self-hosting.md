@@ -25,7 +25,7 @@ Creem, a Creem account, and hosted corotum.com subscription products are not pre
 
 ## AGPL obligations
 
-This software is licensed under [GNU AGPLv3](https://github.com/mat_misztoft/corotum/blob/main/LICENSE). If you run a modified version as a network service, you must offer the corresponding source to users who interact with it over the network. Keep the license text, copyright notices, and a way to obtain the source you actually deploy.
+This software is licensed under [GNU AGPLv3](https://github.com/mat-misztoft/corotum/blob/main/LICENSE). If you run a modified version as a network service, you must offer the corresponding source to users who interact with it over the network. Keep the license text, copyright notices, and a way to obtain the source you actually deploy.
 
 ## Create D1 and bindings
 

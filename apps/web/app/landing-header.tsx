@@ -8,12 +8,12 @@ const links = [
   ["#pricing", "Pricing"],
   ["#agents", "Agents"],
   ["https://docs.corotum.com", "Docs"],
-  ["https://github.com/mat_misztoft/corotum", "GitHub"],
+  ["https://github.com/mat-misztoft/corotum", "GitHub"],
 ] as const;
 
 const linkEvents: Partial<Record<(typeof links)[number][0], string>> = {
   "https://docs.corotum.com": "nav-docs",
-  "https://github.com/mat_misztoft/corotum": "nav-github",
+  "https://github.com/mat-misztoft/corotum": "nav-github",
 };
 
 export function LandingHeader() {

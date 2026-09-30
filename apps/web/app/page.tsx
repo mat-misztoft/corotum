@@ -85,7 +85,7 @@ export default function Home() {
               className="button button-secondary"
               data-umami-event="cta-github"
               data-umami-event-location="hero"
-              href="https://github.com/mat_misztoft/corotum"
+              href="https://github.com/mat-misztoft/corotum"
             >
               View on GitHub
             </a>
@@ -281,7 +281,7 @@ export default function Home() {
               className="pricing-link"
               data-umami-event="cta-github"
               data-umami-event-location="pricing"
-              href="https://github.com/mat_misztoft/corotum"
+              href="https://github.com/mat-misztoft/corotum"
             >
               View on GitHub
             </a>
@@ -427,7 +427,7 @@ export default function Home() {
             className="button button-secondary"
             data-umami-event="cta-github"
             data-umami-event-location="final"
-            href="https://github.com/mat_misztoft/corotum"
+            href="https://github.com/mat-misztoft/corotum"
           >
             View on GitHub
           </a>

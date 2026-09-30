@@ -15,7 +15,7 @@ export default defineConfig({
         {
           icon: "github",
           label: "Corotum on GitHub",
-          href: "https://github.com/mat_misztoft/corotum",
+          href: "https://github.com/mat-misztoft/corotum",
         },
       ],
       head: [

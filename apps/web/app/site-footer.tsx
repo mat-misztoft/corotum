@@ -9,7 +9,7 @@ export function SiteFooter() {
         </a>
         <a
           data-umami-event="nav-github"
-          href="https://github.com/mat_misztoft/corotum"
+          href="https://github.com/mat-misztoft/corotum"
         >
           GitHub
         </a>
