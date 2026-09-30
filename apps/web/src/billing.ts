@@ -30,16 +30,10 @@ export type CreemClient = {
   createPortal(customerId: string): Promise<{ url: string }>;
 };
 
-const GRANT_EVENTS = new Set([
-  "subscription.active",
-  "subscription.trialing",
-  "subscription.paid",
-]);
-const REVOKE_EVENTS = new Set([
-  "subscription.paused",
-  "subscription.expired",
-  "subscription.canceled",
-]);
+// Creem recommends subscription.paid for access: subscription.active lacks checkout metadata.
+const GRANT_EVENTS = new Set(["subscription.paid"]);
+// Keep access through payment retries; canceled is the terminal state.
+const REVOKE_EVENTS = new Set(["subscription.canceled"]);
 const ENTITLED_STATUSES = new Set(["active", "trialing", "paid"]);
 
 export class BillingNotConfiguredError extends Error {

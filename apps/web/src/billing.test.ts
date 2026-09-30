@@ -312,6 +312,20 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   expect(first).toEqual({ duplicate: false, eventType: "subscription.paid" });
   expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(true);
 
+  const expired = JSON.stringify({
+    id: "evt_expired_1",
+    eventType: "subscription.expired",
+    object: { id: "sub_creem_2", customer: { id: "cus_ada" } },
+  });
+  await processCreemWebhook(
+    db,
+    hostedEnv,
+    expired,
+    await sign(expired, webhookSecret),
+    1_500,
+  );
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(true);
+
   sqlite
     .query("UPDATE subscriptions SET status = 'canceled', updated_at = ?")
     .run(2_000);
@@ -333,7 +347,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   ).toEqual({ status: "canceled", updatedAt: 2_000 });
   expect(
     sqlite.query("SELECT COUNT(*) AS count FROM billing_events").get(),
-  ).toEqual({ count: 2 });
+  ).toEqual({ count: 3 });
 
   const canceled = JSON.stringify({
     id: "evt_cancel_1",
@@ -351,6 +365,25 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     await sign(canceled, webhookSecret),
     4_000,
   );
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
+});
+
+test("subscription.active without metadata is acknowledged but does not grant access", async () => {
+  const { db } = await billingDb();
+  const payload = JSON.stringify({
+    id: "evt_active_1",
+    eventType: "subscription.active",
+    object: { id: "sub_creem_3", customer: { id: "cus_ada" } },
+  });
+
+  await expect(
+    processCreemWebhook(
+      db,
+      hostedEnv,
+      payload,
+      await sign(payload, webhookSecret),
+    ),
+  ).resolves.toEqual({ duplicate: false, eventType: "subscription.active" });
   expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
 });
 
@@ -432,7 +465,7 @@ test("login and pairing work without entitlement while hosted sync and mutations
 
   const grant = JSON.stringify({
     id: "evt_grant_sync",
-    eventType: "subscription.active",
+    eventType: "subscription.paid",
     object: {
       id: "sub_sync",
       customer: { id: "cus_ada" },
