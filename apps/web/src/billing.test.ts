@@ -47,7 +47,7 @@ const device = {
   architecture: "arm64",
   cliVersion: "0.1.0",
 };
-const launchEnd = Date.parse("2026-10-15T00:00:00.000Z");
+const launchEnd = Date.parse("2026-10-22T00:00:00.000Z");
 
 async function afterLaunch<T>(run: () => Promise<T>) {
   const now = Date.now;
@@ -390,6 +390,7 @@ test("subscription.active without metadata is acknowledged but does not grant ac
 test("the launch period ends at midnight UTC and then requires a subscription", async () => {
   const { db } = await billingDb();
   expect(isLaunchFreePeriod(Date.parse("2026-10-01T00:00:00.000Z"))).toBe(true);
+  expect(isLaunchFreePeriod(Date.parse("2026-10-15T00:00:00.000Z"))).toBe(true);
   expect(isLaunchFreePeriod(launchEnd - 1)).toBe(true);
   expect(isLaunchFreePeriod(launchEnd)).toBe(false);
   expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd - 1)).toBe(

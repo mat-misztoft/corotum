@@ -48,7 +48,7 @@ const evidencePath = fileURLToPath(
   new URL("./security-evidence.md", import.meta.url),
 );
 const webhookSecret = "whsec_test";
-const launchEnd = Date.parse("2026-10-15T00:00:00.000Z");
+const launchEnd = Date.parse("2026-10-22T00:00:00.000Z");
 const hostedEnv: BillingEnvironment = {
   COROTUM_HOSTED: "true",
   CREEM_API_KEY: "ck_test",

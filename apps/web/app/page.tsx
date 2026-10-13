@@ -67,9 +67,9 @@ export default function Home() {
             <aside className="launch-promotion" aria-label="Free Launch Extended">
               <strong>FREE LAUNCH EXTENDED</strong>
               <span>
-                Cloud free until October 14, 2026 · No card required
+                Cloud free until October 21, 2026 · No card required
               </span>
-              <small>$5.99/month or $59.90/year from October 15</small>
+              <small>$5.99/month or $59.90/year from October 22</small>
             </aside>
           )}
           <div className="hero-actions">
@@ -294,9 +294,9 @@ export default function Home() {
               <aside className="launch-promotion pricing-launch-promotion">
                 <strong>FREE LAUNCH EXTENDED</strong>
                 <span>
-                  Cloud free until October 14, 2026 · No card required
+                  Cloud free until October 21, 2026 · No card required
                 </span>
-                <small>$5.99/month or $59.90/year from October 15</small>
+                <small>$5.99/month or $59.90/year from October 22</small>
               </aside>
             )}
             <ul className="pricing-list">

@@ -63,7 +63,7 @@ test("pricing keeps the hosted and self-hosted paths clear", () => {
   expect(page).toContain("hosted corotum.com service.");
   expect(page).toContain("FREE LAUNCH EXTENDED");
   expect(page).toContain("isLaunchFreePeriod()");
-  expect(page).toContain("Cloud free until October 14, 2026");
+  expect(page).toContain("Cloud free until October 21, 2026");
   expect(page).toContain('className="launch-promotion"');
   expect(styles).toContain(".pricing-plans");
   expect(styles).toContain("grid-template-columns: 1fr 1fr");
