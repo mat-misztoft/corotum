@@ -14,15 +14,11 @@ There is no daemon. Corotum does not install a background service and does not r
 curl -fsSL https://corotum.com/install.sh | sh
 ```
 
-Default location: `~/.local/bin/corotum`. The installer is per-user and does not require sudo. It appends that directory to `PATH` in the user shell startup files when it is not already present.
+Default location: `~/.local/bin/corotum`. The installer is per-user and does not require sudo. It automatically configures `PATH` for Bash, Zsh (including `ZDOTDIR`), and POSIX login shells without duplicating its entries.
 
-The current terminal does not pick that up. Open a new terminal, or run:
+Follow the instructions printed by the installer. After successful PATH setup, open a new terminal and run `corotum init`. The installer cannot change the parent terminal's environment when run through `curl … | sh`; it also prints a quoted full-path command to start initialization immediately.
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-corotum
-corotum init
-```
+If a startup file cannot be written or the shell is unsupported (such as Fish), installation still succeeds. The installer warns you, identifies the failed file or unsupported shell, and prints recovery instructions. For supported shells it also prints the exact PATH command for the current terminal. Initialization is not run automatically.
 
 Supported targets: `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`.
 
@@ -34,7 +30,7 @@ irm https://corotum.com/install.ps1 | iex
 
 Default location: `%LOCALAPPDATA%\ToolMirror\bin\corotum.exe`. The installer is per-user and does not require Administrator. It adds that directory to the user `Path` when it is not already present.
 
-Open a new terminal, then run `corotum` and `corotum init`.
+The PowerShell installer also updates `Path` in the current terminal, so you can run `corotum init` immediately. If saving the persistent user `Path` fails, it warns you and prints instructions for future terminals plus a quoted full-path command. The installed binary remains usable.
 
 Windows arm64 is not supported in v0.5.
 
@@ -45,7 +41,8 @@ Windows arm64 is not supported in v0.5.
 3. Verifies the archive SHA-256.
 4. Runs `--version` on the staged binary.
 5. Replaces the previous binary only after those checks succeed.
-6. Prints that v0.5 binaries are unsigned.
+6. Configures the shell/user PATH and reports any configuration failures without treating a verified, installed binary as a failed installation.
+7. Prints next steps and an immediate full-path initialization command on Unix; PowerShell updates the current terminal directly. Prints that v0.5 binaries are unsigned.
 
 Installer overrides (optional):
 

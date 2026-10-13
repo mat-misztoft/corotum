@@ -106,6 +106,7 @@ async function runInstallSh(
   origin: string,
   os: string,
   arch: string,
+  env: Record<string, string> = {},
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(["sh", installSh], {
     cwd: root,
@@ -116,6 +117,7 @@ async function runInstallSh(
       COROTUM_RELEASE_BASE: origin,
       COROTUM_OS: os,
       COROTUM_ARCH: arch,
+      ...env,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -421,6 +423,110 @@ describe("official installers", () => {
     expect(second.code).toBe(0);
     expect(second.pathEntries).toEqual([join(windowsDir, "ToolMirror", "bin")]);
     expect(second.pathEntries).toEqual(first.pathEntries);
+  });
+
+  test("configures PATH despite misleading comments and reports startup-file failures", async () => {
+    const files = await releaseLayout("0.1.0", join(work, "archives-shell"));
+    const server = startReleaseServer(files);
+    try {
+      const home = join(work, "shell-home");
+      await mkdir(home, { recursive: true });
+      await writeFile(join(home, ".profile"), "# .local/bin is not on PATH\n");
+      await writeFile(join(home, ".bash_profile"), "# login shell\n");
+      const result = await runInstallSh(home, server.origin, "linux", "x64", {
+        SHELL: "/bin/bash",
+      });
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("PATH configured");
+      expect(result.stdout).not.toContain("export PATH=");
+      for (const file of [".profile", ".bashrc", ".bash_profile"]) {
+        const shell = Bun.spawn(
+          ["sh", "-c", '. "$1"; command -v corotum', "sh", join(home, file)],
+          {
+            env: { ...process.env, HOME: home, PATH: "/usr/bin:/bin" },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        expect(await shell.exited).toBe(0);
+        expect((await new Response(shell.stdout).text()).trim()).toBe(
+          join(home, ".local/bin/corotum"),
+        );
+      }
+      await rm(join(home, ".bashrc"));
+      await mkdir(join(home, ".bashrc"));
+      const failed = await runInstallSh(home, server.origin, "linux", "x64", {
+        SHELL: "/bin/bash",
+      });
+      expect(failed.code).toBe(0);
+      expect(failed.stderr).toContain("Could not update");
+      expect(failed.stdout).toContain("automatic PATH setup did not complete");
+      expect(failed.stdout).toContain("export PATH=");
+      expect(failed.stdout).toContain("corotum' init");
+      const unknown = await runInstallSh(home, server.origin, "linux", "x64", {
+        SHELL: "/bin/fish",
+      });
+      expect(unknown.code).toBe(0);
+      expect(unknown.stderr).toContain("Unsupported shell");
+      expect(unknown.stdout).not.toContain("export PATH=");
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("honors ZDOTDIR and quotes custom install paths without executing shell syntax", async () => {
+    const files = await releaseLayout(
+      "0.1.0",
+      join(work, "archives-custom-path"),
+    );
+    const server = startReleaseServer(files);
+    const home = join(work, "custom-path-home");
+    const zdotdir = join(home, "zsh-config");
+    const binDir = join(home, "it's $(touch SHOULD_NOT_EXIST) bin");
+    await mkdir(zdotdir, { recursive: true });
+    try {
+      for (let i = 0; i < 2; i++) {
+        const result = await runInstallSh(home, server.origin, "linux", "x64", {
+          ZDOTDIR: zdotdir,
+          COROTUM_BIN_DIR: binDir,
+        });
+        expect(result.code).toBe(0);
+        expect(result.stderr).toBe("");
+        const direct = result.stdout
+          .split("\n")
+          .find((line) => line.startsWith("  '") && line.endsWith(" init"));
+        if (!direct)
+          throw new Error("Installer did not print a direct init command");
+        const run = Bun.spawn(["sh", "-c", direct], {
+          cwd: home,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(await run.exited).toBe(0);
+      }
+      const startup = join(zdotdir, ".zshrc");
+      expect(
+        (await readFile(startup, "utf8")).split("# Added by").length - 1,
+      ).toBe(1);
+      const shell = Bun.spawn(
+        ["sh", "-c", '. "$1"; command -v corotum', "sh", startup],
+        {
+          cwd: home,
+          env: { ...process.env, HOME: home, PATH: "/usr/bin:/bin" },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(await shell.exited).toBe(0);
+      expect((await new Response(shell.stdout).text()).trim()).toBe(
+        join(binDir, "corotum"),
+      );
+      expect(await Bun.file(join(home, "SHOULD_NOT_EXIST")).exists()).toBe(
+        false,
+      );
+    } finally {
+      server.stop();
+    }
   });
 
   test("rejects a path-escaping latest.json version before downloading an archive", async () => {

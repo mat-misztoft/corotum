@@ -138,14 +138,24 @@ try {
 
   New-Item -ItemType Directory -Path $binDir -Force | Out-Null
   Move-Item -Force $staged $dest
-  Add-UserPath $binDir
+  $pathConfigured = $true
+  try {
+    Add-UserPath $binDir
+  }
+  catch {
+    $pathConfigured = $false
+    Write-Warning "Corotum is installed, but could not update user PATH: $($_.Exception.Message)"
+  }
   $env:Path = "$binDir;" + $env:Path
   Write-Output "Installed $dest"
   Write-Output "Corotum was installed with the official installer."
   Write-Output ""
-  Write-Output "This terminal may not find corotum yet."
-  Write-Output "Open a new terminal, or run:"
-  Write-Output "  $dest"
+  Write-Output "Corotum is ready in this terminal. Run: corotum init"
+  if (-not $pathConfigured) {
+    Write-Output "For future terminals, add $binDir to your user Path in Environment Variables."
+    Write-Output "Or configure this device directly:"
+    Write-Output ("  & '" + $dest.Replace("'", "''") + "' init")
+  }
   Write-Output ""
   Write-Output "Get started"
   Write-Output "  corotum init        Configure this device"

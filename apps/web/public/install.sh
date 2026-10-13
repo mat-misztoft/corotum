@@ -51,50 +51,51 @@ sha256_file() {
   fi
 }
 
+shell_quote() {
+  printf "'"
+  printf '%s' "$1" | sed "s/'/'\\\\''/g"
+  printf "'"
+}
+
 append_path_file() {
   file=$1
-  bin_dir=$2
-  marker="# Added by the official Corotum installer"
-  if [ -f "$file" ] && grep -F "$marker" "$file" >/dev/null 2>&1; then
+  if [ -f "$file" ] && grep -Fx "$path_line" "$file" >/dev/null 2>&1; then
     return 0
   fi
-  if [ -f "$file" ] && grep -F "$bin_dir" "$file" >/dev/null 2>&1; then
-    return 0
-  fi
-  if [ -f "$file" ] && grep -F '.local/bin' "$file" >/dev/null 2>&1; then
-    return 0
-  fi
-  if [ ! -f "$file" ]; then
-    umask 022
-    : >"$file"
-  fi
-  if [ "$bin_dir" = "$HOME/.local/bin" ]; then
-    printf '\n%s\nexport PATH="$HOME/.local/bin:$PATH"\n' "$marker" >>"$file"
-  else
-    printf '\n%s\nexport PATH="%s:$PATH"\n' "$marker" "$bin_dir" >>"$file"
+  if ! (printf '\n%s\n%s\n' "# Added by the official Corotum installer" "$path_line" >>"$file"); then
+    printf 'Warning: Could not update %s.\n' "$file" >&2
+    path_failed=1
   fi
 }
 
 ensure_path() {
-  bin_dir=$1
-  append_path_file "$HOME/.profile" "$bin_dir"
+  path_failed=0
+  path_line="export PATH=$(shell_quote "$BIN_DIR"):\"\$PATH\""
+  if [ "$BIN_DIR" = "$HOME/.local/bin" ]; then
+    path_line='export PATH="$HOME/.local/bin:$PATH"'
+  fi
   case ${SHELL:-} in
-    *zsh)
-      append_path_file "$HOME/.zshrc" "$bin_dir"
+    */zsh)
+      append_path_file "$HOME/.profile"
+      append_path_file "${ZDOTDIR:-$HOME}/.zshrc"
       ;;
-    *bash)
-      append_path_file "$HOME/.bashrc" "$bin_dir"
+    */bash)
+      append_path_file "$HOME/.profile"
+      append_path_file "$HOME/.bashrc"
       if [ -f "$HOME/.bash_profile" ]; then
-        append_path_file "$HOME/.bash_profile" "$bin_dir"
+        append_path_file "$HOME/.bash_profile"
+      elif [ -f "$HOME/.bash_login" ]; then
+        append_path_file "$HOME/.bash_login"
       fi
       ;;
+    */sh | */dash | */ksh)
+      append_path_file "$HOME/.profile"
+      ;;
+    *)
+      printf 'Warning: Unsupported shell for automatic PATH setup: %s\n' "${SHELL:-unknown}" >&2
+      path_failed=1
+      ;;
   esac
-  if [ -f "$HOME/.zshrc" ]; then
-    append_path_file "$HOME/.zshrc" "$bin_dir"
-  fi
-  if [ -f "$HOME/.bashrc" ]; then
-    append_path_file "$HOME/.bashrc" "$bin_dir"
-  fi
 }
 
 print_banner
@@ -196,16 +197,25 @@ mkdir -p "$BIN_DIR"
 mv "$staged" "$DEST"
 chmod 755 "$DEST"
 
-ensure_path "$BIN_DIR"
+ensure_path
 
 printf '%s\n' "Installed $DEST"
 printf '%s\n' "$version_out"
 printf '%s\n' "Corotum was installed with the official installer."
 printf '%s\n' ""
-printf '%s\n' "This terminal may not find corotum yet."
-printf '%s\n' "Open a new terminal, or run:"
-printf '%s\n' "  export PATH=\"$BIN_DIR:\$PATH\""
-printf '%s\n' "  corotum"
+if [ "$path_failed" -eq 0 ]; then
+  printf '%s\n' "PATH configured. Open a new terminal and run: corotum init"
+else
+  printf '%s\n' "Corotum is installed, but automatic PATH setup did not complete."
+  printf '%s\n' "Add $BIN_DIR to PATH in your shell startup file."
+  case ${SHELL:-} in
+    */bash | */zsh | */sh | */dash | */ksh)
+      printf '%s\n' "To use Corotum in this terminal, run:" "  $path_line" "  corotum init"
+      ;;
+  esac
+fi
+printf '%s\n' "To configure this device now without restarting the terminal, run:"
+printf '  %s init\n' "$(shell_quote "$DEST")"
 printf '%s\n' ""
 printf '%s\n' "Get started"
 printf '%s\n' "  corotum init        Configure this device"
