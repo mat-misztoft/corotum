@@ -1,0 +1,2 @@
+CREATE INDEX `device_tokens_active_device_idx` ON `device_tokens` (`device_id`,`id`) WHERE "device_tokens"."revoked_at" IS NULL;--> statement-breakpoint
+CREATE INDEX `device_workspaces_active_workspace_idx` ON `device_workspaces` (`workspace_id`,`device_id`) WHERE "device_workspaces"."is_active" = 1;

@@ -12,11 +12,14 @@ import {
 } from "../../../packages/saas-provider/src/index";
 import { approvePairing, createPairing } from "./pairings";
 import {
+  handleGetWorkspaceRevision,
   handleGetWorkspaceState,
   handlePostPendingResolution,
   handlePutWorkspaceState,
+  handleWorkspaceEvents,
 } from "./state-http";
 import { issueDeviceToken, type TokenDatabase } from "./tokens";
+import type { EventsService } from "./workspace-events";
 
 const migrationsDirectory = fileURLToPath(
   new URL("../migrations/", import.meta.url),
@@ -149,6 +152,118 @@ function stateRequest(
     },
   });
 }
+
+test("revision metadata is authenticated and never reads state JSON or artifacts", async () => {
+  const { sqlite, db } = await stateDb();
+  const { issued, workspaceId } = await pairedDevice(db, sqlite);
+  const queries: string[] = [];
+  const light = {
+    ...db,
+    prepare(query: string) {
+      queries.push(query);
+      return db.prepare(query);
+    },
+    async rateLimitRequest() {
+      return { success: true };
+    },
+  };
+  const response = await handleGetWorkspaceRevision(
+    stateRequest(workspaceId, issued.token),
+    light,
+    workspaceId,
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    revisionId: null,
+    revisionSequence: 0,
+  });
+  expect(queries.join(" ")).not.toMatch(
+    /manifest_json|lockfile_json|workspace_artifacts|rate_limit_windows/,
+  );
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(
+    (
+      await handleGetWorkspaceRevision(
+        stateRequest(workspaceId, "wrong"),
+        db,
+        workspaceId,
+      )
+    ).status,
+  ).toBe(401);
+  const bearer = apiRequest("/api/v2/workspaces/id/revision", {
+    headers: {
+      authorization: `Bearer ${issued.token}`,
+      [CLI_VERSION_HEADER]: "0.1.0",
+    },
+  });
+  expect(
+    (await handleGetWorkspaceRevision(bearer, db, workspaceId)).status,
+  ).toBe(401);
+});
+
+test("event upgrade authenticates token, CLI, membership and rate limit before RPC", async () => {
+  const { sqlite, db } = await stateDb();
+  const { issued, workspaceId } = await pairedDevice(db, sqlite);
+  const calls: unknown[] = [];
+  const events = {
+    async fetch(request: Request) {
+      calls.push(Object.fromEntries(request.headers));
+      return new Response("subscribed");
+    },
+  } as unknown as EventsService;
+  const request = () =>
+    stateRequest(workspaceId, issued.token, {
+      headers: { upgrade: "websocket" },
+    });
+  expect(
+    (await handleWorkspaceEvents(request(), db, workspaceId, false, events))
+      .status,
+  ).toBe(200);
+  expect(calls[0]).toMatchObject({
+    "x-corotum-workspace-id": workspaceId,
+    "x-corotum-device-id": issued.deviceId,
+    "x-corotum-token-id": expect.stringContaining("tok_"),
+  });
+  expect(JSON.stringify(calls)).not.toContain(issued.token);
+  const blocked = {
+    ...db,
+    async rateLimitRequest() {
+      return { success: false };
+    },
+  };
+  expect(
+    (
+      await handleWorkspaceEvents(
+        request(),
+        blocked,
+        workspaceId,
+        false,
+        events,
+      )
+    ).status,
+  ).toBe(429);
+  expect(
+    (
+      await handleWorkspaceEvents(
+        stateRequest(workspaceId, issued.token, {
+          headers: { [CLI_VERSION_HEADER]: "999.0.0" },
+        }),
+        db,
+        workspaceId,
+        false,
+        events,
+      )
+    ).status,
+  ).toBe(426);
+  sqlite
+    .query("UPDATE device_workspaces SET is_active = 0 WHERE device_id = ?")
+    .run(issued.deviceId);
+  expect(
+    (await handleWorkspaceEvents(request(), db, workspaceId, false, events))
+      .status,
+  ).toBe(404);
+  expect(calls).toHaveLength(1);
+});
 
 test("an authenticated device can pull empty Cloud state and push an idempotent update", async () => {
   const { sqlite, db } = await stateDb();

@@ -6,12 +6,13 @@ import {
   handleDashboardGet,
   handleDashboardMutation,
 } from "../../../../src/dashboard-http";
+import { eventDatabase } from "../../../../src/workspace-events";
 
 const workerEnv = env as unknown as AuthEnvironment;
 
 export async function GET(request: Request) {
   return handleDashboardGet(
-    workerEnv.DB as never,
+    eventDatabase(workerEnv) as never,
     await requireUserId(request, workerEnv),
     isHostedCloud(workerEnv),
   );
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return handleDashboardMutation(
     request,
-    workerEnv.DB as never,
+    eventDatabase(workerEnv) as never,
     await requireUserId(request, workerEnv),
     isHostedCloud(workerEnv),
   );

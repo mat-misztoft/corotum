@@ -6,6 +6,7 @@ import {
   handlePutWorkspaceState,
 } from "../../../../../../src/state-http";
 import type { TokenDatabase } from "../../../../../../src/tokens";
+import { eventDatabase } from "../../../../../../src/workspace-events";
 
 // vinext's generated `cloudflare:workers` type does not include app bindings.
 const workerEnv = env as unknown as AuthEnvironment;
@@ -17,7 +18,7 @@ export async function GET(
   const { id } = await context.params;
   return handleGetWorkspaceState(
     request,
-    workerEnv.DB as unknown as TokenDatabase,
+    eventDatabase(workerEnv) as unknown as TokenDatabase,
     id,
     isHostedCloud(workerEnv),
   );
@@ -30,7 +31,7 @@ export async function PUT(
   const { id } = await context.params;
   return handlePutWorkspaceState(
     request,
-    workerEnv.DB as unknown as TokenDatabase,
+    eventDatabase(workerEnv) as unknown as TokenDatabase,
     id,
     isHostedCloud(workerEnv),
   );

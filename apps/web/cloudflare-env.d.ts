@@ -3,6 +3,10 @@
 interface Env {
   DB: D1Database;
   ARTIFACTS: R2Bucket;
+  EVENTS?: import("./src/workspace-events").EventsService;
+  CLOUD_READ_LIMITER: RateLimit;
+  CLOUD_WRITE_LIMITER: RateLimit;
+  CLOUD_AUTH_LIMITER: RateLimit;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
   GITHUB_CLIENT_ID?: string;

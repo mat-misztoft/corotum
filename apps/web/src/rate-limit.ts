@@ -7,7 +7,12 @@ export const RATE_LIMITS = {
 } as const;
 
 export type RateLimitKind = keyof typeof RATE_LIMITS;
-export type RateLimitDatabase = WorkspaceDatabase;
+export type RateLimitDatabase = WorkspaceDatabase & {
+  rateLimitRequest?(
+    kind: RateLimitKind,
+    key: string,
+  ): Promise<{ success: boolean }>;
+};
 
 type WindowRow = { count: number; windowStart: number };
 
@@ -35,6 +40,13 @@ export async function consumeRateLimit(
   const { limit, windowMs } = RATE_LIMITS[kind];
   const windowStart = Math.floor(now / windowMs) * windowMs;
   const key = rateLimitKey(kind, identity);
+  if (db.rateLimitRequest) {
+    const { success } = await db.rateLimitRequest(kind, key);
+    return {
+      allowed: success,
+      retryAfterSeconds: success ? 0 : Math.ceil(windowMs / 1000),
+    };
+  }
   const existing = await db
     .prepare(
       "SELECT count, window_start AS windowStart FROM rate_limit_windows WHERE key = ?",

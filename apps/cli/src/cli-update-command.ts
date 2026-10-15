@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 
 import type { Command } from "commander";
-
+import { restartAutoSyncService } from "./auto-command";
 import { jsonEnvelope } from "./cli-contracts";
 import { cliUpdate, createCliUpdateDeps } from "./cli-update";
 
@@ -29,6 +29,7 @@ export function registerCliUpdateCommand(
         }),
         { check: options.check === true },
       );
+      if (result.status === "UPDATED") await restartAutoSyncService();
       if (program.opts<{ json?: boolean }>().json === true) {
         io.writeOutput(
           `${JSON.stringify(jsonEnvelope({ outcome: "SUCCESS", ...result }))}\n`,

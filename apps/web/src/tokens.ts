@@ -7,6 +7,9 @@ type BoundStatement = ReturnType<
 >;
 export type TokenDatabase = WorkspaceDatabase & {
   batch(statements: readonly BoundStatement[]): Promise<readonly RunResult[]>;
+  invalidateEvents?(
+    scope: { deviceId: string } | { userId: string },
+  ): Promise<void>;
 };
 
 type PairingRow = Readonly<{
@@ -170,7 +173,9 @@ export async function authenticateDeviceToken(
     .prepare(
       `SELECT device_tokens.id AS tokenId,
               device_tokens.device_id AS deviceId,
-              devices.user_id AS userId
+              devices.user_id AS userId,
+              device_tokens.last_used_at AS lastUsedAt,
+              devices.last_seen_at AS lastSeenAt
        FROM device_tokens
        JOIN devices ON devices.id = device_tokens.device_id
        WHERE device_tokens.token_hash = ?
@@ -178,22 +183,35 @@ export async function authenticateDeviceToken(
          AND devices.revoked_at IS NULL`,
     )
     .bind(await hash(token))
-    .first<{ tokenId: string; deviceId: string; userId: string }>();
+    .first<{
+      tokenId: string;
+      deviceId: string;
+      userId: string;
+      lastUsedAt?: number | null;
+      lastSeenAt?: number | null;
+    }>();
   if (!row) throw new DeviceUnauthorizedError();
 
-  await db.batch([
-    db
-      .prepare(
-        "UPDATE device_tokens SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL",
-      )
-      .bind(now, row.tokenId),
-    db
-      .prepare(
-        "UPDATE devices SET last_seen_at = ? WHERE id = ? AND revoked_at IS NULL",
-      )
-      .bind(now, row.deviceId),
-  ]);
-  return { deviceId: row.deviceId, userId: row.userId };
+  const cutoff = now - 30 * 60_000;
+  const statements = [];
+  if (row.lastUsedAt == null || row.lastUsedAt <= cutoff)
+    statements.push(
+      db
+        .prepare(
+          "UPDATE device_tokens SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL AND (last_used_at IS NULL OR last_used_at <= ?)",
+        )
+        .bind(now, row.tokenId, cutoff),
+    );
+  if (row.lastSeenAt == null || row.lastSeenAt <= cutoff)
+    statements.push(
+      db
+        .prepare(
+          "UPDATE devices SET last_seen_at = ? WHERE id = ? AND revoked_at IS NULL AND (last_seen_at IS NULL OR last_seen_at <= ?)",
+        )
+        .bind(now, row.deviceId, cutoff),
+    );
+  if (statements.length) await db.batch(statements);
+  return { deviceId: row.deviceId, userId: row.userId, tokenId: row.tokenId };
 }
 
 /** Invalidates the presented token and leaves remote device rows in place. */
@@ -213,6 +231,7 @@ export async function logoutDeviceToken(
     .run();
   if ((result as RunResult).meta?.changes !== 1)
     throw new DeviceUnauthorizedError();
+  await invalidateDeviceEvents(db, authenticated.deviceId);
   return authenticated;
 }
 
@@ -241,5 +260,16 @@ export async function revokeDevice(
       )
       .bind(now, deviceId),
   ]);
+  await invalidateDeviceEvents(db, deviceId);
   return { deviceId };
+}
+
+async function invalidateDeviceEvents(db: TokenDatabase, deviceId: string) {
+  try {
+    await db.invalidateEvents?.({ deviceId });
+  } catch {
+    console.error(
+      JSON.stringify({ code: "EVENT_INVALIDATION_FAILED", deviceId }),
+    );
+  }
 }

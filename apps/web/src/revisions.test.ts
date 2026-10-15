@@ -171,3 +171,67 @@ test("idempotency retries return the original revision without another write", a
   expect(retry).toEqual(first);
   expect(memory.snapshots).toHaveLength(1);
 });
+
+test("publishes only committed revisions, never replays or conflicts", async () => {
+  const memory: Memory = {
+    sequence: 0,
+    revisionId: null,
+    snapshots: [],
+    skills: [],
+    idempotency: new Map(),
+  };
+  const events: unknown[] = [];
+  const db = {
+    ...database(memory),
+    async revisionCommitted(event: unknown) {
+      expect(memory.sequence).toBe(1);
+      events.push(event);
+    },
+  };
+  const revision = await mutateDesiredState(db, mutation(null, "publish"));
+  await mutateDesiredState(db, mutation(null, "publish"));
+  await expect(
+    mutateDesiredState(db, mutation(null, "conflict")),
+  ).rejects.toBeInstanceOf(RevisionConflictError);
+  expect(events).toEqual([
+    { workspaceId: "ws_1", revisionId: revision.id, revisionSequence: 1 },
+  ]);
+});
+
+test("notification failure cannot undo or fail an accepted mutation", async () => {
+  const memory: Memory = {
+    sequence: 0,
+    revisionId: null,
+    snapshots: [],
+    skills: [],
+    idempotency: new Map(),
+  };
+  const db = {
+    ...database(memory),
+    async revisionCommitted() {
+      throw new Error("events unavailable");
+    },
+  };
+  const result = await mutateDesiredState(db, mutation(null, "unavailable"));
+  expect(result.sequence).toBe(1);
+  expect(memory.sequence).toBe(1);
+});
+
+test("an unresponsive event service cannot indefinitely hold a committed mutation", async () => {
+  const memory: Memory = {
+    sequence: 0,
+    revisionId: null,
+    snapshots: [],
+    skills: [],
+    idempotency: new Map(),
+  };
+  const db = {
+    ...database(memory),
+    revisionCommitted: () => new Promise<void>(() => {}),
+  };
+  const result = await Promise.race([
+    mutateDesiredState(db, mutation(null, "hung-events")),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+  ]);
+  expect(result?.sequence).toBe(1);
+});

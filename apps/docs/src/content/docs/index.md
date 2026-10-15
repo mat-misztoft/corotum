@@ -18,4 +18,4 @@ Cloud Sync is the current workstream. Git Sync / Free remains documented and ava
 | [Terms of Service](https://corotum.com/terms) / [Privacy Policy](https://corotum.com/privacy) | Hosted-service legal terms and privacy policy |
 | [Migration](/guides/migration/) | Git ↔ Cloud, ToolMirror upgrade, `corotum migrate legacy-cleanup` |
 
-v0.5 binaries are unsigned. Official installers are the only supported installation path. There is no daemon and no remote forced sync.
+Binaries are unsigned. Official installers are the only supported installation path. [Automatic Cloud sync](/cloud/automatic-sync/) is opt-in; Git Sync remains manual. There is no remote forced sync.

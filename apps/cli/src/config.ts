@@ -18,6 +18,10 @@ const configSchema = z
     origin: z.string().min(1).nullable().default(null),
     installationId: z.uuid().nullable(),
     agents: z.record(z.string(), z.object({ enabled: z.boolean() })),
+    autoSync: z
+      .object({ enabled: z.boolean() })
+      .strict()
+      .default({ enabled: false }),
   })
   .strict();
 
@@ -42,6 +46,7 @@ export const CONFIG_KEYS = [
   "origin",
   "installationId",
   "agents",
+  "autoSync",
 ] as const satisfies readonly ConfigKey[];
 export const SETTABLE_CONFIG_KEYS = [
   "telemetry",
@@ -60,6 +65,7 @@ export const defaultConfig = (): CorotumConfig => ({
   origin: null,
   installationId: null,
   agents: {},
+  autoSync: { enabled: false },
 });
 
 export function effectiveStoragePaths(

@@ -283,7 +283,7 @@ export class V2SyncService {
         ? operation.skill.id
         : operation.skillId;
     try {
-      if (operation.kind === "INSTALL") {
+      if (operation.kind === "INSTALL" || operation.kind === "REPAIR_TARGET") {
         await this.applier.apply({
           state: desired.state,
           revisionId: desired.revisionId,
@@ -522,12 +522,13 @@ async function collectTargets(
         const key = `${agentId}\0${path}`;
         if (seen.has(key)) continue;
         const hash = await scanHash(path);
-        if (hash === null) continue;
         seen.set(key, {
           agentId,
           path,
           contentHash: hash,
-          managed: false,
+          // An absent desired target is safe to create; existing unowned content
+          // remains a conflict and must never be adopted implicitly.
+          managed: hash === null,
         });
       }
     }

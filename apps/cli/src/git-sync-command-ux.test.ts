@@ -12,7 +12,8 @@ import { join } from "node:path";
 
 import { scanNormalizedContent } from "../../../packages/skills-adapter/src/normalized-content";
 import { ExitCode } from "./cli-contracts";
-import { defaultConfig } from "./config";
+import { ConfigStore, defaultConfig } from "./config";
+import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
 
 const roots: string[] = [];
@@ -201,6 +202,29 @@ async function initGit(home: string, remote: string): Promise<CliResult> {
 }
 
 describe("corotum config Git Sync UX", () => {
+  test("telemetry does not rewrite config while the mutation lock is held", async () => {
+    const home = await temp("telemetry-lock");
+    const config = new ConfigStore(paths(home));
+    await config.set("telemetry", true);
+    await config.set("installationId", null);
+    await config.set("origin", "https://changed.example");
+    const before = await readFile(paths(home).configFile, "utf8");
+    const release = await new MutationLock(
+      join(paths(home).stateDir, "process.lock"),
+    ).acquire();
+    try {
+      await run(home, ["--json", "--non-interactive", "config", "list"]);
+      expect(await readFile(paths(home).configFile, "utf8")).toBe(before);
+    } finally {
+      await release();
+    }
+    expect(
+      (await run(home, ["--json", "--non-interactive", "config", "list"])).code,
+    ).toBe(0);
+    expect((await config.load()).installationId).toBeString();
+    expect((await config.load()).origin).toBe("https://changed.example");
+  });
+
   test(
     "inspects Git Sync and Cloud keys without agents and never prompts",
     async () => {
@@ -262,6 +286,34 @@ describe("corotum config Git Sync UX", () => {
         key: "workspaceId",
         value: null,
       });
+
+      const beforeLockedSet = await readFile(paths(home).configFile, "utf8");
+      const release = await new MutationLock(
+        join(paths(home).stateDir, "process.lock"),
+      ).acquire();
+      try {
+        for (const [key, value] of [
+          ["telemetry", "false"],
+          ["origin", "https://changed.example"],
+        ] as const) {
+          const locked = await run(home, [
+            "--json",
+            "--non-interactive",
+            "config",
+            "set",
+            key,
+            value,
+          ]);
+          expect(locked.code).not.toBe(0);
+          expect(locked.json?.outcome).toBe("GENERAL_ERROR");
+          expect(locked.stdout).toContain("mutation is already running");
+          expect(await readFile(paths(home).configFile, "utf8")).toBe(
+            beforeLockedSet,
+          );
+        }
+      } finally {
+        await release();
+      }
 
       const set = await run(home, [
         "--json",

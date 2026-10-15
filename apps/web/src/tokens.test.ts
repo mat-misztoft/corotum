@@ -114,6 +114,38 @@ function apiRequest(
   return new Request(`https://corotum.com${path}`, init);
 }
 
+test("token/device activity writes occur at most once per 30 minutes and revoke invalidates subscribers", async () => {
+  const { sqlite, db } = await tokenDb();
+  const { pairing } = await approvedPairing(db, sqlite);
+  const issued = await issueDeviceToken(
+    db,
+    pairing.id,
+    pairing.deviceCode,
+    3_000,
+  );
+  await authenticateDeviceToken(db, issued.token, 4_000);
+  await authenticateDeviceToken(db, issued.token, 5_000);
+  expect(
+    sqlite.query("SELECT last_used_at AS time FROM device_tokens").get(),
+  ).toEqual({ time: 4_000 });
+  expect(
+    sqlite.query("SELECT last_seen_at AS time FROM devices").get(),
+  ).toEqual({ time: 4_000 });
+  await authenticateDeviceToken(db, issued.token, 1_804_001);
+  expect(
+    sqlite.query("SELECT last_used_at AS time FROM device_tokens").get(),
+  ).toEqual({ time: 1_804_001 });
+  const invalidations: unknown[] = [];
+  const notifying = {
+    ...db,
+    async invalidateEvents(scope: unknown) {
+      invalidations.push(scope);
+    },
+  };
+  await logoutDeviceToken(notifying, issued.token, 1_805_000);
+  expect(invalidations).toEqual([{ deviceId: issued.deviceId }]);
+});
+
 test("device token migration stores token_hash and never a plaintext token column", async () => {
   const sql = (
     await Promise.all(
@@ -188,11 +220,15 @@ test("a valid token authenticates only its device", async () => {
     3_000,
   );
 
-  expect(await authenticateDeviceToken(db, firstToken.token, 4_000)).toEqual({
+  expect(
+    await authenticateDeviceToken(db, firstToken.token, 4_000),
+  ).toMatchObject({
     deviceId: first.approved.deviceId,
     userId: "user_1",
   });
-  expect(await authenticateDeviceToken(db, secondToken.token, 4_000)).toEqual({
+  expect(
+    await authenticateDeviceToken(db, secondToken.token, 4_000),
+  ).toMatchObject({
     deviceId: secondApproved.deviceId,
     userId: "user_1",
   });
@@ -217,7 +253,7 @@ test("logout revokes the token immediately and keeps remote device data", async 
     3_000,
   );
 
-  expect(await logoutDeviceToken(db, issued.token, 4_000)).toEqual({
+  expect(await logoutDeviceToken(db, issued.token, 4_000)).toMatchObject({
     deviceId: approved.deviceId,
     userId: "user_1",
   });

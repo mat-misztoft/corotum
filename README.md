@@ -4,7 +4,7 @@ Keep your agent skills in sync.
 
 Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. Cloud Sync is the current workstream (hosted corotum.com or self-hosted Cloud). Git Sync / Free remains a fully documented Git-backed backend with no Corotum account. Neither mode is hidden or removed.
 
-v0.5 binaries are unsigned. Official installers are the only supported installation method. There is no daemon and no remote forced sync.
+Binaries are unsigned. Official installers are the only supported installation method. Cloud automatic sync is opt-in; Git Sync remains manual. There is no remote forced sync.
 
 ## Install
 
@@ -39,7 +39,17 @@ corotum login
 corotum init cloud
 ```
 
-Zero installed or enabled agents is valid. Global skills live in `~/.agents/skills` independently of agents. Optional `corotum agents` commands scan, enable, or disable local agent exposure later. In Cloud mode the same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. The dashboard and WebMCP can mutate that state too. After `corotum sync`, the device reports its applied revision; there is no daemon and no remote forced sync.
+Zero installed or enabled agents is valid. Global skills live in `~/.agents/skills` independently of agents. Optional `corotum agents` commands scan, enable, or disable local agent exposure later. In Cloud mode the same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. The dashboard and WebMCP can mutate that state too. After `corotum sync`, the device reports its applied revision.
+
+After Cloud initialization, optionally enable a per-user native background service:
+
+```bash
+corotum auto enable
+corotum --json auto status
+corotum auto disable
+```
+
+[Automatic Cloud sync](https://docs.corotum.com/cloud/automatic-sync/) uses the installed standalone binary on macOS arm64/x64, Linux arm64/x64, and Windows x64; no separate Bun or Node runtime is needed. It preserves normal sync conflict checks and reconnects after offline periods.
 
 ## Docs
 

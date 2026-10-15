@@ -4,6 +4,7 @@ import { version } from "../package.json";
 import { registerAddCommand } from "./add-command";
 import { registerAdoptCommand } from "./adopt-command";
 import { registerAgentsCommand } from "./agents-command";
+import { registerAutoCommands } from "./auto-command";
 import {
   type CliOutcome,
   ExitCode,
@@ -97,6 +98,7 @@ export function createCli(
   registerAgentsCommand(program, io);
   registerConfigCommand(program, io);
   registerCloudAuthCommands(program, io);
+  registerAutoCommands(program, io);
   registerResetCommand(program, io);
   registerMigrateCommand(program, io);
 

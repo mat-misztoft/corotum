@@ -26,8 +26,10 @@ import {
   type TokenDatabase,
 } from "./tokens";
 import { deviceTokenFrom } from "./tokens-http";
+import type { EventsService } from "./workspace-events";
 import {
   requireDeviceWorkspaceAccess,
+  requireWorkspaceAccess,
   WorkspaceAccessError,
 } from "./workspaces";
 
@@ -157,6 +159,79 @@ export async function handleGetWorkspaceState(
     );
   } catch (error) {
     return stateError(error);
+  }
+}
+
+export async function handleGetWorkspaceRevision(
+  request: Request,
+  db: TokenDatabase,
+  workspaceId: string,
+  hosted = false,
+) {
+  const authenticated = await authenticateStateRequest(
+    request,
+    db,
+    workspaceId,
+    "normal",
+    hosted,
+  );
+  if ("error" in authenticated) return authenticated.error;
+  const row = await db
+    .prepare(`SELECT wr.id AS revisionId, w.current_revision_sequence AS revisionSequence
+    FROM workspaces w LEFT JOIN workspace_revisions wr ON wr.workspace_id = w.id
+      AND wr.revision_sequence = w.current_revision_sequence
+    WHERE w.id = ? AND w.owner_user_id = ?`)
+    .bind(workspaceId, authenticated.device.userId)
+    .first<{ revisionId: string | null; revisionSequence: number }>();
+  if (!row) return jsonError("Workspace not found", 404);
+  return Response.json(row, { headers: { "cache-control": "no-store" } });
+}
+
+export async function handleWorkspaceEvents(
+  request: Request,
+  db: TokenDatabase,
+  workspaceId: string,
+  hosted = false,
+  events?: EventsService,
+) {
+  const authenticated = await authenticateStateRequest(
+    request,
+    db,
+    workspaceId,
+    "normal",
+    hosted,
+  );
+  if ("error" in authenticated) return authenticated.error;
+  try {
+    await requireWorkspaceAccess(db, authenticated.device.userId, workspaceId);
+  } catch (error) {
+    return stateError(error);
+  }
+  if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
+    return jsonError("WebSocket upgrade required", 426);
+  if (!events) return jsonError("Workspace events unavailable", 503);
+  try {
+    const response = await events.fetch(
+      new Request("https://events.internal/subscribe", {
+        headers: {
+          upgrade: "websocket",
+          "x-corotum-workspace-id": workspaceId,
+          "x-corotum-device-id": authenticated.device.deviceId,
+          "x-corotum-token-id": authenticated.device.tokenId,
+          "x-corotum-expires-at": String(Date.now() + 60 * 60_000),
+        },
+      }),
+    );
+    if (response.status !== 101) return response;
+    // Service fetch returns immutable headers. vinext adds response headers, so
+    // retain the socket while constructing a mutable response in this worker.
+    return new Response(null, {
+      status: 101,
+      headers: new Headers(response.headers),
+      webSocket: response.webSocket,
+    });
+  } catch {
+    return jsonError("Workspace events unavailable", 503);
   }
 }
 

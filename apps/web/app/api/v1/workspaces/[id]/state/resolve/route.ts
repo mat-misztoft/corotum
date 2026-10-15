@@ -3,6 +3,7 @@ import type { AuthEnvironment } from "../../../../../../../src/auth";
 import { isHostedCloud } from "../../../../../../../src/billing";
 import { handlePostPendingResolution } from "../../../../../../../src/state-http";
 import type { TokenDatabase } from "../../../../../../../src/tokens";
+import { eventDatabase } from "../../../../../../../src/workspace-events";
 
 const workerEnv = env as unknown as AuthEnvironment;
 
@@ -13,7 +14,7 @@ export async function POST(
   const { id } = await context.params;
   return handlePostPendingResolution(
     request,
-    workerEnv.DB as unknown as TokenDatabase,
+    eventDatabase(workerEnv) as unknown as TokenDatabase,
     id,
     isHostedCloud(workerEnv),
   );

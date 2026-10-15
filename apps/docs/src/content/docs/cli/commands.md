@@ -154,6 +154,19 @@ Reconcile local skills to the exact locked state (Git or Cloud). Cloud then repo
 
 Git failures (auth, missing Git, bad repository, unreachable remote) are classified on every command. Interactive Git never waits on a credential prompt (`GIT_TERMINAL_PROMPT=0`). After auth failure on a pending push, sign in with system Git (`gh auth login` or a credential helper) and retry `corotum init` (resume) or `corotum sync` if already initialized.
 
+## auto
+
+```bash
+corotum auto --help
+corotum auto enable
+corotum auto disable
+corotum auto status
+corotum --json auto status
+corotum auto run --help
+```
+
+Manage opt-in per-user [automatic Cloud sync](/cloud/automatic-sync/). `enable` requires Cloud mode and a paired device, installs the native login service, and starts it. `disable` stops and removes it. `status` reports native and saved operational state; use `--json` for detailed metadata. `auto run` is the long-running internal service entry point. Git Sync remains manual. Each subcommand supports `--help`.
+
 ## agents
 
 ```bash
@@ -291,7 +304,7 @@ Missing login is a typed `corotum login` error. Hosted corotum.com Cloud mutatio
 
 `add`, `update`, and `set-ref` resolve Git on this device. The dashboard and WebMCP can also mutate Cloud desired state. Skills they add or retarget may stay `PENDING_RESOLUTION` until a device with repository access runs `corotum sync` and locks exact content. Sync never installs upstream `HEAD`.
 
-`status`, `diff`, and `sync` pull exact lockfile state. After a verified local sync, the device reports the applied revision. The dashboard does not show `SYNCED` until that report exists. Partial skill or target failure is `PARTIALLY_SYNCED` (or a per-target error), not a silent full success. There is no daemon and no remote forced sync.
+`status`, `diff`, and `sync` pull exact lockfile state. After a verified local sync, the device reports the applied revision. The dashboard does not show `SYNCED` until that report exists. Partial skill or target failure is `PARTIALLY_SYNCED` (or a per-target error), not a silent full success. [Automatic Cloud sync](/cloud/automatic-sync/) is opt-in; there is no remote forced sync.
 
 ## Optional agents
 

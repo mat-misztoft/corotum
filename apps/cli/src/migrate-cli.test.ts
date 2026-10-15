@@ -786,6 +786,10 @@ describe("real corotum migrate CLI", () => {
         expect(cloud.artifacts.size).toBe(1);
 
         const backRemote = await stateRemote(join(root, "back"));
+        await writeJson(paths(home).configFile, {
+          ...(await readConfig(home)),
+          autoSync: { enabled: true },
+        });
         const toGit = await spawnCli(
           home,
           [
@@ -810,6 +814,7 @@ describe("real corotum migrate CLI", () => {
         });
         const config = await readConfig(home);
         expect(config.mode).toBe("git");
+        expect(config.autoSync).toEqual({ enabled: false });
         expect(config.gitRepository).toBe(backRemote);
         expect(
           await readFile(

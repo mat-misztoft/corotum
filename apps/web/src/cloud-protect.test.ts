@@ -289,8 +289,16 @@ test("normal authenticated Cloud API traffic is throttled independently", async 
 });
 
 test("Git Sync CLI sources stay independent of Cloud compatibility checks", () => {
-  const files = readdirSync(cliSrc).filter((file) => file.endsWith(".ts"));
-  expect(files.some((file) => file.includes("sync"))).toBe(true);
+  // Shared sync entry points and the CLI's Git provider construction path,
+  // not Cloud-only commands or tests that legitimately assert Cloud headers.
+  const files = [
+    "cli.ts",
+    "sync-command.ts",
+    "sync.ts",
+    "v2-sync.ts",
+    "artifact-consent.ts",
+    "v2-mutation-session.ts",
+  ];
   for (const file of files) {
     const source = readFileSync(join(cliSrc, file), "utf8");
     expect(source).not.toContain("protectCloudRequest");

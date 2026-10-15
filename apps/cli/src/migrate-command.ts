@@ -7,6 +7,7 @@ import {
   V2SaaSProvider,
 } from "../../../packages/saas-provider/src/index";
 import { createCliV2GitStateProvider } from "./artifact-consent";
+import { disableAutoSync } from "./auto-command";
 import { CLI_VERSION, type CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import { CloudAuthError } from "./cloud-auth";
@@ -194,6 +195,12 @@ export function registerMigrateCommand(program: Command, io: CliIo): void {
             }
           } finally {
             await release();
+          }
+          if (
+            destination === "git" &&
+            (await new ConfigStore(paths).load()).autoSync.enabled
+          ) {
+            await disableAutoSync();
           }
         });
       },

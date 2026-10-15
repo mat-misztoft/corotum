@@ -74,7 +74,7 @@ Repository secrets for `bun run release:upload`:
 
 The workflow sets `RELEASE_REQUIRE_UPLOAD=1`. `.github/workflows/cli-compile.yml` has no secrets.
 
-`bun run release:deploy` is a separate Worker deploy: `CLOUDFLARE_API_TOKEN` is required, `CLOUDFLARE_ACCOUNT_ID` is optional. That script is not wired into `release.yml`.
+`bun run release:deploy` is a separate Worker deployment: it deploys `apps/events` first, then `apps/web`. `CLOUDFLARE_API_TOKEN` is required, `CLOUDFLARE_ACCOUNT_ID` is optional. That script is not wired into `release.yml`. The main app's `EVENTS` service binding targets `corotum-events`; the private events Worker needs no public hostname. See [self-hosting deployment](/cloud/self-hosting/#deploy) for the binding and deployment commands.
 
 ## Email magic-link authentication
 
@@ -102,7 +102,7 @@ AUTH_EMAIL_FROM=auth@corotum.com
 
 ## Cloud Sync behavior
 
-After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/skills` using the same provenance rules as Git init. Zero agents is valid. The same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. Dashboard and WebMCP can mutate that state too. Devices apply exact locked revisions with `corotum sync`, then report the applied revision. The dashboard does not show `SYNCED` until that report exists. Source-backed skills are fetched with system Git on that device. Artifact-backed skills download from authenticated R2. Retention keeps the current artifact plus one previous artifact per skill. Sync never uses upstream `HEAD`. There is no daemon and no remote forced sync. Details: [skills.md](/concepts/skills/).
+After entitlement, `corotum init cloud` adopts selected skills from `~/.agents/skills` using the same provenance rules as Git init. Zero agents is valid. The same skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) mutate Cloud desired state. Dashboard and WebMCP can mutate that state too. Devices apply exact locked revisions with `corotum sync`, then report the applied revision. The dashboard does not show `SYNCED` until that report exists. Source-backed skills are fetched with system Git on that device. Artifact-backed skills download from authenticated R2. Retention keeps the current artifact plus one previous artifact per skill. Sync never uses upstream `HEAD`. [Automatic Cloud sync](/cloud/automatic-sync/) is opt-in; there is no remote forced sync. Details: [skills.md](/concepts/skills/).
 
 ## CLI against hosted Cloud
 

@@ -5,10 +5,15 @@ import { drizzle } from "drizzle-orm/d1";
 import { persistAccountDisplayLabel } from "./account-label";
 import * as schema from "./db/schema";
 import type { EmailEnvironment, EmailService } from "./email";
+import type { EventsService, RequestRateLimiter } from "./workspace-events";
 import { ensureDefaultWorkspace, type WorkspaceDatabase } from "./workspaces";
 
 export type AuthEnvironment = EmailEnvironment & {
   DB: D1Database;
+  EVENTS?: EventsService;
+  CLOUD_READ_LIMITER?: RequestRateLimiter;
+  CLOUD_WRITE_LIMITER?: RequestRateLimiter;
+  CLOUD_AUTH_LIMITER?: RequestRateLimiter;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
   GITHUB_CLIENT_ID?: string;

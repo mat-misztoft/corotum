@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 import type { Command } from "commander";
 import type { CliIo } from "./cli";
@@ -10,6 +11,7 @@ import {
   ConfigStore,
   SETTABLE_CONFIG_KEYS,
 } from "./config";
+import { MutationLock } from "./mutation-lock";
 import { resolvePlatformPaths } from "./platform";
 
 export class ConfigError extends Error {
@@ -52,7 +54,7 @@ export function registerConfigCommand(program: Command, io: CliIo): void {
           throw new ConfigError("config set telemetry requires true or false.");
         }
         const next = value === "true";
-        await store().set("telemetry", next);
+        await setConfig("telemetry", next);
         write(
           io,
           program,
@@ -69,7 +71,7 @@ export function registerConfigCommand(program: Command, io: CliIo): void {
           error instanceof Error ? error.message : "Cloud origin is invalid.",
         );
       }
-      await store().set("origin", origin);
+      await setConfig("origin", origin);
       write(
         io,
         program,
@@ -90,13 +92,27 @@ async function listConfig(program: Command, io: CliIo): Promise<void> {
 }
 
 function store(): ConfigStore {
-  return new ConfigStore(
-    resolvePlatformPaths({
-      homeDir: homedir(),
-      platform: process.platform as "darwin" | "linux" | "win32",
-      env: process.env,
-    }),
-  );
+  return new ConfigStore(configPaths());
+}
+
+function configPaths() {
+  return resolvePlatformPaths({
+    homeDir: homedir(),
+    platform: process.platform as "darwin" | "linux" | "win32",
+    env: process.env,
+  });
+}
+
+async function setConfig(key: ConfigKey, value: unknown): Promise<void> {
+  const paths = configPaths();
+  const release = await new MutationLock(
+    join(paths.stateDir, "process.lock"),
+  ).acquire();
+  try {
+    await new ConfigStore(paths).set(key, value);
+  } finally {
+    await release();
+  }
 }
 
 function assertKnownKey(key: string): ConfigKey {

@@ -6,7 +6,11 @@ export const HOSTED_ANNUAL_PRICE_CENTS = 5990;
 export const LAUNCH_FREE_PERIOD_END = "2026-10-22T00:00:00.000Z";
 
 export type BillingInterval = "month" | "year";
-export type BillingDatabase = WorkspaceDatabase;
+export type BillingDatabase = WorkspaceDatabase & {
+  invalidateEvents?(
+    scope: { deviceId: string } | { userId: string },
+  ): Promise<void>;
+};
 
 export type BillingEnvironment = {
   COROTUM_HOSTED?: string;
@@ -472,6 +476,15 @@ async function applySubscriptionEvent(
       now,
     )
     .run();
+  if (action === "revoke") {
+    try {
+      await db.invalidateEvents?.({ userId });
+    } catch {
+      console.error(
+        JSON.stringify({ code: "EVENT_INVALIDATION_FAILED", userId }),
+      );
+    }
+  }
 }
 
 function grantedStatus(object: Record<string, unknown>, eventType: string) {

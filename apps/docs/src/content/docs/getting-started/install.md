@@ -6,7 +6,7 @@ Official installers are the only supported installation method. Release artifact
 
 GitHub Actions rebuilds every release target from the tagged source, writes checksums and `releases/latest.json`, and publishes only after tests, installer smoke, and workerd endpoint checks pass. Pipeline-proof binaries from earlier CI are not reused. Upload uses repository secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET`. Worker auth and billing vars are not set in GitHub Actions. See [hosted.md](/cloud/hosted/).
 
-There is no daemon. Corotum does not install a background service and does not remotely force devices to sync.
+Installation does not enable a background service. After Cloud initialization, opt in with `corotum auto enable`; see [automatic Cloud sync](/cloud/automatic-sync/). Git Sync remains manual; devices cannot be remotely forced to sync.
 
 ## macOS and Linux
 

@@ -358,14 +358,24 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
       metadata: { userId: "user_1" },
     },
   });
+  const invalidated: unknown[] = [];
   await processCreemWebhook(
-    db,
+    {
+      ...db,
+      async invalidateEvents(scope) {
+        expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(
+          false,
+        );
+        invalidated.push(scope);
+      },
+    },
     hostedEnv,
     canceled,
     await sign(canceled, webhookSecret),
     4_000,
   );
   expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
+  expect(invalidated).toEqual([{ userId: "user_1" }]);
 });
 
 test("subscription.active without metadata is acknowledged but does not grant access", async () => {

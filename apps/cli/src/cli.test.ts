@@ -95,7 +95,37 @@ describe("CLI automation contracts", () => {
     const root = fixtureIo();
     expect(await runCli(["--help"], root.io)).toBe(ExitCode.SUCCESS);
     expect(root.output.join("").trimEnd()).toMatchInlineSnapshot(`
-"Usage: corotum [options] [command]\n\nKeep your agent skills in sync.\n\nOptions:\n  -V, --version                                 output the version number\n  --json                                        emit machine-readable JSON (default: false)\n  --non-interactive                             never prompt for input (default: false)\n  --allow-artifacts                             allow committing exact local artifact content to Git (default: false)\n  -h, --help                                    display help for command\n\nCommands:\n  init [options] [provider] [repository]        initialize Git Sync or Corotum Cloud and safely adopt selected local skills\n  add [options] <source>                        resolve and add one skill from a Git source\n  adopt [options] <name>                        adopt one local skill from a matching Git source\n  remove <skill>                                remove a managed skill from every reconciled device\n  unmanage <skill>                              stop managing a skill while preserving local copies\n  restore <skill>                               restore managed skill content from its exact locked revision\n  update [options] [skill]                      check upstream skill revisions or update exact locks\n  cli-update [options]                          update the Corotum CLI from official release metadata\n  set-ref <skill> <ref>                         change a managed skill ref and lock its exact content\n  status                                        show local skill reconciliation status\n  diff                                          show the exact-lock reconciliation plan\n  sync                                          reconcile local skills to the exact locked state\n  agents                                        list, scan, enable, or disable optional local agents\n  config                                        manage local configuration\n  login [options]                               pair this device with Corotum Cloud in a browser\n  logout [options]                              revoke this device token and remove local Cloud credentials\n  reset [options]                               delete Cloud desired-state skills and unlink this device\n  migrate [options] <destination> [repository]  move desired state between Corotum Git Sync and Cloud, or migrate legacy ToolMirror state"
+"Usage: corotum [options] [command]
+
+Keep your agent skills in sync.
+
+Options:
+  -V, --version                                 output the version number
+  --json                                        emit machine-readable JSON (default: false)
+  --non-interactive                             never prompt for input (default: false)
+  --allow-artifacts                             allow committing exact local artifact content to Git (default: false)
+  -h, --help                                    display help for command
+
+Commands:
+  init [options] [provider] [repository]        initialize Git Sync or Corotum Cloud and safely adopt selected local skills
+  add [options] <source>                        resolve and add one skill from a Git source
+  adopt [options] <name>                        adopt one local skill from a matching Git source
+  remove <skill>                                remove a managed skill from every reconciled device
+  unmanage <skill>                              stop managing a skill while preserving local copies
+  restore <skill>                               restore managed skill content from its exact locked revision
+  update [options] [skill]                      check upstream skill revisions or update exact locks
+  cli-update [options]                          update the Corotum CLI from official release metadata
+  set-ref <skill> <ref>                         change a managed skill ref and lock its exact content
+  status                                        show local skill reconciliation status
+  diff                                          show the exact-lock reconciliation plan
+  sync                                          reconcile local skills to the exact locked state
+  agents                                        list, scan, enable, or disable optional local agents
+  config                                        manage local configuration
+  login [options]                               pair this device with Corotum Cloud in a browser
+  logout [options]                              revoke this device token and remove local Cloud credentials
+  auto                                          manage per-user automatic Cloud synchronization
+  reset [options]                               delete Cloud desired-state skills and unlink this device
+  migrate [options] <destination> [repository]  move desired state between Corotum Git Sync and Cloud, or migrate legacy ToolMirror state"
 `);
 
     const init = fixtureIo();

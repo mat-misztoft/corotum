@@ -51,6 +51,7 @@ export default defineConfig({
           label: "Cloud",
           items: [
             { label: "Hosted Corotum Cloud", slug: "cloud/hosted" },
+            { label: "Automatic sync", slug: "cloud/automatic-sync" },
             { label: "Self-hosting", slug: "cloud/self-hosting" },
           ],
         },

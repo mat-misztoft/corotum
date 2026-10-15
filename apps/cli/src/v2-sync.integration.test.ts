@@ -184,6 +184,33 @@ async function homeRuntime(
 }
 
 describe("v2 CLI sync/reconcile integration", () => {
+  test("startup reconciliation repairs absent enabled targets even without ownership records", async () => {
+    const root = await temp("unrecorded-target");
+    const source = await skillSource(root);
+    const port = memoryCloud({
+      revisionId: "rev_target",
+      state: desiredFor(source),
+      ledger: emptyLedger,
+    });
+    const { homeDir, service, stateStore } = await homeRuntime(root, port);
+    const target = join(homeDir, ".pi", "agent", "skills", "demo");
+    await mkdir(join(homeDir, ".pi", "agent", "skills"), { recursive: true });
+    expect((await service.sync()).kind).toBe("synced");
+    await rm(target);
+    const state = await stateStore.load();
+    if (!state?.skills.sk_demo)
+      throw new Error("Expected installed skill ownership");
+    await stateStore.save({
+      ...state,
+      skills: {
+        ...state.skills,
+        sk_demo: { ...state.skills.sk_demo, targets: {} },
+      },
+    });
+    expect((await service.sync()).kind).toBe("synced");
+    expect((await lstat(target)).isSymbolicLink()).toBe(true);
+  });
+
   test("git sync materializes the exact lock, verifies symlink targets, and advances revision", async () => {
     const root = await temp("git-install");
     const source = await skillSource(root);

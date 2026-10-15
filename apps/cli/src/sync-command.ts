@@ -151,7 +151,7 @@ async function syncCommand(program: Command, io: CliIo): Promise<void> {
   });
 }
 
-async function createRuntime(
+export async function createRuntime(
   program: Command,
   io: CliIo,
   forSync: boolean,

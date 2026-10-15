@@ -4,11 +4,11 @@ title: Self-hosted Corotum Cloud
 
 Self-hosted Corotum Cloud is free under AGPLv3. Hosted Corotum billing is not required for self-hosted Cloud. Creem is not required. Do not configure Creem. Auth and OAuth are configured independently from hosted billing.
 
-There is no daemon and no remote forced sync. Devices pair in a browser and apply or report state only when the CLI runs on that device.
+Devices pair in a browser and apply or report state through the CLI on that device. [Automatic Cloud sync](/cloud/automatic-sync/) is an opt-in native per-user service. There is no remote forced sync.
 
 ## What you deploy
 
-The `apps/web` Cloudflare Worker (vinext / Next.js on workerd) plus one D1 database. The same process serves the landing page, dashboard, WebMCP, and `/api/v1/` Cloud API.
+Deploy the `apps/events` Cloudflare Worker with its SQLite-backed workspace Durable Object, then the `apps/web` Worker (vinext / Next.js on workerd), D1, and R2. The main app serves the landing page, dashboard, WebMCP, and Cloud API, including `/api/v2/workspaces/:workspaceId/revision` and `/api/v2/workspaces/:workspaceId/events`. Devices connect only to the main app origin; the app authenticates and proxies event subscriptions through a private service binding. No public events hostname, route, or separate client origin is needed.
 
 Leave `COROTUM_HOSTED` unset or set it to `false`. Only `true` or `1` turns on hosted corotum.com billing. Self-hosted Cloud paths do not check Creem entitlement.
 
@@ -35,7 +35,7 @@ From `apps/web`:
 npx wrangler d1 create corotum
 ```
 
-Put the returned `database_id` in `apps/web/wrangler.jsonc` under `d1_databases` for binding `DB`, database name `corotum`, `migrations_dir` `migrations`. The repository ships with `database_id` `local-toolmirror-d1` for local use; production must use the created id.
+Put the returned `database_id` in `apps/web/wrangler.jsonc` under `d1_databases` for binding `DB`, database name `corotum`, `migrations_dir` `migrations`. Use your own database id rather than the repository's configured deployment id.
 
 Apply migrations:
 
@@ -54,14 +54,18 @@ bun run db:migrate
 | Binding | Name | Purpose |
 | --- | --- | --- |
 | `DB` | D1 `corotum` | Auth, workspaces, revisions, devices, reports, artifact metadata |
-| `ARTIFACTS` | R2 `corotum-artifacts` | Artifact-backed skill archives only |
+| `ARTIFACTS` | R2 `corotum` | Artifact-backed skill archives only; change to your own bucket |
 | `ASSETS` | `dist/client` | Built web assets |
 | `COROTUM_TELEMETRY` | Analytics Engine dataset `corotum_telemetry` | Optional anonymous CLI telemetry ingest |
+| `EVENTS` | Worker service `corotum-events` | Private revision hints via workspace Durable Objects |
+| `CLOUD_READ_LIMITER` | Rate limiter namespace `2101` | 120 reads per 60 seconds per application key |
+| `CLOUD_WRITE_LIMITER` | Rate limiter namespace `2102` | 30 mutations per 60 seconds per application key |
+| `CLOUD_AUTH_LIMITER` | Rate limiter namespace `2103` | 10 pairing/auth requests per 60 seconds per application key |
 
 Create the R2 bucket before `wrangler deploy` (or change `bucket_name` to a bucket you own):
 
 ```bash
-npx wrangler r2 bucket create corotum-artifacts
+npx wrangler r2 bucket create corotum
 ```
 
 D1 stores no archive bytes. Retention keeps the current artifact plus one previous artifact per skill; GC deletes an object only when it is absent from both references. See [skills.md](/concepts/skills/).
@@ -167,14 +171,35 @@ bun run web:dev
 
 Local values go in `apps/web/.dev.vars` (email sender is documented below). `COROTUM_ENVIRONMENT=development` (the default when unset in local Worker dev) does not require `BETTER_AUTH_URL` or both OAuth providers. Production does.
 
+For automatic-sync development, also run the events service in another terminal:
+
+```bash
+bunx wrangler dev --config apps/events/wrangler.jsonc
+```
+
+The web development Worker resolves its `EVENTS` service binding through Wrangler's local service registry. Loopback HTTP/WebSocket origins are allowed by the CLI; non-loopback automatic sync requires HTTPS. The focused `bun run --cwd apps/events test` verifies real workerd sockets and hibernation. `bun run --cwd apps/events test:clients` builds the production web app and proves convergence using two standalone CLI processes, isolated homes, local D1, and the real events Worker.
+
 ## Deploy
 
-From the repository root:
+Deploy the events Worker **first**. From the repository root:
 
 ```bash
 bun install
+bun run --cwd apps/events deploy
 bun run web:build
 ```
+
+`apps/events/wrangler.jsonc` names the Worker `corotum-events`, binds `WORKSPACES` to `WorkspaceEvents`, and declares the initial SQLite Durable Object migration. Keep that migration when deploying for the first time. The Worker disables `workers.dev` and preview URLs and needs no public route or hostname.
+
+The main app must have this service binding in `apps/web/wrangler.jsonc` (use your deployed events Worker name if renamed):
+
+```jsonc
+"services": [
+  { "binding": "EVENTS", "service": "corotum-events" }
+]
+```
+
+This is a Worker service binding, not an environment URL or secret. Keep the configured Cloud API rate-limiter bindings as well. The public app authenticates `/api/v2/workspaces/:workspaceId/events` upgrades and `/api/v2/workspaces/:workspaceId/revision` reads before consulting the private events service. Do not expose the events Worker directly or put device tokens in URLs.
 
 From `apps/web`:
 
@@ -206,7 +231,7 @@ corotum init cloud --origin https://cloud.example.com
 `init cloud` opens the pairing browser flow when the device is not already logged in. Hosted entitlement is not required.
 
 4. Open `/dashboard` for skills, devices, target reports, and settings. The dashboard is a full product surface. Self-hosted billing UI states that Cloud functionality is free and has no billing portal.
-5. Mutate Cloud desired state with the same CLI skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) or with [WebMCP](/webmcp/dashboard-and-webmcp/) / the same-origin dashboard mutation API. Then run `corotum sync` on each device; the device reports the applied revision. There is no daemon and no remote forced sync. Zero agents is valid.
+5. Mutate Cloud desired state with the same CLI skill commands as Git Sync (`add`, `adopt`, `remove`, `unmanage`, `restore`, `update`, `set-ref`) or with [WebMCP](/webmcp/dashboard-and-webmcp/) / the same-origin dashboard mutation API. Then run `corotum sync` on each device, or opt in with `corotum auto enable`; the device reports the applied revision. There is no remote forced sync. Zero agents is valid.
 6. Revoke a device from `/dashboard/devices`. Revoke invalidates only that device token and keeps remote machine data.
 7. `corotum logout --origin https://cloud.example.com` revokes the local token.
 
@@ -228,7 +253,7 @@ See [migration.md](/guides/migration/). Identity (skill id, source, ref, lock re
 ## Limitations
 
 - v0.5 binaries are unsigned. Official installers are the supported install path.
-- No daemon, watch mode, scheduled updates, or remote forced sync.
+- Automatic sync is Cloud-only and opt-in; no remote forced sync or automatic upstream skill updates.
 - No project-level skills, teams/RBAC, or Windows arm64.
 - Production auth requires both GitHub and Google OAuth.
 - Self-hosted Cloud does not offer a Creem checkout or billing portal.

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  index,
   integer,
   sqliteTable,
   text,
@@ -238,6 +239,9 @@ export const deviceWorkspaces = sqliteTable(
     lastErrorMessage: text("last_error_message"),
   },
   (table) => [
+    index("device_workspaces_active_workspace_idx")
+      .on(table.workspaceId, table.deviceId)
+      .where(sql`${table.isActive} = 1`),
     uniqueIndex("device_workspaces_device_workspace_unique").on(
       table.deviceId,
       table.workspaceId,
@@ -364,16 +368,24 @@ export const cliPairings = sqliteTable(
   ],
 );
 
-export const deviceTokens = sqliteTable("device_tokens", {
-  id: text().primaryKey(),
-  deviceId: text("device_id")
-    .notNull()
-    .references(() => devices.id, { onDelete: "cascade" }),
-  tokenHash: text("token_hash").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
-  revokedAt: integer("revoked_at", { mode: "timestamp" }),
-});
+export const deviceTokens = sqliteTable(
+  "device_tokens",
+  {
+    id: text().primaryKey(),
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => devices.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("device_tokens_active_device_idx")
+      .on(table.deviceId, table.id)
+      .where(sql`${table.revokedAt} IS NULL`),
+  ],
+);
 
 export const subscriptions = sqliteTable(
   "subscriptions",

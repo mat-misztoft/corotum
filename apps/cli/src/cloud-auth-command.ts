@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Command } from "commander";
+import { disableAutoSync } from "./auto-command";
 import { CLI_VERSION, type CliIo } from "./cli";
 import { jsonEnvelope } from "./cli-contracts";
 import {
@@ -55,6 +56,7 @@ export function registerCloudAuthCommands(program: Command, io: CliIo): void {
         io,
         options.origin,
       );
+      await disableAutoSync();
       const release = await new MutationLock(
         join(paths.stateDir, "process.lock"),
       ).acquire();

@@ -40,6 +40,18 @@ const env: Record<string, string> = {
 };
 if (accountId) env.CLOUDFLARE_ACCOUNT_ID = accountId;
 
+const events = Bun.spawn(["bunx", ...args], {
+  cwd: fileURLToPath(new URL("../apps/events", import.meta.url)),
+  stdout: "inherit",
+  stderr: "inherit",
+  env,
+});
+const eventsCode = await events.exited;
+if (eventsCode !== 0) {
+  console.error("Events deploy failed; web deployment must not continue.");
+  process.exit(eventsCode);
+}
+
 const proc = Bun.spawn(["bunx", ...args], {
   cwd: fileURLToPath(new URL("../apps/web", import.meta.url)),
   stdout: "inherit",

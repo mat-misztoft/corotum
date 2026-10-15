@@ -61,6 +61,11 @@ type BoundStatement = ReturnType<
 >;
 type RevisionDatabase = WorkspaceDatabase & {
   batch(statements: readonly BoundStatement[]): Promise<readonly RunResult[]>;
+  revisionCommitted?(event: {
+    workspaceId: string;
+    revisionId: string;
+    revisionSequence: number;
+  }): Promise<void>;
 };
 const emptyLedger: DispositionLedger = { version: 2, activeDispositions: {} };
 function revisionId() {
@@ -312,6 +317,34 @@ export async function mutateDesiredState(
       .first<{ responseJson: string }>();
     if (existing) return JSON.parse(existing.responseJson) as CloudRevision;
     throw error;
+  }
+  // Notifications are hints: a failed delivery must not turn a committed write into an error.
+  let notificationTimeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    if (db.revisionCommitted)
+      await Promise.race([
+        db.revisionCommitted({
+          workspaceId: input.workspaceId,
+          revisionId: revision.id,
+          revisionSequence: revision.sequence,
+        }),
+        new Promise<never>((_, reject) => {
+          notificationTimeout = setTimeout(
+            () => reject(new Error("Notification deadline exceeded")),
+            2000,
+          );
+        }),
+      ]);
+  } catch {
+    console.error(
+      JSON.stringify({
+        code: "REVISION_NOTIFICATION_FAILED",
+        workspaceId: input.workspaceId,
+        revisionId: revision.id,
+      }),
+    );
+  } finally {
+    clearTimeout(notificationTimeout);
   }
   return revision;
 }

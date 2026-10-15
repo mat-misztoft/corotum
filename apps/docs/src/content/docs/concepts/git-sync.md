@@ -86,7 +86,7 @@ corotum sync
 
 Zero enabled agents is valid: Git Sync still manages the global named store. Enable an agent later with `corotum agents enable` to expose already managed skills on that device.
 
-There is no daemon, watch mode, scheduled update, or remote forced sync. A device reconciles only when you run `corotum sync` on that device.
+Git Sync has no daemon, watch mode, scheduled update, or remote forced sync. A device reconciles Git state only when you run `corotum sync` on that device. The opt-in [automatic sync service](/cloud/automatic-sync/) is Cloud-only.
 
 ## PENDING_PUSH
 

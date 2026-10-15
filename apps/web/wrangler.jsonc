@@ -11,6 +11,24 @@
     "AUTH_EMAIL_FROM": "auth@corotum.com"
   },
   "main": "vinext/server/fetch-handler",
+  "services": [{ "binding": "EVENTS", "service": "corotum-events" }],
+  "ratelimits": [
+    {
+      "name": "CLOUD_READ_LIMITER",
+      "namespace_id": "2101",
+      "simple": { "limit": 120, "period": 60 }
+    },
+    {
+      "name": "CLOUD_WRITE_LIMITER",
+      "namespace_id": "2102",
+      "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      "name": "CLOUD_AUTH_LIMITER",
+      "namespace_id": "2103",
+      "simple": { "limit": 10, "period": 60 }
+    }
+  ],
   "assets": {
     "directory": "dist/client",
     "binding": "ASSETS",
