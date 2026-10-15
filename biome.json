@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
   "files": {
-    "includes": ["**", "!bun.lock", "!**/.astro", "!**/.next", "!**/dist"]
+    "includes": [
+      "**",
+      "!bun.lock",
+      "!**/.astro",
+      "!**/.next",
+      "!**/dist",
+      "!**/.wrangler"
+    ]
   },
   "formatter": {
     "indentStyle": "space"

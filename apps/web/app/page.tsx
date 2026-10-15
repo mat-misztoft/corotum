@@ -64,11 +64,12 @@ export default function Home() {
             on the same exact version.
           </p>
           {isLaunchFreePeriod() && (
-            <aside className="launch-promotion" aria-label="Free Launch Extended">
+            <aside
+              className="launch-promotion"
+              aria-label="Free Launch Extended"
+            >
               <strong>FREE LAUNCH EXTENDED</strong>
-              <span>
-                Cloud free until October 21, 2026 · No card required
-              </span>
+              <span>Cloud free until October 21, 2026 · No card required</span>
               <small>$5.99/month or $59.90/year from October 22</small>
             </aside>
           )}
