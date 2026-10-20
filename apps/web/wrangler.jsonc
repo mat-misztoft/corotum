@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "corotum-web",
+  "name": "corotum-production",
   "compatibility_date": "2026-03-26",
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,

@@ -54,6 +54,27 @@ function layoutFiles(
 }
 
 describe("final release layout", () => {
+  test("production deployment targets the existing web Worker and deploys events first", () => {
+    const config = JSON.parse(
+      readFileSync(join(root, "apps/web/wrangler.jsonc"), "utf8"),
+    );
+    expect(config.name).toBe("corotum-production");
+    expect(config.services).toContainEqual({
+      binding: "EVENTS",
+      service: "corotum-events",
+    });
+    const deploy = readFileSync(
+      join(root, "tooling/release-deploy.ts"),
+      "utf8",
+    );
+    expect(deploy.indexOf('new URL("../apps/events"')).toBeLessThan(
+      deploy.indexOf('new URL("../apps/web"'),
+    );
+    expect(deploy).toContain("delete eventsEnv.WRANGLER_CI_OVERRIDE_NAME");
+    expect(
+      readFileSync(join(root, "tooling/release-email-config.ts"), "utf8"),
+    ).not.toContain('"corotum-web"');
+  });
   test("CLI tags match the independent CLI package version", () => {
     expect(() =>
       assertCliReleaseTag("0.7.3", "refs/tags/cli-v0.7.3"),

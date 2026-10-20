@@ -40,11 +40,14 @@ const env: Record<string, string> = {
 };
 if (accountId) env.CLOUDFLARE_ACCOUNT_ID = accountId;
 
+const eventsEnv = { ...env };
+delete eventsEnv.WRANGLER_CI_OVERRIDE_NAME;
+
 const events = Bun.spawn(["bunx", ...args], {
   cwd: fileURLToPath(new URL("../apps/events", import.meta.url)),
   stdout: "inherit",
   stderr: "inherit",
-  env,
+  env: eventsEnv,
 });
 const eventsCode = await events.exited;
 if (eventsCode !== 0) {

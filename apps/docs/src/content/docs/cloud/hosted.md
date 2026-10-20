@@ -76,6 +76,8 @@ The workflow sets `RELEASE_REQUIRE_UPLOAD=1`. `.github/workflows/cli-compile.yml
 
 `bun run release:deploy` is a separate Worker deployment: it deploys `apps/events` first, then `apps/web`. `CLOUDFLARE_API_TOKEN` is required, `CLOUDFLARE_ACCOUNT_ID` is optional. That script is not wired into `release.yml`. The main app's `EVENTS` service binding targets `corotum-events`; the private events Worker needs no public hostname. See [self-hosting deployment](/cloud/self-hosting/#deploy) for the binding and deployment commands.
 
+For Cloudflare Workers Builds connected to `corotum-production`, set the deploy command to `bun run release:deploy` from the repository root (or `bun run --cwd ../.. release:deploy` when the build root is `apps/web`). Do not use plain `wrangler deploy`: it only deploys the web Worker and requires `corotum-events` to already exist. Configure `CLOUDFLARE_API_TOKEN` and `AUTH_EMAIL_FROM=auth@corotum.com` for the deployment preflight.
+
 ## Email magic-link authentication
 
 Users can sign in at `/sign-in` with GitHub, Google, or an email magic link. A magic link creates an account for a new address or signs into the existing account for that address; it does not reveal whether the address already has an account. Links are single-use, expire, and return only to safe same-origin paths. Authentication and device pairing work before a subscription exists. The hosted entitlement gate still applies separately to paid Cloud Sync and Cloud mutations.
