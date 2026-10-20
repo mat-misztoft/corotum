@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createAuth } from "./auth";
 import {
   type BillingDatabase,
   type BillingEnvironment,
@@ -59,10 +60,10 @@ async function afterLaunch<T>(run: () => Promise<T>) {
   }
 }
 
-async function billingDb() {
+async function billingDb(files = migrationFiles) {
   const sqlite = new Database(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
-  for (const file of migrationFiles) {
+  for (const file of files) {
     const sql = await Bun.file(join(migrationsDirectory, file)).text();
     for (const statement of sql.split("--> statement-breakpoint")) {
       const trimmed = statement.trim();
@@ -214,8 +215,10 @@ test("billing portal opens only the authenticated customer's Creem portal", asyn
   const payload = JSON.stringify({
     id: "evt_paid_1",
     eventType: "subscription.paid",
+    created_at: 1_000,
     object: {
       id: "sub_creem_1",
+      created_at: 100,
       status: "active",
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1", billingInterval: "month" },
@@ -279,8 +282,10 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   const payload = JSON.stringify({
     id: "evt_paid_dup",
     eventType: "subscription.paid",
+    created_at: 1_000,
     object: {
       id: "sub_creem_2",
+      created_at: 100,
       customer: "cus_ada",
       metadata: { userId: "user_1", billingInterval: "year" },
     },
@@ -352,8 +357,10 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   const canceled = JSON.stringify({
     id: "evt_cancel_1",
     eventType: "subscription.canceled",
+    created_at: 4_000,
     object: {
       id: "sub_creem_2",
+      created_at: 100,
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1" },
     },
@@ -407,6 +414,319 @@ test("the launch period ends at midnight UTC and then requires a subscription", 
     true,
   );
   expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
+});
+
+async function subscriptionEvent(
+  db: BillingDatabase,
+  eventId: string,
+  eventType: string,
+  eventTime: number,
+  subscriptionId = "sub_current",
+  subscriptionCreatedAt = 100,
+) {
+  const payload = JSON.stringify({
+    id: eventId,
+    eventType,
+    created_at: eventTime,
+    object: {
+      id: subscriptionId,
+      created_at: subscriptionCreatedAt,
+      customer: "cus_ada",
+      metadata: { userId: "user_1", billingInterval: "year" },
+    },
+  });
+  return processCreemWebhook(
+    db,
+    hostedEnv,
+    payload,
+    await sign(payload, webhookSecret),
+  );
+}
+
+test("active subscriptions cannot purchase another plan", async () => {
+  const { db } = await billingDb();
+  await subscriptionEvent(db, "evt_paid", "subscription.paid", 1_000);
+  const { creem, checkouts } = mockCreem();
+  const response = await handleBillingCheckout(
+    jsonRequest("/api/v1/billing/checkout", { interval: "month" }),
+    db,
+    hostedEnv,
+    creem,
+    { id: "user_1", email: "ada@example.com" },
+  );
+  expect(response.status).toBe(409);
+  expect(checkouts).toHaveLength(0);
+});
+
+test("hosted account deletion is blocked until the subscription is canceled", async () => {
+  const { db } = await billingDb();
+  const auth = createAuth({
+    DB: db as unknown as D1Database,
+    COROTUM_HOSTED: "true",
+    BETTER_AUTH_SECRET: "a-secure-secret-with-at-least-thirty-two-characters",
+    BETTER_AUTH_URL: "https://corotum.com",
+  });
+  const beforeDelete = auth.options.user?.deleteUser?.beforeDelete;
+  expect(beforeDelete).toBeFunction();
+  if (!beforeDelete)
+    throw new Error("Account deletion must have a billing guard");
+  const user = { id: "user_1" } as never;
+  await beforeDelete(user, new Request("https://corotum.com"));
+  await subscriptionEvent(db, "evt_paid", "subscription.paid", 1_000);
+  await expect(
+    beforeDelete(user, new Request("https://corotum.com")),
+  ).rejects.toThrow("subscription");
+  await subscriptionEvent(db, "evt_cancel", "subscription.canceled", 2_000);
+  await beforeDelete(user, new Request("https://corotum.com"));
+});
+
+test("late paid events cannot restore a canceled subscription", async () => {
+  const { sqlite, db } = await billingDb();
+  await subscriptionEvent(db, "evt_cancel", "subscription.canceled", 2_000);
+  await subscriptionEvent(db, "evt_old_paid", "subscription.paid", 1_000);
+  expect(sqlite.query("SELECT status FROM subscriptions").get()).toEqual({
+    status: "canceled",
+  });
+  await subscriptionEvent(db, "evt_later_paid", "subscription.paid", 3_000);
+  expect(sqlite.query("SELECT status FROM subscriptions").get()).toEqual({
+    status: "canceled",
+  });
+});
+
+test("events for an old subscription cannot replace the newer subscription", async () => {
+  const { sqlite, db } = await billingDb();
+  await subscriptionEvent(
+    db,
+    "evt_new_paid",
+    "subscription.paid",
+    3_000,
+    "sub_new",
+    200,
+  );
+  await subscriptionEvent(
+    db,
+    "evt_old_cancel",
+    "subscription.canceled",
+    4_000,
+    "sub_old",
+    100,
+  );
+  await subscriptionEvent(
+    db,
+    "evt_old_paid",
+    "subscription.paid",
+    5_000,
+    "sub_old",
+    100,
+  );
+  expect(
+    sqlite
+      .query("SELECT status, provider_subscription_id AS id FROM subscriptions")
+      .get(),
+  ).toEqual({ status: "active", id: "sub_new" });
+});
+
+test("a newer subscription replaces a canceled one and older renewals are ignored", async () => {
+  const { sqlite, db } = await billingDb();
+  await subscriptionEvent(
+    db,
+    "evt_old_cancel",
+    "subscription.canceled",
+    2_000,
+    "sub_old",
+    100,
+  );
+  await subscriptionEvent(
+    db,
+    "evt_new_paid",
+    "subscription.paid",
+    3_000,
+    "sub_new",
+    200,
+  );
+  await subscriptionEvent(
+    db,
+    "evt_late_renewal",
+    "subscription.paid",
+    2_500,
+    "sub_new",
+    200,
+  );
+  expect(
+    sqlite
+      .query(
+        "SELECT status, provider_subscription_id AS id, event_created_at AS eventTime FROM subscriptions",
+      )
+      .get(),
+  ).toEqual({ status: "active", id: "sub_new", eventTime: 3_000 });
+});
+
+test("cancellation wins when provider event timestamps are equal", async () => {
+  for (const order of [
+    ["paid", "canceled"],
+    ["canceled", "paid"],
+  ]) {
+    const { sqlite, db } = await billingDb();
+    for (const type of order) {
+      await subscriptionEvent(db, `evt_${type}`, `subscription.${type}`, 1_000);
+    }
+    expect(sqlite.query("SELECT status FROM subscriptions").get()).toEqual({
+      status: "canceled",
+    });
+  }
+});
+
+test("concurrent old and new subscription events keep the newer subscription", async () => {
+  const { sqlite, db } = await billingDb();
+  await Promise.all([
+    subscriptionEvent(
+      db,
+      "evt_old_paid",
+      "subscription.paid",
+      3_000,
+      "sub_old",
+      100,
+    ),
+    subscriptionEvent(
+      db,
+      "evt_new_paid",
+      "subscription.paid",
+      2_000,
+      "sub_new",
+      200,
+    ),
+    subscriptionEvent(
+      db,
+      "evt_old_cancel",
+      "subscription.canceled",
+      4_000,
+      "sub_old",
+      100,
+    ),
+  ]);
+  expect(
+    sqlite
+      .query("SELECT status, provider_subscription_id AS id FROM subscriptions")
+      .get(),
+  ).toEqual({ status: "active", id: "sub_new" });
+});
+
+test("checkout stays blocked during payment recovery but allows canceled plans", async () => {
+  const { sqlite, db } = await billingDb();
+  await subscriptionEvent(db, "evt_paid", "subscription.paid", 1_000);
+  const { creem, checkouts } = mockCreem();
+  for (const status of ["trialing", "past_due", "paused", "scheduled_cancel"]) {
+    sqlite.query("UPDATE subscriptions SET status = ?").run(status);
+    const response = await handleBillingCheckout(
+      jsonRequest("/api/v1/billing/checkout", { interval: "year" }),
+      db,
+      hostedEnv,
+      creem,
+      { id: "user_1", email: "ada@example.com" },
+    );
+    expect(response.status).toBe(409);
+  }
+  expect(checkouts).toHaveLength(0);
+  await subscriptionEvent(db, "evt_cancel", "subscription.canceled", 2_000);
+  const response = await handleBillingCheckout(
+    jsonRequest("/api/v1/billing/checkout", { interval: "year" }),
+    db,
+    hostedEnv,
+    creem,
+    { id: "user_1", email: "ada@example.com" },
+  );
+  expect(response.status).toBe(200);
+  expect(checkouts).toHaveLength(1);
+});
+
+test("the billing migration preserves existing plans and guards them against old subscriptions", async () => {
+  const { sqlite, db } = await billingDb(
+    migrationFiles.filter((file) => !file.startsWith("0015_")),
+  );
+  sqlite
+    .query(`INSERT INTO subscriptions (
+    id, user_id, provider, provider_customer_id, provider_subscription_id,
+    billing_interval, status, created_at, updated_at
+  ) VALUES ('sub_row', 'user_1', 'creem', 'cus_ada', 'sub_current', 'year', 'active', 1000, 2000)`)
+    .run();
+  sqlite.exec(
+    await Bun.file(
+      join(migrationsDirectory, "0015_billing_event_order.sql"),
+    ).text(),
+  );
+  expect(
+    sqlite
+      .query(
+        "SELECT event_created_at, subscription_created_at FROM subscriptions",
+      )
+      .get(),
+  ).toEqual({ event_created_at: 2_000, subscription_created_at: 1_000 });
+  await subscriptionEvent(
+    db,
+    "evt_old_cancel",
+    "subscription.canceled",
+    3_000,
+    "sub_old",
+    500,
+  );
+  await subscriptionEvent(
+    db,
+    "evt_current_paid",
+    "subscription.paid",
+    2_500,
+    "sub_current",
+    900,
+  );
+  expect(
+    sqlite
+      .query(
+        "SELECT status, provider_subscription_id AS id, subscription_created_at AS createdAt FROM subscriptions",
+      )
+      .get(),
+  ).toEqual({ status: "active", id: "sub_current", createdAt: 900 });
+});
+
+test("subscription webhooks require provider event and subscription creation timestamps", async () => {
+  const { sqlite, db } = await billingDb();
+  for (const payload of [
+    {
+      id: "evt_missing_time",
+      eventType: "subscription.paid",
+      object: {
+        id: "sub_1",
+        customer: "cus_ada",
+        metadata: { userId: "user_1" },
+      },
+    },
+    {
+      id: "evt_missing_subscription_time",
+      eventType: "subscription.paid",
+      created_at: 1_000,
+      object: {
+        id: "sub_1",
+        customer: "cus_ada",
+        metadata: { userId: "user_1" },
+      },
+    },
+  ]) {
+    const body = JSON.stringify(payload);
+    const response = await handleCreemWebhook(
+      new Request("https://corotum.com/api/v1/webhooks/creem", {
+        method: "POST",
+        body,
+        headers: { "creem-signature": await sign(body, webhookSecret) },
+      }),
+      db,
+      hostedEnv,
+    );
+    expect(response.status).toBe(400);
+  }
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM subscriptions").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM billing_events").get(),
+  ).toEqual({ count: 0 });
 });
 
 test("login and pairing work without entitlement while hosted sync and mutations are denied", async () => {
@@ -478,8 +798,10 @@ test("login and pairing work without entitlement while hosted sync and mutations
   const grant = JSON.stringify({
     id: "evt_grant_sync",
     eventType: "subscription.paid",
+    created_at: 1_000,
     object: {
       id: "sub_sync",
+      created_at: 100,
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1", billingInterval: "month" },
     },

@@ -4,6 +4,7 @@ import {
   type BillingDatabase,
   type BillingEnvironment,
   BillingNotConfiguredError,
+  BillingSubscriptionExistsError,
   BillingUnavailableError,
   type CreemClient,
   CreemProviderError,
@@ -25,6 +26,8 @@ export type BillingUser = Readonly<{
 }>;
 
 function billingError(error: unknown) {
+  if (error instanceof BillingSubscriptionExistsError)
+    return jsonError(error.message, 409);
   if (error instanceof BillingUnavailableError)
     return jsonError(error.message, 404);
   if (error instanceof BillingNotConfiguredError)
@@ -61,7 +64,7 @@ export async function handleBillingCheckout(
     return jsonError("Invalid request", 400);
 
   try {
-    const checkout = await createHostedCheckout(env, creem, {
+    const checkout = await createHostedCheckout(db, env, creem, {
       userId: user.id,
       email: user.email,
       name: user.name,

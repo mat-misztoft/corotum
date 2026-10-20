@@ -1,8 +1,14 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { drizzle } from "drizzle-orm/d1";
 import { persistAccountDisplayLabel } from "./account-label";
+import {
+  BillingSubscriptionExistsError,
+  isHostedCloud,
+  requireNoBillableSubscription,
+} from "./billing";
 import * as schema from "./db/schema";
 import type { EmailEnvironment, EmailService } from "./email";
 import type { EventsService, RequestRateLimiter } from "./workspace-events";
@@ -119,7 +125,23 @@ export function createAuth(
     },
     user: {
       changeEmail: { enabled: true },
-      deleteUser: { enabled: true },
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          try {
+            await requireNoBillableSubscription(
+              env.DB as unknown as WorkspaceDatabase,
+              user.id,
+              isHostedCloud(env),
+            );
+          } catch (error) {
+            if (error instanceof BillingSubscriptionExistsError) {
+              throw new APIError("BAD_REQUEST", { message: error.message });
+            }
+            throw error;
+          }
+        },
+      },
     },
     emailVerification: emailService
       ? {

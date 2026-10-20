@@ -104,8 +104,10 @@ test("Playwright: pairing approval, hosted billing gate, and device status", asy
     const payload = JSON.stringify({
       id: "evt_playwright_paid",
       eventType: "subscription.paid",
+      created_at: 1_000,
       object: {
         id: "sub_pw",
+        created_at: 100,
         status: "active",
         customer: { id: "cus_ada" },
         metadata: { userId: "user_1", billingInterval: "month" },

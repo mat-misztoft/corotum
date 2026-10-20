@@ -331,8 +331,10 @@ test("security: unsigned webhooks, rate limits, and old CLIs cannot mutate Cloud
   const payload = JSON.stringify({
     id: "evt_forged",
     eventType: "subscription.paid",
+    created_at: 1_000,
     object: {
       id: "sub_forged",
+      created_at: 100,
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1", billingInterval: "month" },
     },

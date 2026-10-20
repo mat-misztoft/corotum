@@ -61,6 +61,30 @@ export class BillingCustomerMissingError extends Error {
   }
 }
 
+export class BillingSubscriptionExistsError extends Error {
+  constructor() {
+    super(
+      "Manage or cancel your existing subscription in Billing before continuing.",
+    );
+    this.name = "BillingSubscriptionExistsError";
+  }
+}
+
+export async function requireNoBillableSubscription(
+  db: BillingDatabase,
+  userId: string,
+  hosted: boolean,
+) {
+  if (!hosted) return;
+  const subscription = await db
+    .prepare("SELECT status FROM subscriptions WHERE user_id = ?")
+    .bind(userId)
+    .first<{ status: string }>();
+  if (subscription && !["canceled", "expired"].includes(subscription.status)) {
+    throw new BillingSubscriptionExistsError();
+  }
+}
+
 export class InvalidBillingIntervalError extends Error {
   constructor() {
     super("A monthly or annual interval is required");
@@ -140,6 +164,7 @@ function productIdFor(env: BillingEnvironment, interval: BillingInterval) {
 }
 
 export async function createHostedCheckout(
+  db: BillingDatabase,
   env: BillingEnvironment,
   creem: CreemClient,
   input: {
@@ -151,6 +176,7 @@ export async function createHostedCheckout(
   },
 ) {
   if (!isHostedCloud(env)) throw new BillingUnavailableError();
+  await requireNoBillableSubscription(db, input.userId, true);
   const interval = parseInterval(input.interval);
   if (!env.CREEM_API_KEY || !productIdFor(env, interval)) {
     throw new BillingNotConfiguredError();
@@ -235,6 +261,7 @@ export async function processCreemWebhook(
     eventType?: unknown;
     event_type?: unknown;
     object?: unknown;
+    created_at?: unknown;
   };
   const providerEventId = typeof event.id === "string" ? event.id.trim() : "";
   const eventType =
@@ -254,12 +281,19 @@ export async function processCreemWebhook(
   if (existing) return { duplicate: true as const, eventType };
 
   if (GRANT_EVENTS.has(eventType) || REVOKE_EVENTS.has(eventType)) {
+    const eventCreatedAt = timestampOf(event.created_at);
+    if (eventCreatedAt === null || eventCreatedAt <= 0) {
+      throw new UnprocessableWebhookError(
+        "Webhook event is missing a valid created_at timestamp",
+      );
+    }
     await applySubscriptionEvent(
       db,
       eventType,
       event.object,
       now,
       GRANT_EVENTS.has(eventType) ? "grant" : "revoke",
+      eventCreatedAt,
     );
   }
 
@@ -398,11 +432,18 @@ async function applySubscriptionEvent(
   objectValue: unknown,
   now: number,
   action: "grant" | "revoke",
+  eventCreatedAt: number,
 ) {
   const object = readObject(objectValue);
   if (!object) throw new UnprocessableWebhookError();
   const metadata = metadataOf(object);
   const subscriptionId = readString(object.id);
+  const subscriptionCreatedAt = timestampOf(object.created_at);
+  if (subscriptionCreatedAt === null || subscriptionCreatedAt <= 0) {
+    throw new UnprocessableWebhookError(
+      "Subscription is missing a valid created_at timestamp",
+    );
+  }
   const customerId = customerIdOf(object);
   let userId =
     readString(metadata.userId) || readString(metadata.user_id) || "";
@@ -451,8 +492,8 @@ async function applySubscriptionEvent(
       `INSERT INTO subscriptions (
           id, user_id, provider, provider_customer_id, provider_subscription_id,
           billing_interval, status, current_period_start, current_period_end,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at, event_created_at, subscription_created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
           provider_customer_id = excluded.provider_customer_id,
           provider_subscription_id = excluded.provider_subscription_id,
@@ -460,7 +501,17 @@ async function applySubscriptionEvent(
           status = excluded.status,
           current_period_start = excluded.current_period_start,
           current_period_end = excluded.current_period_end,
-          updated_at = excluded.updated_at`,
+          updated_at = excluded.updated_at,
+          event_created_at = excluded.event_created_at,
+          subscription_created_at = excluded.subscription_created_at
+        WHERE (
+          subscriptions.provider_subscription_id = excluded.provider_subscription_id
+          AND excluded.event_created_at >= subscriptions.event_created_at
+          AND NOT (subscriptions.status = 'canceled' AND excluded.status != 'canceled')
+        ) OR (
+          subscriptions.provider_subscription_id != excluded.provider_subscription_id
+          AND excluded.subscription_created_at > subscriptions.subscription_created_at
+        )`,
     )
     .bind(
       `sub_${crypto.randomUUID()}`,
@@ -474,6 +525,8 @@ async function applySubscriptionEvent(
       periodEnd,
       now,
       now,
+      eventCreatedAt,
+      subscriptionCreatedAt,
     )
     .run();
   if (action === "revoke") {

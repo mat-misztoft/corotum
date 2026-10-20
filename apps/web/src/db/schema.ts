@@ -398,6 +398,10 @@ export const subscriptions = sqliteTable(
     provider: text().notNull(),
     providerCustomerId: text("provider_customer_id").notNull(),
     providerSubscriptionId: text("provider_subscription_id").notNull(),
+    eventCreatedAt: integer("event_created_at").notNull().default(0),
+    subscriptionCreatedAt: integer("subscription_created_at")
+      .notNull()
+      .default(0),
     billingInterval: text("billing_interval").notNull(),
     status: text().notNull(),
     currentPeriodStart: integer("current_period_start", {

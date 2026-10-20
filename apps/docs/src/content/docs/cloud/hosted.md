@@ -19,7 +19,7 @@ One product: Corotum Cloud.
 
 Hosted billing uses Creem. Verified Creem webhook state is authoritative. Duplicate provider event ids are ignored.
 
-Entitled webhook statuses: `subscription.active`, `subscription.trialing`, `subscription.paid`. Access is revoked on `subscription.paused`, `subscription.expired`, and `subscription.canceled`.
+`subscription.paid` grants access. `subscription.canceled` revokes access; payment retries do not immediately remove it. Events are ordered by their provider timestamps and subscription creation dates, so an old delivery cannot overwrite the current subscription. A canceled subscription cannot be reactivated by a delayed payment event.
 
 ## Checkout and portal
 
@@ -31,6 +31,10 @@ On hosted corotum.com, open `/dashboard/billing`:
 4. Manage the subscription through the billing portal (Creem customer portal) when a subscription exists.
 
 The dashboard only opens the authenticated customer's portal.
+
+An existing non-terminal subscription blocks another checkout and account deletion. Manage or cancel it in Billing first; account deletion becomes available after Corotum receives the cancellation webhook. Hosted paid access starts on 22 October 2026 at 00:00 UTC.
+
+Before deploying the billing changes, apply the production D1 migrations from `apps/web`: `bunx wrangler d1 migrations apply corotum --remote`. Migration `0015_billing_event_order.sql` adds webhook ordering timestamps and preserves existing subscriptions. Existing rows use their stored receipt dates until a newer event supplies provider timestamps; replaying older historical events may require reconciliation with Creem.
 
 ## Hosted entitlement
 
@@ -76,7 +80,7 @@ The workflow sets `RELEASE_REQUIRE_UPLOAD=1`. `.github/workflows/cli-compile.yml
 
 `bun run release:deploy` is a separate Worker deployment: it deploys `apps/events` first, then `apps/web`. `CLOUDFLARE_API_TOKEN` is required, `CLOUDFLARE_ACCOUNT_ID` is optional. That script is not wired into `release.yml`. The main app's `EVENTS` service binding targets `corotum-events`; the private events Worker needs no public hostname. See [self-hosting deployment](/cloud/self-hosting/#deploy) for the binding and deployment commands.
 
-For Cloudflare Workers Builds connected to `corotum-production`, set the deploy command to `bun run release:deploy` from the repository root (or `bun run --cwd ../.. release:deploy` when the build root is `apps/web`). Do not use plain `wrangler deploy`: it only deploys the web Worker and requires `corotum-events` to already exist. Configure `CLOUDFLARE_API_TOKEN` and `AUTH_EMAIL_FROM=auth@corotum.com` for the deployment preflight.
+For separate Cloudflare Workers Builds, connect `corotum-events` to the same repository with path `apps/events`, no build command, and deploy command `bunx wrangler deploy`. Deploy it successfully once before deploying `corotum-production`. Production can keep its own deploy command `cd apps/web && bunx wrangler deploy` from the repository root. Docs, events, and production remain separate Workers.
 
 ## Email magic-link authentication
 

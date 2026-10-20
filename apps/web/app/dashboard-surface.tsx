@@ -428,8 +428,12 @@ export function DashboardSurface({ view }: { view: View }) {
         callbackURL: "/sign-in",
       });
       if (error) throw new Error(error.message);
-    } catch {
-      setDeleteError("Unable to delete your account. Try again.");
+    } catch (cause) {
+      setDeleteError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to delete your account. Try again.",
+      );
       setAction(null);
     }
   }
