@@ -9,6 +9,7 @@ import {
 import { jsonError, readJson } from "./api";
 import {
   HostedEntitlementRequiredError,
+  readHostedCloudAccess,
   requireHostedCloudAccess,
 } from "./billing";
 import { protectCloudRequest } from "./cloud-protect";
@@ -199,9 +200,18 @@ export async function handleWorkspaceEvents(
     db,
     workspaceId,
     "normal",
-    hosted,
+    false,
   );
   if ("error" in authenticated) return authenticated.error;
+  const now = Date.now();
+  const entitlement = await readHostedCloudAccess(
+    db,
+    authenticated.device.userId,
+    hosted,
+    now,
+  );
+  if (!entitlement.allowed)
+    return stateError(new HostedEntitlementRequiredError());
   try {
     await requireWorkspaceAccess(db, authenticated.device.userId, workspaceId);
   } catch (error) {
@@ -218,7 +228,9 @@ export async function handleWorkspaceEvents(
           "x-corotum-workspace-id": workspaceId,
           "x-corotum-device-id": authenticated.device.deviceId,
           "x-corotum-token-id": authenticated.device.tokenId,
-          "x-corotum-expires-at": String(Date.now() + 60 * 60_000),
+          "x-corotum-expires-at": String(
+            Math.min(now + 60 * 60_000, entitlement.expiresAt ?? Infinity),
+          ),
         },
       }),
     );

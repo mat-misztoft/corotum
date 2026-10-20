@@ -30,7 +30,7 @@ test("billing and settings use the shared dashboard language without new control
   expect(surface).toContain(
     'window.open(url, "_blank", "noopener,noreferrer")',
   );
-  expect(surface).toContain('settings.subscription.status === "paid"');
+  expect(surface).toContain('!["canceled", "expired"].includes(');
   expect(surface).toContain("`Connect ${label}`");
   expect(surface).toContain("`Disconnect ${label}`");
   expect(surface).toContain("authClient.unlinkAccount({ accountId })");

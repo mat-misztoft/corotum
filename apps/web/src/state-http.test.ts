@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ import {
   SaaSProvider,
   UNINITIALIZED_CLOUD_REVISION,
 } from "../../../packages/saas-provider/src/index";
+import { LAUNCH_FREE_PERIOD_END } from "./billing";
 import { approvePairing, createPairing } from "./pairings";
 import {
   handleGetWorkspaceRevision,
@@ -263,6 +264,58 @@ test("event upgrade authenticates token, CLI, membership and rate limit before R
       .status,
   ).toBe(404);
   expect(calls).toHaveLength(1);
+});
+
+test("event attachment expires at the entitlement deadline or one hour, whichever is earlier", async () => {
+  const { sqlite, db } = await stateDb();
+  const { issued, workspaceId } = await pairedDevice(db, sqlite);
+  const launchEnd = Date.parse(LAUNCH_FREE_PERIOD_END);
+  const clock = spyOn(Date, "now").mockReturnValue(launchEnd - 30_000);
+  const expiries: number[] = [];
+  const events = {
+    async fetch(request: Request) {
+      expiries.push(Number(request.headers.get("x-corotum-expires-at")));
+      return new Response("subscribed");
+    },
+  } as unknown as EventsService;
+  const subscribe = (hosted = true) =>
+    handleWorkspaceEvents(
+      stateRequest(workspaceId, issued.token, {
+        headers: { upgrade: "websocket" },
+      }),
+      db,
+      workspaceId,
+      hosted,
+      events,
+    );
+  try {
+    expect((await subscribe()).status).toBe(200);
+    expect(expiries.pop()).toBe(launchEnd);
+    expect((await subscribe(false)).status).toBe(200);
+    expect(expiries.pop()).toBe(Date.now() + 60 * 60_000);
+    clock.mockReturnValue(launchEnd);
+    expect((await subscribe()).status).toBe(402);
+    expect(expiries).toHaveLength(0);
+    sqlite
+      .query(`INSERT INTO subscriptions (
+      id, user_id, provider, provider_customer_id, provider_subscription_id,
+      billing_interval, status, provider_product_id, current_period_start, current_period_end, created_at, updated_at
+    ) VALUES ('sub_row', 'user_1', 'creem', 'cus_ada', 'sub_current', 'month', 'active', 'prod_month', ?, ?, ?, ?)`)
+      .run(launchEnd, launchEnd + 30_000, launchEnd, launchEnd);
+    expect((await subscribe()).status).toBe(200);
+    expect(expiries.pop()).toBe(launchEnd + 30_000);
+    sqlite
+      .query("UPDATE subscriptions SET current_period_end = ?")
+      .run(launchEnd + 2 * 60 * 60_000);
+    expect((await subscribe()).status).toBe(200);
+    expect(expiries.pop()).toBe(launchEnd + 60 * 60_000);
+    clock.mockReturnValue(launchEnd + 2 * 60 * 60_000);
+    expect((await subscribe()).status).toBe(402);
+    expect(expiries).toHaveLength(0);
+  } finally {
+    clock.mockRestore();
+    sqlite.close();
+  }
 });
 
 test("an authenticated device can pull empty Cloud state and push an idempotent update", async () => {

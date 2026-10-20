@@ -108,6 +108,9 @@ test("Playwright: pairing approval, hosted billing gate, and device status", asy
       object: {
         id: "sub_pw",
         created_at: 100,
+        product: "prod_month",
+        current_period_start_date: "2026-01-01T00:00:00.000Z",
+        current_period_end_date: "2100-01-01T00:00:00.000Z",
         status: "active",
         customer: { id: "cus_ada" },
         metadata: { userId: "user_1", billingInterval: "month" },

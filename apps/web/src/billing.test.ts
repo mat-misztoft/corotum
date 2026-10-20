@@ -14,6 +14,7 @@ import {
   hasHostedCloudAccess,
   isLaunchFreePeriod,
   processCreemWebhook,
+  readHostedCloudAccess,
   verifyCreemSignature,
 } from "./billing";
 import {
@@ -71,6 +72,7 @@ async function billingDb(files = migrationFiles) {
     }
   }
 
+  let batches = Promise.resolve();
   const db = {
     prepare(query: string) {
       return {
@@ -91,16 +93,24 @@ async function billingDb(files = migrationFiles) {
       };
     },
     async batch(statements: { run(): Promise<unknown> }[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = [];
-        for (const statement of statements) results.push(await statement.run());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-      }
+      const run = batches.then(async () => {
+        sqlite.exec("BEGIN IMMEDIATE");
+        try {
+          const results = [];
+          for (const statement of statements)
+            results.push(await statement.run());
+          sqlite.exec("COMMIT");
+          return results;
+        } catch (error) {
+          sqlite.exec("ROLLBACK");
+          throw error;
+        }
+      });
+      batches = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
     },
   } as BillingDatabase & TokenDatabase;
 
@@ -129,6 +139,519 @@ async function sign(payload: string, secret: string) {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
+
+const day = 86_400_000;
+function lifecycleEvent(
+  type: string,
+  time = launchEnd + 1_000,
+  changes: Record<string, unknown> = {},
+) {
+  const object = {
+    id: "sub_lifecycle",
+    created_at: launchEnd - day,
+    product: "prod_month",
+    customer: "cus_ada",
+    current_period_start_date: new Date(launchEnd - day).toISOString(),
+    current_period_end_date: new Date(launchEnd + day).toISOString(),
+    metadata: { userId: "user_1" },
+    ...changes,
+  };
+  return {
+    id: `evt_${type}_${time}`,
+    eventType: type,
+    created_at: time,
+    object:
+      type === "checkout.completed"
+        ? {
+            id: "ch_lifecycle",
+            product: object.product,
+            customer: object.customer,
+            metadata: object.metadata,
+            subscription: object,
+          }
+        : object,
+  };
+}
+async function deliver(
+  db: BillingDatabase,
+  event: ReturnType<typeof lifecycleEvent>,
+) {
+  const payload = JSON.stringify(event);
+  return processCreemWebhook(
+    db,
+    hostedEnv,
+    payload,
+    await sign(payload, webhookSecret),
+    launchEnd + 2_000,
+  );
+}
+
+test("all eleven lifecycle events update state with bounded access", async () => {
+  for (const [type, status, allowed] of [
+    ["paid", "active", true],
+    ["active", "active", true],
+    ["trialing", "trialing", true],
+    ["scheduled_cancel", "scheduled_cancel", true],
+    ["past_due", "past_due", true],
+    ["unpaid", "unpaid", false],
+    ["paused", "paused", false],
+    ["expired", "expired", false],
+    ["canceled", "canceled", false],
+    ["update", "paused", false],
+  ] as const) {
+    const { db, sqlite } = await billingDb();
+    await deliver(db, lifecycleEvent("subscription.paid", launchEnd));
+    const event = lifecycleEvent(
+      `subscription.${type}`,
+      launchEnd + 1_000,
+      type === "update" ? { status: "paused" } : {},
+    );
+    await deliver(db, event);
+    expect(sqlite.query("SELECT status FROM subscriptions").get()).toEqual({
+      status,
+    });
+    expect(
+      await hasHostedCloudAccess(db, "user_1", true, launchEnd + 2_000),
+    ).toBe(allowed);
+    expect(
+      await hasHostedCloudAccess(db, "user_1", true, launchEnd + 5 * day),
+    ).toBe(false);
+    expect((await deliver(db, event)).duplicate).toBe(true);
+  }
+  const { db, sqlite } = await billingDb();
+  await deliver(db, lifecycleEvent("checkout.completed"));
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 2_000),
+  ).toBe(false);
+  expect(
+    sqlite.query("SELECT user_id FROM billing_subscription_links").get(),
+  ).toEqual({ user_id: "user_1" });
+  await deliver(
+    db,
+    lifecycleEvent("subscription.active", launchEnd + 3_000, { metadata: {} }),
+  );
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 4_000),
+  ).toBe(true);
+});
+
+test("product and identity validation fail closed without consuming events", async () => {
+  const { db, sqlite } = await billingDb();
+  for (const changes of [
+    { product: "prod_other" },
+    { product: null },
+    { metadata: {} },
+    { metadata: { userId: "missing" } },
+    { metadata: { userId: "user_1", user_id: "other" } },
+  ]) {
+    await expect(
+      deliver(db, lifecycleEvent("subscription.paid", launchEnd, changes)),
+    ).rejects.toThrow();
+  }
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM billing_events").get(),
+  ).toEqual({ count: 0 });
+  await deliver(db, lifecycleEvent("subscription.paid", launchEnd));
+  await expect(
+    deliver(
+      db,
+      lifecycleEvent("subscription.paid", launchEnd + 1_000, {
+        customer: "cus_other",
+      }),
+    ),
+  ).rejects.toThrow();
+  await expect(
+    deliver(
+      db,
+      lifecycleEvent("subscription.active", launchEnd + 1_000, {
+        metadata: { userId: "other" },
+      }),
+    ),
+  ).rejects.toThrow();
+});
+
+test("event recording failure rolls back the subscription and link writes", async () => {
+  const { db, sqlite } = await billingDb();
+  sqlite.exec(
+    "CREATE TRIGGER fail_event BEFORE INSERT ON billing_events BEGIN SELECT RAISE(ABORT, 'event failure'); END",
+  );
+  await expect(
+    deliver(db, lifecycleEvent("subscription.paid")),
+  ).rejects.toThrow("event failure");
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM subscriptions").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    sqlite
+      .query("SELECT COUNT(*) AS count FROM billing_subscription_links")
+      .get(),
+  ).toEqual({ count: 0 });
+});
+
+test("access boundaries and fixed grace period do not depend on a final webhook", async () => {
+  const { db } = await billingDb();
+  await deliver(db, lifecycleEvent("subscription.paid", launchEnd));
+  expect(
+    await readHostedCloudAccess(db, "user_1", true, launchEnd + day - 1),
+  ).toEqual({ allowed: true, expiresAt: launchEnd + day });
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd + day)).toBe(
+    false,
+  );
+  await deliver(db, lifecycleEvent("subscription.past_due", launchEnd + day));
+  await deliver(
+    db,
+    lifecycleEvent("subscription.past_due", launchEnd + 2 * day),
+  );
+  expect(
+    await readHostedCloudAccess(db, "user_1", true, launchEnd + 3 * day),
+  ).toEqual({ allowed: true, expiresAt: launchEnd + 4 * day });
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 4 * day),
+  ).toBe(false);
+});
+
+test("concurrent duplicate deliveries commit state once and invalidate only after commit", async () => {
+  const { db, sqlite } = await billingDb();
+  const invalidations: string[] = [];
+  const hooked = {
+    ...db,
+    async invalidateEvents(scope: { userId: string } | { deviceId: string }) {
+      expect(
+        sqlite.query("SELECT COUNT(*) AS count FROM billing_events").get(),
+      ).toEqual({ count: 1 });
+      if ("userId" in scope) invalidations.push(scope.userId);
+    },
+  };
+  const event = lifecycleEvent("subscription.paid");
+  const results = await Promise.all(
+    Array.from({ length: 8 }, () => deliver(hooked, event)),
+  );
+  expect(results.filter((result) => !result.duplicate)).toHaveLength(1);
+  expect(invalidations).toEqual(["user_1"]);
+  expect(
+    sqlite
+      .query("SELECT COUNT(*) AS count FROM billing_subscription_links")
+      .get(),
+  ).toEqual({ count: 1 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM subscriptions").get(),
+  ).toEqual({ count: 1 });
+});
+
+test("concurrent customer ownership claims cannot attach the same customer to two users", async () => {
+  const { db, sqlite } = await billingDb();
+  sqlite.exec(`INSERT INTO user (id, name, email, email_verified, created_at, updated_at)
+    VALUES ('user_2', 'Other', 'other@example.com', 1, 1, 1)`);
+  const results = await Promise.allSettled([
+    deliver(db, lifecycleEvent("subscription.paid", launchEnd + 1_000)),
+    deliver(
+      db,
+      lifecycleEvent("subscription.paid", launchEnd + 2_000, {
+        id: "sub_other",
+        metadata: { userId: "user_2" },
+      }),
+    ),
+  ]);
+  expect(
+    results.filter((result) => result.status === "fulfilled"),
+  ).toHaveLength(1);
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM billing_events").get(),
+  ).toEqual({ count: 1 });
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM subscriptions").get(),
+  ).toEqual({ count: 1 });
+});
+
+test("concurrent subscription identity conflicts roll back the losing event", async () => {
+  const { db, sqlite } = await billingDb();
+  const results = await Promise.allSettled([
+    deliver(db, lifecycleEvent("subscription.paid", launchEnd + 1_000)),
+    deliver(
+      db,
+      lifecycleEvent("subscription.paid", launchEnd + 2_000, {
+        customer: "cus_other",
+      }),
+    ),
+  ]);
+  expect(
+    results.filter((result) => result.status === "fulfilled"),
+  ).toHaveLength(1);
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM billing_events").get(),
+  ).toEqual({ count: 1 });
+});
+
+test("state write failures roll back the event and identity link and can be retried", async () => {
+  const { db, sqlite } = await billingDb();
+  const invalidations: unknown[] = [];
+  const hooked = {
+    ...db,
+    async invalidateEvents(scope: unknown) {
+      invalidations.push(scope);
+    },
+  };
+  sqlite.exec(
+    "CREATE TRIGGER fail_state BEFORE INSERT ON subscriptions BEGIN SELECT RAISE(ABORT, 'state failure'); END",
+  );
+  const event = lifecycleEvent("subscription.paid");
+  await expect(deliver(hooked, event)).rejects.toThrow("state failure");
+  expect(
+    sqlite.query("SELECT COUNT(*) AS count FROM billing_events").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    sqlite
+      .query("SELECT COUNT(*) AS count FROM billing_subscription_links")
+      .get(),
+  ).toEqual({ count: 0 });
+  expect(invalidations).toHaveLength(0);
+  sqlite.exec("DROP TRIGGER fail_state");
+  expect((await deliver(hooked, event)).duplicate).toBe(false);
+  expect((await deliver(hooked, event)).duplicate).toBe(true);
+  expect(invalidations).toHaveLength(1);
+});
+
+test("failure after the state insert rolls back every write in the batch", async () => {
+  const { db, sqlite } = await billingDb();
+  sqlite.exec(
+    "CREATE TRIGGER fail_evidence BEFORE UPDATE ON subscriptions BEGIN SELECT RAISE(ABORT, 'evidence failure'); END",
+  );
+  await expect(
+    deliver(db, lifecycleEvent("subscription.paid")),
+  ).rejects.toThrow("evidence failure");
+  for (const table of [
+    "billing_events",
+    "billing_subscription_links",
+    "subscriptions",
+  ]) {
+    expect(
+      sqlite.query(`SELECT COUNT(*) AS count FROM ${table}`).get(),
+    ).toEqual({ count: 0 });
+  }
+});
+
+test("an unsuccessful batch result cannot acknowledge successful webhook processing", async () => {
+  const { db } = await billingDb();
+  await expect(
+    deliver(
+      {
+        ...db,
+        async batch(statements) {
+          return statements.map(() => ({ success: false }));
+        },
+      },
+      lifecycleEvent("subscription.paid"),
+    ),
+  ).rejects.toThrow();
+  await expect(
+    deliver({ ...db, batch: undefined }, lifecycleEvent("subscription.paid")),
+  ).rejects.toThrow("Atomic");
+});
+
+test("pause, recovery, plan updates and scheduled cancellation resume in provider order", async () => {
+  const { db, sqlite } = await billingDb();
+  await deliver(db, lifecycleEvent("subscription.paid", launchEnd));
+  await deliver(db, lifecycleEvent("subscription.paused", launchEnd + 2_000));
+  await deliver(db, lifecycleEvent("subscription.active", launchEnd + 1_000));
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 3_000),
+  ).toBe(false);
+  await deliver(
+    db,
+    lifecycleEvent("subscription.active", launchEnd + 4_000, { metadata: {} }),
+  );
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 5_000),
+  ).toBe(true);
+  await deliver(
+    db,
+    lifecycleEvent("subscription.update", launchEnd + 6_000, {
+      product: "prod_year",
+      status: "scheduled_cancel",
+      metadata: {},
+      current_period_end_date: new Date(launchEnd + 2 * day).toISOString(),
+    }),
+  );
+  expect(
+    sqlite.query("SELECT billing_interval, status FROM subscriptions").get(),
+  ).toEqual({ billing_interval: "year", status: "scheduled_cancel" });
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 2 * day),
+  ).toBe(false);
+  await deliver(db, lifecycleEvent("checkout.completed", launchEnd + 7_000));
+  expect(sqlite.query("SELECT status FROM subscriptions").get()).toEqual({
+    status: "scheduled_cancel",
+  });
+  await deliver(db, lifecycleEvent("subscription.unpaid", launchEnd + 8_000));
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 9_000),
+  ).toBe(false);
+  await deliver(db, lifecycleEvent("subscription.paid", launchEnd + 10_000));
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 11_000),
+  ).toBe(true);
+});
+
+test("trial, missing dates, future periods and first-charge failure fail closed at boundaries", async () => {
+  for (const [type, changes] of [
+    ["subscription.active", { current_period_end_date: null }],
+    [
+      "subscription.active",
+      {
+        current_period_start_date: new Date(launchEnd + day / 2).toISOString(),
+      },
+    ],
+    ["subscription.past_due", {}],
+  ] as const) {
+    const { db } = await billingDb();
+    await deliver(db, lifecycleEvent(type, launchEnd, changes));
+    expect(
+      await hasHostedCloudAccess(db, "user_1", true, launchEnd + 1_000),
+    ).toBe(false);
+  }
+  const { db } = await billingDb();
+  await deliver(
+    db,
+    lifecycleEvent("subscription.trialing", launchEnd, {
+      trial_end_date: new Date(launchEnd + 10_000).toISOString(),
+    }),
+  );
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 9_999),
+  ).toBe(true);
+  expect(
+    await hasHostedCloudAccess(db, "user_1", true, launchEnd + 10_000),
+  ).toBe(false);
+  await expect(
+    deliver(
+      db,
+      lifecycleEvent("subscription.update", launchEnd + 1_000, {
+        status: "active",
+        current_period_end_date: "invalid",
+      }),
+    ),
+  ).rejects.toThrow();
+});
+
+test("late payment evidence enriches a newer date-less status without reviving revoked access", async () => {
+  for (const order of [
+    [0, 1],
+    [1, 0],
+  ]) {
+    for (const offset of [0, 1_000]) {
+      const { db, sqlite } = await billingDb();
+      const paid = lifecycleEvent("subscription.paid", launchEnd);
+      const active = lifecycleEvent("subscription.active", launchEnd + offset, {
+        current_period_start_date: null,
+        current_period_end_date: null,
+      });
+      for (const index of order) await deliver(db, [paid, active][index]);
+      expect(
+        await hasHostedCloudAccess(db, "user_1", true, launchEnd + 2_000),
+      ).toBe(true);
+      expect(
+        sqlite
+          .query("SELECT current_period_end AS end FROM subscriptions")
+          .get(),
+      ).toEqual({ end: launchEnd + day });
+      await deliver(
+        db,
+        lifecycleEvent("subscription.paused", launchEnd + 5_000),
+      );
+      await deliver(db, lifecycleEvent("subscription.paid", launchEnd + 4_000));
+      expect(
+        await hasHostedCloudAccess(db, "user_1", true, launchEnd + 6_000),
+      ).toBe(false);
+    }
+  }
+});
+
+test("payment and past-due delivery order produces the same fixed grace deadline", async () => {
+  for (const order of [
+    [0, 1],
+    [1, 0],
+  ]) {
+    const { db } = await billingDb();
+    const events = [
+      lifecycleEvent("subscription.paid", launchEnd),
+      lifecycleEvent("subscription.past_due", launchEnd + day),
+    ];
+    for (const index of order) await deliver(db, events[index]);
+    expect(
+      await readHostedCloudAccess(db, "user_1", true, launchEnd + 2 * day),
+    ).toEqual({ allowed: true, expiresAt: launchEnd + 4 * day });
+    expect(
+      await hasHostedCloudAccess(db, "user_1", true, launchEnd + 4 * day),
+    ).toBe(false);
+  }
+});
+
+test("late recovery between two payment-failure cycles does not lose or extend the new grace period", async () => {
+  for (const order of [
+    [0, 1, 2, 3, 4],
+    [0, 1, 3, 4, 2],
+    [4, 3, 1, 2, 0],
+  ]) {
+    const { db } = await billingDb();
+    const events = [
+      lifecycleEvent("subscription.paid", launchEnd),
+      lifecycleEvent("subscription.past_due", launchEnd + day),
+      lifecycleEvent("subscription.paid", launchEnd + 2 * day, {
+        current_period_end_date: new Date(launchEnd + 3 * day).toISOString(),
+      }),
+      lifecycleEvent("subscription.past_due", launchEnd + 3 * day),
+      lifecycleEvent("subscription.past_due", launchEnd + 4 * day),
+    ];
+    for (const index of order) await deliver(db, events[index]);
+    expect(
+      await readHostedCloudAccess(db, "user_1", true, launchEnd + 5 * day),
+    ).toEqual({ allowed: true, expiresAt: launchEnd + 6 * day });
+    expect(
+      await hasHostedCloudAccess(db, "user_1", true, launchEnd + 6 * day),
+    ).toBe(false);
+  }
+});
+
+test("newer or equal end-only snapshots accept missing start evidence without regressing their end", async () => {
+  for (const order of [
+    [0, 1],
+    [1, 0],
+  ]) {
+    for (const offset of [0, 1_000]) {
+      const { db } = await billingDb();
+      const events = [
+        lifecycleEvent("subscription.paid", launchEnd),
+        lifecycleEvent("subscription.active", launchEnd + offset, {
+          current_period_start_date: null,
+        }),
+      ];
+      for (const index of order) await deliver(db, events[index]);
+      expect(
+        await hasHostedCloudAccess(db, "user_1", true, launchEnd + 2_000),
+      ).toBe(true);
+    }
+  }
+});
+
+test("equal-timestamp payment and failure preserve bounded grace in either delivery order", async () => {
+  for (const order of [
+    [0, 1],
+    [1, 0],
+  ]) {
+    const { db } = await billingDb();
+    const events = [
+      lifecycleEvent("subscription.paid", launchEnd),
+      lifecycleEvent("subscription.past_due", launchEnd),
+    ];
+    for (const index of order) await deliver(db, events[index]);
+    expect(
+      await readHostedCloudAccess(db, "user_1", true, launchEnd + 2 * day),
+    ).toEqual({ allowed: true, expiresAt: launchEnd + 3 * day });
+    expect(
+      await hasHostedCloudAccess(db, "user_1", true, launchEnd + 3 * day),
+    ).toBe(false);
+  }
+});
 
 function mockCreem() {
   const checkouts: CreemCheckoutInput[] = [];
@@ -219,6 +742,9 @@ test("billing portal opens only the authenticated customer's Creem portal", asyn
     object: {
       id: "sub_creem_1",
       created_at: 100,
+      product: "prod_month",
+      current_period_start: launchEnd - day,
+      current_period_end: launchEnd + day,
       status: "active",
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1", billingInterval: "month" },
@@ -265,8 +791,11 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   const checkoutCompleted = JSON.stringify({
     id: "evt_checkout_1",
     eventType: "checkout.completed",
+    created_at: 500,
     object: {
       id: "chk_1",
+      product: "prod_year",
+      subscription: "sub_creem_2",
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1" },
     },
@@ -286,6 +815,9 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     object: {
       id: "sub_creem_2",
       created_at: 100,
+      product: "prod_year",
+      current_period_start: launchEnd - day,
+      current_period_end: launchEnd + day,
       customer: "cus_ada",
       metadata: { userId: "user_1", billingInterval: "year" },
     },
@@ -320,7 +852,12 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   const expired = JSON.stringify({
     id: "evt_expired_1",
     eventType: "subscription.expired",
-    object: { id: "sub_creem_2", customer: { id: "cus_ada" } },
+    created_at: 1_500,
+    object: {
+      id: "sub_creem_2",
+      product: "prod_year",
+      customer: { id: "cus_ada" },
+    },
   });
   await processCreemWebhook(
     db,
@@ -329,7 +866,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     await sign(expired, webhookSecret),
     1_500,
   );
-  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(true);
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
 
   sqlite
     .query("UPDATE subscriptions SET status = 'canceled', updated_at = ?")
@@ -361,6 +898,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
     object: {
       id: "sub_creem_2",
       created_at: 100,
+      product: "prod_year",
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1" },
     },
@@ -385,7 +923,7 @@ test("only a verified Creem webhook grants or revokes hosted entitlement, and du
   expect(invalidated).toEqual([{ userId: "user_1" }]);
 });
 
-test("subscription.active without metadata is acknowledged but does not grant access", async () => {
+test("unbound subscription.active without metadata is rejected without granting access", async () => {
   const { db } = await billingDb();
   const payload = JSON.stringify({
     id: "evt_active_1",
@@ -400,7 +938,7 @@ test("subscription.active without metadata is acknowledged but does not grant ac
       payload,
       await sign(payload, webhookSecret),
     ),
-  ).resolves.toEqual({ duplicate: false, eventType: "subscription.active" });
+  ).rejects.toThrow();
   expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
 });
 
@@ -431,6 +969,9 @@ async function subscriptionEvent(
     object: {
       id: subscriptionId,
       created_at: subscriptionCreatedAt,
+      product: "prod_year",
+      current_period_start: launchEnd - day,
+      current_period_end: launchEnd + day,
       customer: "cus_ada",
       metadata: { userId: "user_1", billingInterval: "year" },
     },
@@ -641,7 +1182,9 @@ test("checkout stays blocked during payment recovery but allows canceled plans",
 
 test("the billing migration preserves existing plans and guards them against old subscriptions", async () => {
   const { sqlite, db } = await billingDb(
-    migrationFiles.filter((file) => !file.startsWith("0015_")),
+    migrationFiles.filter(
+      (file) => !file.startsWith("0015_") && !file.startsWith("0016_"),
+    ),
   );
   sqlite
     .query(`INSERT INTO subscriptions (
@@ -661,6 +1204,15 @@ test("the billing migration preserves existing plans and guards them against old
       )
       .get(),
   ).toEqual({ event_created_at: 2_000, subscription_created_at: 1_000 });
+  sqlite.exec(
+    await Bun.file(
+      join(migrationsDirectory, "0016_billing_lifecycle.sql"),
+    ).text(),
+  );
+  expect(
+    sqlite.query("SELECT user_id FROM billing_subscription_links").get(),
+  ).toEqual({ user_id: "user_1" });
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(false);
   await subscriptionEvent(
     db,
     "evt_old_cancel",
@@ -684,6 +1236,7 @@ test("the billing migration preserves existing plans and guards them against old
       )
       .get(),
   ).toEqual({ status: "active", id: "sub_current", createdAt: 900 });
+  expect(await hasHostedCloudAccess(db, "user_1", true, launchEnd)).toBe(true);
 });
 
 test("subscription webhooks require provider event and subscription creation timestamps", async () => {
@@ -802,6 +1355,9 @@ test("login and pairing work without entitlement while hosted sync and mutations
     object: {
       id: "sub_sync",
       created_at: 100,
+      product: "prod_month",
+      current_period_start: launchEnd - day,
+      current_period_end: launchEnd + day,
       customer: { id: "cus_ada" },
       metadata: { userId: "user_1", billingInterval: "month" },
     },

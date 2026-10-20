@@ -398,6 +398,14 @@ export const subscriptions = sqliteTable(
     provider: text().notNull(),
     providerCustomerId: text("provider_customer_id").notNull(),
     providerSubscriptionId: text("provider_subscription_id").notNull(),
+    providerProductId: text("provider_product_id"),
+    trialEnd: integer("trial_end"),
+    gracePeriodEnd: integer("grace_period_end"),
+    eventPriority: integer("event_priority").notNull().default(0),
+    periodEventAt: integer("period_event_at").notNull().default(0),
+    paidEventAt: integer("paid_event_at").notNull().default(0),
+    paidPeriodEnd: integer("paid_period_end"),
+    pastDueAt: integer("past_due_at"),
     eventCreatedAt: integer("event_created_at").notNull().default(0),
     subscriptionCreatedAt: integer("subscription_created_at")
       .notNull()
@@ -429,6 +437,9 @@ export const billingEvents = sqliteTable(
     id: text().primaryKey(),
     provider: text().notNull(),
     providerEventId: text("provider_event_id").notNull(),
+    providerSubscriptionId: text("provider_subscription_id"),
+    providerCreatedAt: integer("provider_created_at"),
+    subscriptionStatus: text("subscription_status"),
     eventType: text("event_type").notNull(),
     processedAt: integer("processed_at", { mode: "timestamp" }).notNull(),
   },
@@ -436,6 +447,34 @@ export const billingEvents = sqliteTable(
     uniqueIndex("billing_events_provider_event_unique").on(
       table.provider,
       table.providerEventId,
+    ),
+    index("billing_events_subscription_time").on(
+      table.provider,
+      table.providerSubscriptionId,
+      table.providerCreatedAt,
+    ),
+  ],
+);
+
+export const billingSubscriptionLinks = sqliteTable(
+  "billing_subscription_links",
+  {
+    provider: text().notNull(),
+    providerSubscriptionId: text("provider_subscription_id").notNull(),
+    providerCustomerId: text("provider_customer_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("billing_subscription_links_subscription_unique").on(
+      table.provider,
+      table.providerSubscriptionId,
+    ),
+    index("billing_subscription_links_customer").on(
+      table.provider,
+      table.providerCustomerId,
     ),
   ],
 );

@@ -17,9 +17,27 @@ One product: Corotum Cloud.
 
 ## Creem subscription
 
-Hosted billing uses Creem. Verified Creem webhook state is authoritative. Duplicate provider event ids are ignored.
+Hosted billing uses Creem. Verified Creem webhook state is authoritative. Configure all eleven events below on the same webhook endpoint:
 
-`subscription.paid` grants access. `subscription.canceled` revokes access; payment retries do not immediately remove it. Events are ordered by their provider timestamps and subscription creation dates, so an old delivery cannot overwrite the current subscription. A canceled subscription cannot be reactivated by a delayed payment event.
+| Event | Access policy |
+| --- | --- |
+| `subscription.paid` | Activate or renew through the supplied period end |
+| `subscription.active` | Activate a securely identified subscription through its period end |
+| `subscription.trialing` | Access until trial end (or the supplied trial period end) |
+| `subscription.scheduled_cancel` | Keep access only until the current period ends |
+| `subscription.past_due` | Keep previously paid access through a fixed three-day payment-recovery grace period |
+| `subscription.unpaid` | Suspend access |
+| `subscription.paused` | Suspend access; a newer active/paid event can restore it |
+| `subscription.expired` | Revoke access |
+| `subscription.canceled` | Revoke access |
+| `subscription.update` | Update product, interval, period and status; apply the same access rules |
+| `checkout.completed` | Bind the customer and subscription to the account; never grant access by itself |
+
+The grace deadline is three days after the earlier of the first `past_due` event and the previously paid period end. Repeated failures do not extend it; an initial failed payment does not grant grace access. Recovery clears the deadline so the next billing cycle can have its own recovery period. All access checks enforce start/end dates even if a final webhook is delayed. Missing verified product or required access dates denies paid access. WebSocket authorization is capped by the same deadline and rechecked before revision broadcasts.
+
+Only the configured monthly and annual product IDs can update hosted subscriptions. Product determines billing interval; metadata cannot override it. Conflicting account/customer/subscription identities are rejected. Events without user metadata require an existing exact subscription binding, not an email or customer-only guess. An early unbound event fails so Creem can retry after a checkout or metadata-bearing subscription event establishes its binding.
+
+Event recording, identity binding and subscription writes use one atomic D1 batch. Duplicate deliveries cannot mutate state twice; failed writes roll back so retries can succeed. Provider event timestamps and subscription creation dates prevent old deliveries from replacing newer state. At equal event times, revocation/suspension takes priority over grants. Canceled and expired subscriptions cannot be reactivated; a new subscription must have a newer creation date. Unknown future event types are acknowledged and recorded without changing access.
 
 ## Checkout and portal
 
@@ -34,7 +52,7 @@ The dashboard only opens the authenticated customer's portal.
 
 An existing non-terminal subscription blocks another checkout and account deletion. Manage or cancel it in Billing first; account deletion becomes available after Corotum receives the cancellation webhook. Hosted paid access starts on 22 October 2026 at 00:00 UTC.
 
-Before deploying the billing changes, apply the production D1 migrations from `apps/web`: `bunx wrangler d1 migrations apply corotum --remote`. Migration `0015_billing_event_order.sql` adds webhook ordering timestamps and preserves existing subscriptions. Existing rows use their stored receipt dates until a newer event supplies provider timestamps; replaying older historical events may require reconciliation with Creem.
+Before deploying the billing changes, apply the production D1 migrations from `apps/web`: `bunx wrangler d1 migrations apply corotum --remote`. Migration `0015_billing_event_order.sql` adds webhook ordering timestamps. Migration `0016_billing_lifecycle.sql` preserves ownership bindings and adds product/trial/grace fields. Legacy rows have no verified product and therefore do not grant paid access until a new, verified current Creem event supplies product and date information. Before launch, reconcile any existing paid accounts against their current Creem subscription state. Resending an already processed historical event does not bypass deduplication or prove current entitlement. Existing rows use their stored receipt dates until a newer event supplies provider timestamps. Confirm checkout, webhook activation, renewal, cancellation and CLI sync before the paid launch. Migrations and deployment are separate operator actions; the CLI release workflow does not run them.
 
 ## Hosted entitlement
 

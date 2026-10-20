@@ -861,9 +861,9 @@ export function DashboardSurface({ view }: { view: View }) {
                 >
                   {!(
                     settings.subscription &&
-                    (settings.subscription.status === "active" ||
-                      settings.subscription.status === "trialing" ||
-                      settings.subscription.status === "paid")
+                    !["canceled", "expired"].includes(
+                      settings.subscription.status,
+                    )
                   ) && (
                     <>
                       <button

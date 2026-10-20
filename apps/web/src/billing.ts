@@ -7,6 +7,9 @@ export const LAUNCH_FREE_PERIOD_END = "2026-10-22T00:00:00.000Z";
 
 export type BillingInterval = "month" | "year";
 export type BillingDatabase = WorkspaceDatabase & {
+  batch?(
+    statements: ReturnType<ReturnType<WorkspaceDatabase["prepare"]>["bind"]>[],
+  ): Promise<readonly unknown[]>;
   invalidateEvents?(
     scope: { deviceId: string } | { userId: string },
   ): Promise<void>;
@@ -34,11 +37,38 @@ export type CreemClient = {
   createPortal(customerId: string): Promise<{ url: string }>;
 };
 
-// Creem recommends subscription.paid for access: subscription.active lacks checkout metadata.
-const GRANT_EVENTS = new Set(["subscription.paid"]);
-// Keep access through payment retries; canceled is the terminal state.
-const REVOKE_EVENTS = new Set(["subscription.canceled"]);
-const ENTITLED_STATUSES = new Set(["active", "trialing", "paid"]);
+export const PAYMENT_GRACE_MS = 3 * 86_400_000;
+const STATUSES = new Set([
+  "active",
+  "trialing",
+  "scheduled_cancel",
+  "past_due",
+  "unpaid",
+  "paused",
+  "expired",
+  "canceled",
+]);
+const EVENT_STATUS: Record<string, string> = {
+  "subscription.paid": "active",
+  "subscription.active": "active",
+  "subscription.trialing": "trialing",
+  "subscription.scheduled_cancel": "scheduled_cancel",
+  "subscription.past_due": "past_due",
+  "subscription.unpaid": "unpaid",
+  "subscription.paused": "paused",
+  "subscription.expired": "expired",
+  "subscription.canceled": "canceled",
+};
+const STATUS_PRIORITY: Record<string, number> = {
+  active: 20,
+  trialing: 20,
+  scheduled_cancel: 30,
+  past_due: 40,
+  unpaid: 50,
+  paused: 60,
+  expired: 80,
+  canceled: 90,
+};
 
 export class BillingNotConfiguredError extends Error {
   constructor() {
@@ -134,18 +164,55 @@ export function isLaunchFreePeriod(now = Date.now()) {
   return now < Date.parse(LAUNCH_FREE_PERIOD_END);
 }
 
+export async function readHostedCloudAccess(
+  db: BillingDatabase,
+  userId: string,
+  hosted: boolean,
+  now = Date.now(),
+) {
+  if (!hosted) return { allowed: true, expiresAt: null };
+  if (isLaunchFreePeriod(now))
+    return { allowed: true, expiresAt: Date.parse(LAUNCH_FREE_PERIOD_END) };
+  const row = await db
+    .prepare(`SELECT status, provider_product_id AS productId, current_period_start AS periodStart,
+      current_period_end AS periodEnd, trial_end AS trialEnd, grace_period_end AS graceEnd
+      FROM subscriptions WHERE user_id = ?`)
+    .bind(userId)
+    .first<{
+      status: string;
+      productId: string | null;
+      periodStart: number | null;
+      periodEnd: number | null;
+      trialEnd: number | null;
+      graceEnd: number | null;
+    }>();
+  const end =
+    row?.status === "trialing"
+      ? row.trialEnd
+      : row?.status === "past_due"
+        ? row.graceEnd
+        : row && ["active", "paid", "scheduled_cancel"].includes(row.status)
+          ? row.periodEnd
+          : null;
+  const allowed = Boolean(
+    row?.productId &&
+      Number.isFinite(end) &&
+      end !== null &&
+      now < end &&
+      row.periodStart !== null &&
+      row.periodStart <= now &&
+      row.periodStart < end,
+  );
+  return { allowed, expiresAt: allowed ? end : null };
+}
+
 export async function hasHostedCloudAccess(
   db: BillingDatabase,
   userId: string,
   hosted: boolean,
   now = Date.now(),
 ) {
-  if (!hosted || isLaunchFreePeriod(now)) return true;
-  const row = await db
-    .prepare("SELECT status FROM subscriptions WHERE user_id = ?")
-    .bind(userId)
-    .first<{ status: string }>();
-  return Boolean(row && ENTITLED_STATUSES.has(row.status));
+  return (await readHostedCloudAccess(db, userId, hosted, now)).allowed;
 }
 
 export async function requireHostedCloudAccess(
@@ -280,37 +347,62 @@ export async function processCreemWebhook(
     .first<{ providerEventId: string }>();
   if (existing) return { duplicate: true as const, eventType };
 
-  if (GRANT_EVENTS.has(eventType) || REVOKE_EVENTS.has(eventType)) {
-    const eventCreatedAt = timestampOf(event.created_at);
-    if (eventCreatedAt === null || eventCreatedAt <= 0) {
-      throw new UnprocessableWebhookError(
-        "Webhook event is missing a valid created_at timestamp",
-      );
-    }
-    await applySubscriptionEvent(
-      db,
-      eventType,
-      event.object,
-      now,
-      GRANT_EVENTS.has(eventType) ? "grant" : "revoke",
-      eventCreatedAt,
-    );
-  }
-
-  const inserted = await db
-    .prepare(
-      "INSERT OR IGNORE INTO billing_events (id, provider, provider_event_id, event_type, processed_at) VALUES (?, ?, ?, ?, ?)",
-    )
+  if (!db.batch) throw new Error("Atomic billing database batch is required");
+  const recordId = `bev_${crypto.randomUUID()}`;
+  const known =
+    Object.hasOwn(EVENT_STATUS, eventType) ||
+    eventType === "subscription.update" ||
+    eventType === "checkout.completed";
+  const eventCreatedAt = known ? requiredTimestamp(event.created_at) : null;
+  const prepared = known
+    ? await prepareSubscriptionEvent(
+        db,
+        env,
+        eventType,
+        event.object,
+        eventCreatedAt as number,
+        now,
+        recordId,
+      )
+    : null;
+  const marker = db
+    .prepare(`INSERT OR IGNORE INTO billing_events
+    (id, provider, provider_event_id, event_type, processed_at, provider_subscription_id, provider_created_at, subscription_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(
-      `bev_${crypto.randomUUID()}`,
+      recordId,
       CREEM_PROVIDER,
       providerEventId,
       eventType,
       now,
+      prepared?.subscriptionId ?? null,
+      eventCreatedAt,
+      prepared?.status ?? null,
+    );
+  const statements = [marker, ...(prepared?.statements ?? [])];
+  const results = await db.batch(statements);
+  if (
+    results.length !== statements.length ||
+    results.some(
+      (result) => (result as { success?: boolean }).success === false,
     )
-    .run();
-  if ((inserted as { meta?: { changes?: number } }).meta?.changes !== 1) {
+  ) {
+    throw new Error("Billing transaction failed");
+  }
+  if (changesOf(results[0]) !== 1) {
     return { duplicate: true as const, eventType };
+  }
+  if (prepared && results.slice(2).some((result) => changesOf(result) > 0)) {
+    try {
+      await db.invalidateEvents?.({ userId: prepared.userId });
+    } catch {
+      console.error(
+        JSON.stringify({
+          code: "EVENT_INVALIDATION_FAILED",
+          userId: prepared.userId,
+        }),
+      );
+    }
   }
   return { duplicate: false as const, eventType };
 }
@@ -407,16 +499,6 @@ function customerIdOf(object: Record<string, unknown>) {
   return nested ? readString(nested.id) : "";
 }
 
-function intervalOf(
-  object: Record<string, unknown>,
-  fallback: BillingInterval,
-): BillingInterval {
-  const metadata = metadataOf(object);
-  const billed = readString(metadata.billingInterval);
-  if (billed === "month" || billed === "year") return billed;
-  return fallback;
-}
-
 function timestampOf(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -426,88 +508,220 @@ function timestampOf(value: unknown) {
   return null;
 }
 
-async function applySubscriptionEvent(
+function requiredTimestamp(value: unknown) {
+  const time = timestampOf(value);
+  if (time === null || time <= 0 || !Number.isSafeInteger(time)) {
+    throw new UnprocessableWebhookError(
+      "A valid provider timestamp is required",
+    );
+  }
+  return time;
+}
+
+function idOf(value: unknown) {
+  return readString(value) || readString(readObject(value)?.id);
+}
+
+function dateField(object: Record<string, unknown>, ...names: string[]) {
+  const values = names
+    .filter((name) => object[name] !== undefined && object[name] !== null)
+    .map((name) => requiredTimestamp(object[name]));
+  if (new Set(values).size > 1)
+    throw new UnprocessableWebhookError("Conflicting subscription dates");
+  return values[0] ?? null;
+}
+
+function changesOf(result: unknown) {
+  return (
+    (result as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0
+  );
+}
+
+async function prepareSubscriptionEvent(
   db: BillingDatabase,
+  env: BillingEnvironment,
   eventType: string,
   objectValue: unknown,
-  now: number,
-  action: "grant" | "revoke",
   eventCreatedAt: number,
+  now: number,
+  recordId: string,
 ) {
   const object = readObject(objectValue);
   if (!object) throw new UnprocessableWebhookError();
-  const metadata = metadataOf(object);
-  const subscriptionId = readString(object.id);
-  const subscriptionCreatedAt = timestampOf(object.created_at);
-  if (subscriptionCreatedAt === null || subscriptionCreatedAt <= 0) {
+  const checkout = eventType === "checkout.completed";
+  const subscription = checkout
+    ? (readObject(object.subscription) ?? {})
+    : object;
+  const subscriptionId = checkout ? idOf(object.subscription) : idOf(object);
+  const customerId = customerIdOf(object) || customerIdOf(subscription);
+  const productId = idOf(object.product) || idOf(subscription.product);
+  if (
+    (customerIdOf(subscription) && customerIdOf(subscription) !== customerId) ||
+    (idOf(subscription.product) && idOf(subscription.product) !== productId)
+  ) {
     throw new UnprocessableWebhookError(
-      "Subscription is missing a valid created_at timestamp",
+      "Conflicting checkout identity or product",
     );
   }
-  const customerId = customerIdOf(object);
-  let userId =
-    readString(metadata.userId) || readString(metadata.user_id) || "";
-  if (!userId && customerId) {
-    const existing = await db
-      .prepare(
-        "SELECT user_id AS userId FROM subscriptions WHERE provider_customer_id = ?",
-      )
-      .bind(customerId)
-      .first<{ userId: string }>();
-    userId = existing?.userId ?? "";
-  }
-  if (!userId && subscriptionId) {
-    const existing = await db
-      .prepare(
-        "SELECT user_id AS userId FROM subscriptions WHERE provider_subscription_id = ?",
-      )
-      .bind(subscriptionId)
-      .first<{ userId: string }>();
-    userId = existing?.userId ?? "";
-  }
+  if (
+    !env.CREEM_PRODUCT_MONTHLY ||
+    !env.CREEM_PRODUCT_ANNUAL ||
+    env.CREEM_PRODUCT_MONTHLY === env.CREEM_PRODUCT_ANNUAL
+  )
+    throw new BillingNotConfiguredError();
+  const interval =
+    productId === env.CREEM_PRODUCT_MONTHLY
+      ? "month"
+      : productId === env.CREEM_PRODUCT_ANNUAL
+        ? "year"
+        : null;
+  if (!interval)
+    throw new UnprocessableWebhookError("Unrecognized subscription product");
+  const claimedUsers = [metadataOf(object), metadataOf(subscription)]
+    .flatMap((metadata) => [
+      readString(metadata.userId),
+      readString(metadata.user_id),
+    ])
+    .filter(Boolean);
+  if (new Set(claimedUsers).size > 1)
+    throw new UnprocessableWebhookError("Conflicting user metadata");
+  const link = await db
+    .prepare(`SELECT user_id AS userId, provider_customer_id AS customerId
+    FROM billing_subscription_links WHERE provider = ? AND provider_subscription_id = ?`)
+    .bind(CREEM_PROVIDER, subscriptionId)
+    .first<{ userId: string; customerId: string }>();
+  const userId = claimedUsers[0] || link?.userId || "";
   if (!userId || !subscriptionId || !customerId) {
     throw new UnprocessableWebhookError();
   }
+  if (link && (link.userId !== userId || link.customerId !== customerId)) {
+    throw new UnprocessableWebhookError("Subscription owner mismatch");
+  }
+  const conflict = await db
+    .prepare(`SELECT user_id FROM billing_subscription_links
+    WHERE provider = ? AND provider_customer_id = ? AND user_id != ? LIMIT 1`)
+    .bind(CREEM_PROVIDER, customerId, userId)
+    .first();
+  if (conflict) throw new UnprocessableWebhookError("Customer owner mismatch");
   const user = await db
     .prepare("SELECT id FROM user WHERE id = ?")
     .bind(userId)
     .first<{ id: string }>();
   if (!user) throw new UnprocessableWebhookError();
-
+  const linkStatement = db
+    .prepare(`INSERT INTO billing_subscription_links
+    (provider, provider_subscription_id, provider_customer_id, user_id, created_at)
+    SELECT ?, ?, ?, CASE WHEN EXISTS (
+      SELECT 1 FROM billing_subscription_links WHERE provider = ? AND provider_customer_id = ? AND user_id != ?
+    ) THEN NULL ELSE ? END, ?
+    WHERE EXISTS (SELECT 1 FROM billing_events WHERE id = ?)
+    ON CONFLICT(provider, provider_subscription_id) DO UPDATE SET user_id = CASE
+      WHEN billing_subscription_links.user_id = excluded.user_id
+        AND billing_subscription_links.provider_customer_id = excluded.provider_customer_id
+      THEN billing_subscription_links.user_id ELSE NULL END`)
+    .bind(
+      CREEM_PROVIDER,
+      subscriptionId,
+      customerId,
+      CREEM_PROVIDER,
+      customerId,
+      userId,
+      userId,
+      now,
+      recordId,
+    );
+  if (checkout)
+    return {
+      userId,
+      subscriptionId,
+      status: null,
+      statements: [linkStatement],
+    };
   const status =
-    action === "grant"
-      ? grantedStatus(object, eventType)
-      : eventStatus(eventType);
-  const interval = intervalOf(object, "month");
-  const periodStart =
-    timestampOf(object.current_period_start) ??
-    timestampOf(object.current_period_start_date);
-  const periodEnd =
-    timestampOf(object.current_period_end) ??
-    timestampOf(object.current_period_end_date) ??
-    timestampOf(object.next_transaction_date);
-
-  await db
+    eventType === "subscription.update"
+      ? readString(subscription.status)
+      : EVENT_STATUS[eventType];
+  if (!status || !STATUSES.has(status))
+    throw new UnprocessableWebhookError("Unknown subscription status");
+  const reported = readString(subscription.status);
+  if (
+    eventType !== "subscription.update" &&
+    reported &&
+    reported !== status &&
+    !(eventType === "subscription.paid" && reported === "paid") &&
+    !(eventType === "subscription.scheduled_cancel" && reported === "active")
+  ) {
+    throw new UnprocessableWebhookError(
+      "Event and subscription status disagree",
+    );
+  }
+  const current = await db
+    .prepare(`SELECT subscription_created_at AS createdAt FROM subscriptions
+    WHERE user_id = ? AND provider_subscription_id = ?`)
+    .bind(userId, subscriptionId)
+    .first<{ createdAt: number }>();
+  const subscriptionCreatedAt = requiredTimestamp(
+    subscription.created_at ?? current?.createdAt,
+  );
+  const periodStart = dateField(
+    subscription,
+    "current_period_start",
+    "current_period_start_date",
+  );
+  const periodEnd = dateField(
+    subscription,
+    "current_period_end",
+    "current_period_end_date",
+  );
+  const trialEnd =
+    dateField(subscription, "trial_end", "trial_end_date") ??
+    (status === "trialing" ? periodEnd : null);
+  for (const time of [periodStart, periodEnd, trialEnd]) {
+    if (time !== null && (!Number.isSafeInteger(time) || time <= 0))
+      throw new UnprocessableWebhookError("Invalid subscription period");
+  }
+  if (periodStart !== null && periodEnd !== null && periodStart >= periodEnd) {
+    throw new UnprocessableWebhookError("Invalid subscription period");
+  }
+  const periodEventAt =
+    periodEnd !== null || trialEnd !== null ? eventCreatedAt : 0;
+  const paidEventAt =
+    ["active", "scheduled_cancel"].includes(status) &&
+    periodStart !== null &&
+    periodEnd !== null
+      ? eventCreatedAt
+      : 0;
+  const stateStatement = db
     .prepare(
       `INSERT INTO subscriptions (
           id, user_id, provider, provider_customer_id, provider_subscription_id,
           billing_interval, status, current_period_start, current_period_end,
-          created_at, updated_at, event_created_at, subscription_created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at, event_created_at, subscription_created_at,
+          provider_product_id, trial_end, grace_period_end, event_priority,
+          period_event_at, paid_event_at, paid_period_end, past_due_at
+        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?
+          WHERE EXISTS (SELECT 1 FROM billing_events WHERE id = ?)
         ON CONFLICT(user_id) DO UPDATE SET
+          paid_event_at = CASE WHEN subscriptions.provider_subscription_id = excluded.provider_subscription_id THEN subscriptions.paid_event_at ELSE excluded.paid_event_at END,
+          paid_period_end = CASE WHEN subscriptions.provider_subscription_id = excluded.provider_subscription_id THEN subscriptions.paid_period_end ELSE excluded.paid_period_end END,
+          period_event_at = CASE WHEN subscriptions.provider_subscription_id = excluded.provider_subscription_id THEN subscriptions.period_event_at ELSE excluded.period_event_at END,
           provider_customer_id = excluded.provider_customer_id,
           provider_subscription_id = excluded.provider_subscription_id,
+          provider_product_id = excluded.provider_product_id,
           billing_interval = excluded.billing_interval,
           status = excluded.status,
-          current_period_start = excluded.current_period_start,
-          current_period_end = excluded.current_period_end,
+          current_period_start = CASE WHEN subscriptions.provider_subscription_id = excluded.provider_subscription_id THEN subscriptions.current_period_start ELSE excluded.current_period_start END,
+          current_period_end = CASE WHEN subscriptions.provider_subscription_id = excluded.provider_subscription_id THEN subscriptions.current_period_end ELSE excluded.current_period_end END,
+          trial_end = CASE WHEN subscriptions.provider_subscription_id = excluded.provider_subscription_id THEN subscriptions.trial_end ELSE excluded.trial_end END,
           updated_at = excluded.updated_at,
           event_created_at = excluded.event_created_at,
+          event_priority = excluded.event_priority,
           subscription_created_at = excluded.subscription_created_at
         WHERE (
           subscriptions.provider_subscription_id = excluded.provider_subscription_id
-          AND excluded.event_created_at >= subscriptions.event_created_at
-          AND NOT (subscriptions.status = 'canceled' AND excluded.status != 'canceled')
+          AND (excluded.event_created_at > subscriptions.event_created_at
+            OR (excluded.event_created_at = subscriptions.event_created_at AND excluded.event_priority > subscriptions.event_priority))
+          AND (subscriptions.status NOT IN ('canceled', 'expired') OR excluded.status = subscriptions.status)
         ) OR (
           subscriptions.provider_subscription_id != excluded.provider_subscription_id
           AND excluded.subscription_created_at > subscriptions.subscription_created_at
@@ -527,28 +741,64 @@ async function applySubscriptionEvent(
       now,
       eventCreatedAt,
       subscriptionCreatedAt,
-    )
-    .run();
-  if (action === "revoke") {
-    try {
-      await db.invalidateEvents?.({ userId });
-    } catch {
-      console.error(
-        JSON.stringify({ code: "EVENT_INVALIDATION_FAILED", userId }),
-      );
-    }
-  }
-}
-
-function grantedStatus(object: Record<string, unknown>, eventType: string) {
-  const status = readString(object.status);
-  if (ENTITLED_STATUSES.has(status)) return status;
-  if (eventType === "subscription.trialing") return "trialing";
-  return "active";
-}
-
-function eventStatus(eventType: string) {
-  if (eventType === "subscription.paused") return "paused";
-  if (eventType === "subscription.expired") return "expired";
-  return "canceled";
+      productId,
+      trialEnd,
+      STATUS_PRIORITY[status],
+      periodEventAt,
+      paidEventAt,
+      paidEventAt ? periodEnd : null,
+      status === "past_due" ? eventCreatedAt : null,
+      recordId,
+    );
+  // Status order and dated access evidence are separate: delayed payment data must not restore a revoked status.
+  const evidenceStatement = db
+    .prepare(`UPDATE subscriptions SET
+    current_period_start = CASE WHEN ? > period_event_at THEN COALESCE(?, current_period_start) ELSE COALESCE(current_period_start, ?) END,
+    current_period_end = CASE WHEN ? > period_event_at THEN COALESCE(?, current_period_end) ELSE COALESCE(current_period_end, ?) END,
+    trial_end = CASE WHEN ? > period_event_at THEN COALESCE(?, trial_end) ELSE COALESCE(trial_end, ?) END,
+    period_event_at = MAX(period_event_at, ?),
+    paid_period_end = CASE WHEN ? > paid_event_at THEN ? ELSE paid_period_end END,
+    paid_event_at = MAX(paid_event_at, ?)
+    WHERE user_id = ? AND provider_subscription_id = ? AND EXISTS (SELECT 1 FROM billing_events WHERE id = ?)`)
+    .bind(
+      periodEventAt,
+      periodStart,
+      periodStart,
+      periodEventAt,
+      periodEnd,
+      periodEnd,
+      periodEventAt,
+      trialEnd,
+      trialEnd,
+      periodEventAt,
+      paidEventAt,
+      paidEventAt ? periodEnd : null,
+      paidEventAt,
+      userId,
+      subscriptionId,
+      recordId,
+    );
+  const graceStatement = db
+    .prepare(`WITH recovery AS (
+    SELECT MIN(e.provider_created_at) AS started FROM billing_events e JOIN subscriptions s
+      ON s.provider = e.provider AND s.provider_subscription_id = e.provider_subscription_id
+    WHERE s.user_id = ? AND s.provider_subscription_id = ? AND e.subscription_status = 'past_due'
+      AND e.provider_created_at >= s.paid_event_at AND e.provider_created_at <= s.event_created_at
+  ) UPDATE subscriptions SET
+    past_due_at = CASE WHEN status = 'past_due' THEN (SELECT started FROM recovery) ELSE NULL END,
+    grace_period_end = CASE WHEN status = 'past_due' AND paid_period_end IS NOT NULL
+      THEN MIN((SELECT started FROM recovery), paid_period_end) + ${PAYMENT_GRACE_MS} ELSE NULL END
+    WHERE user_id = ? AND provider_subscription_id = ? AND EXISTS (SELECT 1 FROM billing_events WHERE id = ?)`)
+    .bind(userId, subscriptionId, userId, subscriptionId, recordId);
+  return {
+    userId,
+    subscriptionId,
+    status,
+    statements: [
+      linkStatement,
+      stateStatement,
+      evidenceStatement,
+      graceStatement,
+    ],
+  };
 }
