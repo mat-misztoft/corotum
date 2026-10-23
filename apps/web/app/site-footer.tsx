@@ -2,7 +2,7 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <p>© 2026 Corotum</p>
-      <p>Keep your agent skills in sync.</p>
+      <p>Identical agent skills on every machine.</p>
       <nav aria-label="Footer">
         <a data-umami-event="nav-docs" href="https://docs.corotum.com">
           Docs

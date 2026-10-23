@@ -51,14 +51,16 @@ try {
   const home = await fetch(`http://127.0.0.1:${port}/`);
   const landing = await home.text();
   const sectionOrder = [
-    "Keep your agent skills in sync.",
-    "One state. Everywhere.",
-    "From skill to synced state.",
-    "One Corotum. Two ways to sync.",
-    "Choose your sync.",
+    "Identical agent skills on every machine.",
+    "Different machines.",
+    "How it works.",
+    "or Cloud",
+    "The complete local CLI, backed by your repository.",
     "See every device at a glance.",
-    "One skill. Many agents.",
-    "Set it once. Keep it in sync.",
+    "One skill set, every agent",
+    "How Corotum is different",
+    "exactly the same AI agent",
+    "Same skills everywhere.",
   ];
   const sectionPositions = sectionOrder.map((copy) => landing.indexOf(copy));
   const ordered =
@@ -83,6 +85,7 @@ try {
     !landing.includes("WebMCP") ||
     !landing.includes("Kiro CLI") ||
     !landing.includes("No remote force-sync.") ||
+    !landing.includes("There is no remote force-sync.") ||
     !landing.includes(
       "Start with Corotum Cloud, or use your own Git repository for free.",
     ) ||

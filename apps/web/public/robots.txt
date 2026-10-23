@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://corotum.com/sitemap.xml
+Sitemap: https://docs.corotum.com/sitemap-index.xml

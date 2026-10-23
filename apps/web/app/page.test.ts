@@ -5,14 +5,16 @@ const styles = await Bun.file(`${import.meta.dir}/globals.css`).text();
 const billing = await Bun.file(`${import.meta.dir}/billing-toggle.tsx`).text();
 
 const sections = [
-  "Keep your agent skills in sync.",
-  "One state. Everywhere.",
-  "From skill to synced state.",
-  "One Corotum. Two ways to sync.",
-  "Choose your sync.",
+  "Identical agent skills on every machine.",
+  "Different machines.",
+  "How it works.",
+  "or Cloud",
+  "The complete local CLI, backed by your repository.",
   "See every device at a glance.",
-  "One skill. Many agents.",
-  "Set it once. Keep it in sync.",
+  "One skill set, every agent",
+  "How Corotum is different",
+  "exactly the same AI agent",
+  "Same skills everywhere.",
 ] as const;
 
 test("landing keeps the product sections in order", () => {
@@ -34,6 +36,8 @@ test("final CTA copy, actions, and install command match planning", () => {
   expect(page).toContain("curl -fsSL https://corotum.com/install.sh | sh");
   expect(page).not.toContain("sync_device");
   expect(page).not.toContain("sync_all_devices");
+  expect(page).not.toContain("put one skill back to its exact lock");
+  expect(page).not.toContain("live in your Cloud workspace");
 });
 
 test("landing login and Cloud CTAs go to /sign-in", () => {

@@ -1,10 +1,26 @@
 # Corotum
 
-Keep your agent skills in sync.
+**Identical AI agent skills on every machine and every agent: locked, verified, drift-aware.**
 
-Corotum is an AGPLv3 skill manager that defines one desired state and reconciles AI agent skills across machines. Cloud Sync is the current workstream (hosted corotum.com or self-hosted Cloud). Git Sync / Free remains a fully documented Git-backed backend with no Corotum account. Neither mode is hidden or removed.
+Corotum keeps one desired state for your agent skills (`SKILL.md`). It reconciles every machine (laptop, desktop, VPS) and every agent on it to the same locked revision and content hash: Claude Code, Codex, Cursor, Gemini CLI, Pi, OpenCode, Windsurf, Cline, Roo Code, GitHub Copilot and Kiro CLI.
 
-Binaries are unsigned. Official installers are the only supported installation method. Cloud automatic sync is opt-in; Git Sync remains manual. There is no remote forced sync.
+- **Lockfile for skills.** `corotum.yaml` declares the skills you want; `corotum.lock` records the exact commit SHA and content hash of each one. `corotum sync` installs that SHA and never installs upstream HEAD.
+- **Drift detection.** `corotum status` and `corotum diff` show what differs on this machine before anything changes. Changed managed skills are reported as `DRIFTED`; unmanaged content in the way is `LOCAL_CONFLICT`.
+- **No silent overwrites.** Ordinary sync leaves drifted and unmanaged skills alone.
+- **Every agent, one copy.** Skills live once in `~/.agents/skills`; enabled agents get a symlink, or a copy when a symlink can't be used. Zero agents is a valid state.
+- **Two backends.** Free Git Sync in a repository you own, or Corotum Cloud (hosted at $5.99/month, or self-hosted for free under AGPLv3) with per-device and per-agent status.
+
+```sh
+curl -fsSL https://corotum.com/install.sh | sh     # macOS / Linux
+corotum init repository git@github.com:you/corotum-state.git
+corotum add owner/skills --skill review --ref main
+corotum diff
+corotum sync
+```
+
+On another machine: `corotum init repository <same-url>` then `corotum sync`.
+
+Docs: https://docs.corotum.com · v0.5 manages global (user-level) skills. Binaries are unsigned; the official installers verify SHA-256.
 
 ## Install
 

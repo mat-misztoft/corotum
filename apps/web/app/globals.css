@@ -121,7 +121,14 @@ a {
   color: #504b44;
   font-size: clamp(1.05rem, 1.4vw, 1.3rem);
   line-height: 1.45;
-  margin: 34px 0 30px;
+  margin: 34px 0 12px;
+  max-width: 480px;
+}
+.hero-support {
+  color: #504b44;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  margin: 0 0 30px;
   max-width: 480px;
 }
 .hero-actions {
@@ -348,7 +355,7 @@ a {
   margin: 0;
   text-transform: uppercase;
 }
-.section-intro > p:last-child,
+.section-intro > p:not(.dispatch-label),
 .flow-heading > p:last-child {
   color: #504b44;
   font-size: 1.1rem;
@@ -1160,6 +1167,12 @@ a {
   margin: 0;
   max-width: 52ch;
 }
+.drift-board {
+  grid-column: 1 / -1;
+}
+.drift-board td:last-child {
+  color: #c9c1b5;
+}
 .agents {
   margin: 0 auto;
   max-width: 1440px;
@@ -1168,8 +1181,7 @@ a {
 .agents-intro {
   max-width: 720px;
 }
-.agents-intro > p:nth-of-type(2),
-.agents-intro > p:nth-of-type(3) {
+.agents-intro > p:not(.dispatch-label) {
   color: #504b44;
   font-size: clamp(1.05rem, 1.4vw, 1.25rem);
   line-height: 1.5;
@@ -1221,6 +1233,110 @@ a {
   margin: 28px 0 0;
   max-width: 62ch;
 }
+.agent-facts {
+  display: grid;
+  gap: 28px 40px;
+  grid-template-columns: 0.8fr 1.3fr 0.9fr;
+  margin-top: 36px;
+}
+.agent-facts p {
+  color: #504b44;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  margin: 0;
+}
+.contrast {
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: clamp(96px, 10vw, 160px) 42px;
+}
+.contrast h2 {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(3.2rem, 6vw, 5.6rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+  margin: 0 0 28px;
+  max-width: 12ch;
+  text-transform: uppercase;
+}
+.contrast-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.contrast-grid article {
+  min-height: 280px;
+  padding: clamp(28px, 4vw, 52px);
+}
+.contrast-grid article:nth-child(1),
+.contrast-grid article:nth-child(4) {
+  background: var(--ink);
+  color: var(--paper);
+}
+.contrast-grid article:nth-child(2) {
+  background: var(--vermillion);
+  color: var(--paper);
+}
+.contrast-grid article:nth-child(3) {
+  background: var(--machine);
+  color: var(--paper);
+}
+.contrast-grid h3 {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(2rem, 3.4vw, 3.2rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.92;
+  margin: 0 0 16px;
+  max-width: 12ch;
+  text-transform: uppercase;
+}
+.contrast-grid p {
+  font-size: 1.05rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 46ch;
+}
+.faq-board {
+  background: var(--ink);
+  color: var(--paper);
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: clamp(96px, 10vw, 160px) 42px;
+}
+.faq-board h2 {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(3.2rem, 6vw, 5.6rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+  margin: 0 0 36px;
+  text-transform: uppercase;
+}
+.faq-list {
+  display: grid;
+  gap: 0 64px;
+  grid-template-columns: 1fr 1fr;
+}
+.faq-board details {
+  padding: 8px 0 28px;
+}
+.faq-board summary {
+  cursor: pointer;
+  font-size: clamp(1.2rem, 1.6vw, 1.45rem);
+  font-weight: 700;
+  line-height: 1.3;
+}
+.faq-board details p,
+.faq-board details li {
+  color: #c9c1b5;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+.faq-board details ul {
+  padding-left: 1.1em;
+}
 .final-cta {
   border-top: 8px solid var(--vermillion);
   margin: 0 auto;
@@ -1229,12 +1345,12 @@ a {
 }
 .final-cta h2 {
   font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
-  font-size: clamp(3.4rem, 7vw, 6.4rem);
+  font-size: clamp(3.2rem, 6vw, 5.4rem);
   font-weight: 500;
-  letter-spacing: -0.055em;
-  line-height: 0.88;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
   margin: 0;
-  max-width: 11ch;
+  max-width: 16ch;
   text-transform: uppercase;
 }
 .final-cta > p:last-of-type {
@@ -1370,6 +1486,15 @@ a {
   }
   .agents {
     padding: 96px 20px;
+  }
+  .agent-facts,
+  .contrast-grid,
+  .faq-list {
+    grid-template-columns: 1fr;
+  }
+  .contrast,
+  .faq-board {
+    padding: 72px 20px;
   }
   .final-cta {
     padding: 72px 20px 96px;
@@ -1509,6 +1634,8 @@ a {
   }
   .device-dispatch h2,
   .agents-intro h2,
+  .contrast h2,
+  .faq-board h2,
   .final-cta h2 {
     font-size: clamp(3.1rem, 15vw, 4.6rem);
   }

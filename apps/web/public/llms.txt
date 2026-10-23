@@ -1,0 +1,31 @@
+# Corotum
+
+> Corotum keeps AI agent skills (SKILL.md) identical on every machine and every agent. It keeps one desired state, locks each skill to an exact commit SHA and content hash, detects drift, and never silently overwrites unmanaged or locally changed skills. Sync installs the locked revision, never upstream HEAD ("Exact, not latest").
+
+Key facts:
+- CLI: `corotum` (v0.5). Install: `curl -fsSL https://corotum.com/install.sh | sh` (macOS/Linux), `irm https://corotum.com/install.ps1 | iex` (Windows x64). v0.5 binaries are unsigned; installers verify SHA-256.
+- Desired-state files: corotum.yaml (manifest), corotum.lock (exact SHA + content hash), corotum.transitions.json.
+- Commands: init, add, adopt, remove, unmanage, restore, set-ref, status, diff, sync, agents, auto (Cloud), migrate, login/logout.
+- Drift states: SYNCED, DRIFTED, LOCAL_CONFLICT, PARTIALLY_SYNCED, AUTH_REQUIRED, PENDING_PUSH.
+- Skills stored once in ~/.agents/skills; exposed to enabled agents by symlink (copy fallback). Agents optional.
+- Supported agents: Codex, Claude Code, Pi, Gemini CLI, OpenCode, Cursor, Windsurf, Cline, Roo Code, GitHub Copilot, Kiro CLI.
+- Scope: global (user-level) skills only in v0.5; project-level skills out of scope.
+- Backends: Git Sync (free, your own Git repo, manual sync, no account) or Corotum Cloud (hosted $5.99/month or $59.90/year; self-hosted free under AGPLv3) with dashboard, per-device and per-agent status, WebMCP, opt-in automatic sync.
+- No remote force-sync. A device reports SYNCED only after it runs corotum sync and verifies the applied revision.
+
+## Docs
+- [Overview](https://docs.corotum.com/)
+- [Install](https://docs.corotum.com/getting-started/install/)
+- [CLI commands](https://docs.corotum.com/cli/commands/)
+- [Skills, locks and artifacts](https://docs.corotum.com/concepts/skills/)
+- [Git Sync](https://docs.corotum.com/concepts/git-sync/)
+- [Hosted Corotum Cloud](https://docs.corotum.com/cloud/hosted/)
+- [Automatic Cloud sync](https://docs.corotum.com/cloud/automatic-sync/)
+- [Self-hosting](https://docs.corotum.com/cloud/self-hosting/)
+- [Dashboard and WebMCP](https://docs.corotum.com/webmcp/dashboard-and-webmcp/)
+- [A lockfile for agent skills](https://docs.corotum.com/guides/lockfile-for-agent-skills/)
+- [Detect skill drift between machines and agents](https://docs.corotum.com/guides/detect-skill-drift/)
+- [Desired-state skill management](https://docs.corotum.com/guides/desired-state/)
+
+## Source
+- [GitHub](https://github.com/mat-misztoft/corotum)

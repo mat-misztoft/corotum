@@ -17,5 +17,8 @@ Cloud Sync is the current workstream. Git Sync / Free remains documented and ava
 | [Dashboard and WebMCP](/webmcp/dashboard-and-webmcp/) | Full Cloud product surface, device reports, WebMCP tools |
 | [Terms of Service](https://corotum.com/terms) / [Privacy Policy](https://corotum.com/privacy) | Hosted-service legal terms and privacy policy |
 | [Migration](/guides/migration/) | Git ↔ Cloud, ToolMirror upgrade, `corotum migrate legacy-cleanup` |
+| [A lockfile for agent skills](/guides/lockfile-for-agent-skills/) | How Corotum pins each agent skill to an exact commit SHA and content hash so every machine and agent installs identical bytes |
+| [Detect skill drift](/guides/detect-skill-drift/) | Use corotum status and corotum diff to find skills that differ from the locked revision, on one machine or across all your devices |
+| [Desired-state skill management](/guides/desired-state/) | Declare which agent skills should exist at which locked revision, preview the plan, and reconcile every machine and agent to it |
 
 Binaries are unsigned. Official installers are the only supported installation path. [Automatic Cloud sync](/cloud/automatic-sync/) is opt-in; Git Sync remains manual. There is no remote forced sync.

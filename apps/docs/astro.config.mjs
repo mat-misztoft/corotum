@@ -66,7 +66,18 @@ export default defineConfig({
         },
         {
           label: "Guides",
-          items: [{ label: "Migration", slug: "guides/migration" }],
+          items: [
+            {
+              label: "Lockfile for agent skills",
+              slug: "guides/lockfile-for-agent-skills",
+            },
+            {
+              label: "Detect skill drift",
+              slug: "guides/detect-skill-drift",
+            },
+            { label: "Desired state", slug: "guides/desired-state" },
+            { label: "Migration", slug: "guides/migration" },
+          ],
         },
         {
           label: "Reference",
