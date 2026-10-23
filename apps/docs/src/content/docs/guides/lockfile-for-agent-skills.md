@@ -1,5 +1,5 @@
 ---
-title: A lockfile for agent skills: identical skills on every machine
+title: "A lockfile for agent skills: identical skills on every machine"
 description: How Corotum pins each agent skill to an exact commit SHA and content hash so every machine and agent installs identical bytes.
 ---
 
