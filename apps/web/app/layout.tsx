@@ -7,6 +7,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Corotum",
   description: "Keep your agent skills in sync.",
+  twitter: {
+    creator: "@mat_misztoft",
+  },
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
