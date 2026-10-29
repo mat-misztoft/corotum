@@ -63,6 +63,11 @@ a {
   letter-spacing: -0.065em;
   text-decoration: none;
 }
+.wordmark img {
+  display: block;
+  height: 1em;
+  width: auto;
+}
 .landing-header nav {
   display: flex;
   gap: clamp(14px, 2vw, 30px);
@@ -1384,6 +1389,17 @@ a {
 }
 .site-footer p {
   margin: 0;
+}
+.site-footer-brand {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+.site-footer-mark {
+  display: block;
+  flex: 0 0 auto;
+  height: 16px;
+  width: auto;
 }
 .site-footer nav {
   display: flex;

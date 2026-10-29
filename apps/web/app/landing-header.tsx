@@ -1,6 +1,7 @@
 "use client";
 
 import { authClient } from "../src/auth-client";
+import { Wordmark } from "./wordmark";
 
 const links = [
   ["#how-it-works", "How it works"],
@@ -21,9 +22,7 @@ export function LandingHeader() {
   return (
     <header className="dashboard-chrome">
       <nav className="dashboard-nav" aria-label="Main navigation">
-        <a className="wordmark" href="/" aria-label="Corotum home">
-          Corotum
-        </a>
+        <Wordmark href="/" label="Corotum home" />
         <div className="dashboard-nav-links">
           {links.map(([href, label]) => (
             <a data-umami-event={linkEvents[href]} href={href} key={href}>

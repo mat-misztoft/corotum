@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Wordmark } from "./wordmark";
 
 export const metadata: Metadata = {
   title: "Page not found | Corotum",
@@ -9,9 +10,7 @@ export default function NotFound() {
     <main className="not-found-page">
       <section className="not-found-shell" aria-labelledby="not-found-title">
         <div className="not-found-brand-rule" aria-hidden="true" />
-        <a className="wordmark" href="/">
-          Corotum
-        </a>
+        <Wordmark href="/" variant="light" />
 
         <div className="not-found-layout">
           <div className="not-found-copy">
