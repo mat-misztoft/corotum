@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
+import { Wordmark } from "../wordmark";
 
 function activateNext(code: string) {
   return code ? `/activate?code=${encodeURIComponent(code)}` : "/activate";
@@ -47,9 +48,7 @@ export default function ActivatePage() {
     <main className="sign-in-page">
       <div className="sign-in-panel">
         <div className="sign-in-brand-rule" aria-hidden="true" />
-        <a className="wordmark" href="/">
-          Corotum
-        </a>
+        <Wordmark href="/" variant="light" />
         <p className="sign-in-kicker">DEVICE PAIRING</p>
         {approved ? (
           <>

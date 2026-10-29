@@ -1,3 +1,4 @@
+import { Wordmark } from "../wordmark";
 import { SignInForm } from "./sign-in-form";
 
 export default function SignInPage() {
@@ -5,9 +6,7 @@ export default function SignInPage() {
     <main className="sign-in-page">
       <div className="sign-in-panel">
         <div className="sign-in-brand-rule" aria-hidden="true" />
-        <a className="wordmark" href="/">
-          Corotum
-        </a>
+        <Wordmark href="/" variant="light" />
         <p className="sign-in-kicker">COROTUM CLOUD</p>
         <h1>Sign in</h1>
         <p className="sign-in-intro">

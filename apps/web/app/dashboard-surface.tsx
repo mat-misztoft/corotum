@@ -4,6 +4,7 @@ import { authClient } from "../src/auth-client";
 import { validEmail } from "./sign-in/sign-in-form";
 import { SiteFooter } from "./site-footer";
 import { WebMcpTools } from "./webmcp-tools";
+import { Wordmark } from "./wordmark";
 
 type View = "overview" | "skills" | "devices" | "billing" | "settings";
 type Dashboard = {
@@ -108,9 +109,7 @@ function DashboardShell({
       <header className="dashboard-chrome">
         <div className="dashboard-brand-rule" />
         <nav className="dashboard-nav" aria-label="Corotum">
-          <a className="wordmark" href="/dashboard">
-            Corotum
-          </a>
+          <Wordmark href="/dashboard" />
           <div className="dashboard-nav-links">
             {navItems.map((item) => (
               <a
